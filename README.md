@@ -15,8 +15,11 @@ However there are also frameworks in PyTorch most notably Facebook's Horizon:
 - [DeepRL](https://github.com/ShangtongZhang/DeepRL)
 
 My motivation is that existing frameworks commonly use tensorflow, which nothing against tensorflow, but I have 
-accomplished more in shorter periods of time using PyTorch. Fastai for computer vision and tabular learning has been
-amazing. One would wish that this would be the same for RL.
+accomplished more in shorter periods of time using PyTorch. 
+
+Fastai for computer vision and tabular learning has been amazing. One would wish that this would be the same for RL. 
+The purpose of this repo is to have a framework that is as easy as possible to start, but also designed for testing
+new agents. 
 
 ## Code 
 Some of the key take aways is Fastai's use of callbacks. Not only do callbacks allow for logging, but in fact adding a
