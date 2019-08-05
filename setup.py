@@ -19,5 +19,5 @@ setup(name='fast_rl',
       packages=[package for package in find_packages()
                 if package.startswith('fast_rl')],
       zip_safe=False,
-      install_requires=['numpy', 'tqdm', 'pillow', 'pandas'],
+      install_requires=['numpy', 'tqdm', 'pillow', 'pandas', 'fastai'],
       )

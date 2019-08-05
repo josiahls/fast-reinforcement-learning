@@ -4,3 +4,4 @@ out
 gen
 .DS_Store
 .gitignore
+/fast_rl/notebooks/.ipynb_checkpoints/

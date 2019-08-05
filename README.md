@@ -24,7 +24,7 @@ new agents.
 ## Code 
 Some of the key take aways is Fastai's use of callbacks. Not only do callbacks allow for logging, but in fact adding a
 callback to a generic fit function can change its behavior drastically. My goal is to have a library that is as easy
-as possible to run on a server or on ones own computer. I am also interested in this being easy to extend. 
+as possible to run on a server or on one's own computer. I am also interested in this being easy to extend. 
 
 I have a few assumptions that the code / support algorithms I believe should adhere to:
 - Environments should be pickle-able, and serializable. They should be able to shut down and start up multiple times
@@ -39,6 +39,12 @@ Luckily, I have a fork of pybullet, so this modifications will be forced.
 it generated.
 - Serializable: If we want to do parallel processing, environments need to be serializable to transport them between 
 those processes.
+
+Some extra assumptions:
+- Environments can easier be goal-less, or have a single goal in which OpenAI defines as `Env` and `GoalEnv`. 
+
+These assumptions are necessary for us to implement other envs from other repos. We do not want to be tied to just
+OpenAI gyms. 
 
 ### Key Components
 
