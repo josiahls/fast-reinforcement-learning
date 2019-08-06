@@ -1,5 +1,6 @@
 from numbers import Integral
 
+import gym
 from fastai.core import *
 # noinspection PyProtectedMember
 from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, ItemLists, data_collate, DataLoader, try_int
@@ -8,19 +9,24 @@ from fastai.vision import Image
 
 
 class MarkovDecisionProcessDataset(Dataset):
-    def __init__(self, env, feed_type='state', render='rgb_array'):
+    def __init__(self, env: gym.Env, episodes, feed_type='state', render='rgb_array'):
+        self.episodes = episodes
         self.render = render
         self.feed_type = feed_type
         self.env = env
-        self.actions = None
+        self.actions = env.action_space.sample()
         self.is_done = True
         self.reward = None
         self.last_state = None
-        self.x = []
+        self.x = self.new(0)
         self.item = None
 
     def new(self, index):
-        output = self.env.reset() if self.actions is None or self.is_done else self.env.step(self.actions)
+        if self.is_done:
+            output, self.reward, self.is_done, info = self.env.reset(), 0, False, {}
+        else:
+            output, self.reward, self.is_done, info = self.env.step(self.actions)
+
         image = self.env.render(self.render)
         current_state = image if self.feed_type == 'image' else output
         alternate_state = output if self.feed_type == 'image' else image
@@ -31,10 +37,18 @@ class MarkovDecisionProcessDataset(Dataset):
         return MarkovDecisionProcessList([items])
 
     def __len__(self):
-        return self.env._max_episode_steps
+        return len(self.x)#self.env._max_episode_steps
 
-    def __getitem__(self, idxs: Union[int,np.ndarray])->'MarkovDecisionProcessDataset':
+    def __getitem__(self, idxs: Union[int, np.ndarray])->'MarkovDecisionProcessDataset':
         idxs = try_int(idxs)
+        if isinstance(idxs, Integral):
+            if self.item is None:
+                self.x.add(self.new(idxs))
+                x = self.x[idxs]
+            else:
+                x = self.item
+
+            return x
         return self.new(idxs)
 
 
@@ -62,7 +76,7 @@ class MarkovDecisionProcessDataBunch(DataBunch):
         return cls(*dls, path=path, device=device, dl_tfms=dl_tfms, collate_fn=collate_fn, no_check=no_check)
 
     @staticmethod
-    def _init_ds(train_ds:Dataset, valid_ds:Dataset, test_ds:Optional[Dataset]=None):
+    def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset]=None):
         # train_ds, but without training tfms
         fix_ds = valid_ds.new(train_ds.x) if hasattr(valid_ds,'new') else train_ds
         return [o for o in (train_ds,valid_ds,fix_ds,test_ds) if o is not None]

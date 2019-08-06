@@ -8,14 +8,11 @@ from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, Marko
 
 
 def test_MarkovDecisionProcessSlice_init():
-    env = gym.make('CartPole-v0')
-
     # Create 2 itemlists
-    train_list = MarkovDecisionProcessList()
     valid_list = MarkovDecisionProcessList()
 
-    train_list = MarkovDecisionProcessDataset(gym.make('CartPole-v0'))
-    valid_list = MarkovDecisionProcessDataset(gym.make('CartPole-v0'))
+    train_list = MarkovDecisionProcessDataset(gym.make('CartPole-v1'), episodes=450)
+    valid_list = MarkovDecisionProcessDataset(gym.make('CartPole-v1'), episodes=450)
 
     env_databunch = MarkovDecisionProcessDataBunch.create(train_list, valid_list, num_workers=0)
 

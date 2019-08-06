@@ -21,4 +21,6 @@ def test_ImageDataBunch_init():
     :return:
     """
     data = ImageDataBunch.from_folder(get_absolute_path('data'), valid_pct=0.5)
-    ln = Learner()
+
+    for e in data.train_ds:
+        print(e)
