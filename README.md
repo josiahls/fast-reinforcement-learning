@@ -34,7 +34,7 @@ environments should not be expected to allow output of contact points, sub-goals
 
 Rational:
 - Shutdown / Startup: Some environments (pybullet) have the issue of shutting down and starting different environments.
-Luckily, I have a fork of pybullet, so this modifications will be forced. 
+Luckily, I have a fork of pybullet, so these modifications will be forced. 
 - Pickling: Being able to encapsulate an environment as a `.pkl` can be important for saving it and all the information
 it generated.
 - Serializable: If we want to do parallel processing, environments need to be serializable to transport them between 
