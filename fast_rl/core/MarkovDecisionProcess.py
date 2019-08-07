@@ -9,8 +9,8 @@ from fastai.vision import Image
 
 
 class MarkovDecisionProcessDataset(Dataset):
-    def __init__(self, env: gym.Env, episodes, feed_type='state', render='rgb_array'):
-        self.episodes = episodes
+    def __init__(self, env: gym.Env, feed_type='state', render='rgb_array', max_steps = None):
+        self.max_steps = env._max_episode_steps if max_steps is None else max_steps
         self.render = render
         self.feed_type = feed_type
         self.env = env
@@ -37,7 +37,7 @@ class MarkovDecisionProcessDataset(Dataset):
         return MarkovDecisionProcessList([items])
 
     def __len__(self):
-        return len(self.x)#self.env._max_episode_steps
+        return self.max_steps
 
     def __getitem__(self, idxs: Union[int, np.ndarray])->'MarkovDecisionProcessDataset':
         idxs = try_int(idxs)
