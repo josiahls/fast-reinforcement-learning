@@ -25,6 +25,7 @@ class MarkovDecisionProcessDataset(Dataset):
 
         self.env_specific_handle()
         self.x = self.new(0)
+        self.counter = -1
         self.item = None
 
     def __del__(self):
@@ -41,10 +42,12 @@ class MarkovDecisionProcessDataset(Dataset):
         return action_space.sample()
 
     def new(self, _):
-        if self.is_done:
+        if self.is_done or self.counter > self.max_steps:
             output, self.reward, self.is_done, info = self.env.reset(), 0, False, {}
+            self.counter = -1
         else:
             output, self.reward, self.is_done, info = self.env.step(self.actions)
+        self.counter += 1
 
         # Specifically for the stupid blackjack-v0 env
         try:

@@ -13,7 +13,7 @@ def test_envs_all():
     max_steps = 50
     envs = Envs.get_all_envs()
 
-    for env in envs[25:]:
+    for env in envs:
         print(f'Testing {env}')
         env_databunch = MarkovDecisionProcessDataBunch.from_env(env, max_steps=max_steps, num_workers=0)
         if env_databunch is None:
