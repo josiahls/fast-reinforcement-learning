@@ -1,6 +1,18 @@
 from numbers import Integral
 
 import gym
+try:
+    # noinspection PyUnresolvedReferences
+    import pybulletgym.envs
+
+except ModuleNotFoundError as e:
+    print(f'Can\'t import one of these: {e}')
+try:
+    # noinspection PyUnresolvedReferences
+    import gym_maze
+except ModuleNotFoundError as e:
+    print(f'Can\'t import one of these: {e}')
+
 from fastai.core import *
 # noinspection PyProtectedMember
 from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader, try_int
@@ -11,9 +23,16 @@ from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
 from gym.envs.toy_text import discrete
 from gym.wrappers import TimeLimit
 
+from fast_rl.util.misc import b_colors
 
-class MarkovDecisionProcessDataset(Dataset):
-    def __init__(self, env: gym.Env, feed_type='state', render='rgb_array', max_steps=None):
+
+FEED_TYPE_IMAGE = 0
+FEED_TYPE_STATE = 1
+
+
+class MDPDataset(Dataset):
+    def __init__(self, env: gym.Env, feed_type=FEED_TYPE_IMAGE, render='rgb_array', max_steps=None):
+        # noinspection PyUnresolvedReferences,PyProtectedMember
         self.max_steps = env._max_episode_steps if max_steps is None else max_steps
         self.render = render
         self.feed_type = feed_type
@@ -24,8 +43,8 @@ class MarkovDecisionProcessDataset(Dataset):
         self.last_state = None
 
         self.env_specific_handle()
-        self.x = self.new(0)
         self.counter = -1
+        self.x = self.new(0)
         self.item = None
 
     def __del__(self):
@@ -44,19 +63,22 @@ class MarkovDecisionProcessDataset(Dataset):
     def new(self, _):
         if self.is_done or self.counter > self.max_steps:
             output, self.reward, self.is_done, info = self.env.reset(), 0, False, {}
-            self.counter = -1
+            if self.counter != -1:
+                self.counter = -1
+                raise StopIteration
         else:
             output, self.reward, self.is_done, info = self.env.step(self.actions)
         self.counter += 1
 
-        # Specifically for the stupid blackjack-v0 env
+        # Specifically for the stupid blackjack-v0 env >:(
         try:
             image = self.env.render(self.render)
         except NotImplementedError:
+            print(f'{b_colors.WARNING} {self.env.unwrapped.spec} Not returning Image {b_colors.ENDC}')
             image = None
 
-        current_state = image if self.feed_type == 'image' and image is not None else output
-        alternate_state = output if self.feed_type == 'image' or image is None else image
+        current_state = image if self.feed_type == FEED_TYPE_IMAGE and image is not None else output
+        alternate_state = output if self.feed_type == FEED_TYPE_IMAGE or image is None else image
         items = MarkovDecisionProcessSlice(current_state=current_state, last_state=self.last_state,
                                            alternate_state=alternate_state, actions=self.actions,
                                            reward=self.reward, done=self.is_done, feed_type=self.feed_type)
@@ -66,7 +88,7 @@ class MarkovDecisionProcessDataset(Dataset):
     def __len__(self):
         return self.max_steps
 
-    def __getitem__(self, idxs: Union[int, np.ndarray]) -> 'MarkovDecisionProcessDataset':
+    def __getitem__(self, idxs: Union[int, np.ndarray]) -> 'MDPDataset':
         idxs = try_int(idxs)
         if isinstance(idxs, Integral):
             if self.item is None:
@@ -80,30 +102,35 @@ class MarkovDecisionProcessDataset(Dataset):
         return self.new(idxs)
 
 
-class MarkovDecisionProcessDataBunch(DataBunch):
+class MDPDataBunch(DataBunch):
+    def get_action_state_size(self):
+        if self.train_ds is not None: a_s, s_s = self.train_ds.env.action_space, self.train_ds.env.observation_space
+        elif self.valid_ds is not None: a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.env.observation_space
+        else: return None
+        return a_s, s_s
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, test_ds: Optional[Dataset] = None,
-                 path: PathOrStr = '.', bs: int = 1, feed_type='state', val_bs: int = None,
-                 num_workers: int = defaults.cpus,
+                 path: PathOrStr = '.', bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
+                 num_workers: int = 0,
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
                  collate_fn: Callable = data_collate, no_check: bool = False, **dl_kwargs):
 
         try:
-            train_list = MarkovDecisionProcessDataset(gym.make(env_name), max_steps=max_steps)
-            valid_list = MarkovDecisionProcessDataset(gym.make(env_name), max_steps=max_steps)
-        except error.DependencyNotInstalled:
+            train_list = MDPDataset(gym.make(env_name), max_steps=max_steps)
+            valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps)
+        except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
-            return None
+            if e.args[0].lower().__contains__('mujoco'): return None
 
         return cls.create(train_list, valid_list, num_workers=num_workers, test_ds=test_ds, path=path, bs=bs,
                           feed_type=feed_type, val_bs=val_bs, dl_tfms=dl_tfms, device=device, collate_fn=collate_fn,
                           no_check=no_check, **dl_kwargs)
 
     @classmethod
-    def create(cls, train_ds: MarkovDecisionProcessDataset, valid_ds: MarkovDecisionProcessDataset = None,
+    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None,
                test_ds: Optional[Dataset] = None, path: PathOrStr = '.', bs: int = 1,
-               feed_type='state',
+               feed_type=FEED_TYPE_STATE,
                val_bs: int = None, num_workers: int = defaults.cpus, dl_tfms: Optional[Collection[Callable]] = None,
                device: torch.device = None, collate_fn: Callable = data_collate, no_check: bool = False,
                **dl_kwargs) -> 'DataBunch':
@@ -130,9 +157,9 @@ class MarkovDecisionProcessDataBunch(DataBunch):
 
 
 class MarkovDecisionProcessList(ItemList):
-    _bunch = MarkovDecisionProcessDataBunch
+    _bunch = MDPDataBunch
 
-    def __init__(self, items=np.array([]), feed_type='image', **kwargs):
+    def __init__(self, items=np.array([]), feed_type=FEED_TYPE_IMAGE, **kwargs):
         super(MarkovDecisionProcessList, self).__init__(items, **kwargs)
         self.feed_type = feed_type
         self.copy_new.append('feed_type')
@@ -143,7 +170,7 @@ class MarkovDecisionProcessList(ItemList):
         return res.current_state
 
     def reconstruct(self, t: Tensor, x: Tensor = None):
-        if self.feed_type == 'image':
+        if self.feed_type == FEED_TYPE_IMAGE:
             return MarkovDecisionProcessSlice(current_state=Image(t), last_state=Image(x[0]),
                                               alternate_state=Floats(x[1]), actions=Floats(x[1]),
                                               reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
@@ -155,9 +182,9 @@ class MarkovDecisionProcessList(ItemList):
 
 class MarkovDecisionProcessSlice(ItemBase):
     # noinspection PyMissingConstructor
-    def __init__(self, current_state, last_state, alternate_state, actions, reward, done, feed_type='image'):
+    def __init__(self, current_state, last_state, alternate_state, actions, reward, done, feed_type=FEED_TYPE_IMAGE):
         self.current_state, self.last_state, self.alternate_state, self.actions, self.reward, self.done = current_state, last_state, alternate_state, actions, reward, done
-        self.data, self.obj = [alternate_state] if feed_type == 'image' else [current_state], (
+        self.data, self.obj = [alternate_state] if feed_type == FEED_TYPE_IMAGE else [current_state], (
             last_state, alternate_state, actions, reward, done)
 
     def __str__(self):

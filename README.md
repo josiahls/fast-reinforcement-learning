@@ -21,6 +21,53 @@ Fastai for computer vision and tabular learning has been amazing. One would wish
 The purpose of this repo is to have a framework that is as easy as possible to start, but also designed for testing
 new agents. 
 
+## Roadmap (kind of)
+At the moment these are the things I personally urgently need, and then the nice things that will make this repo
+something akin to valuable. These are listed in kind of the order I am planning on executing them.
+
+**Critical**
+- [X] MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
+Example:
+```python
+from fast_rl.core.Envs import Envs
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+
+# At present will try to load OpenAI, box2d, pybullet, atari, maze.
+# note "get_all_latest_envs" has a key inclusion and exclusion so if you don't have some of these envs installed, 
+# you can avoid this here.
+for env in Envs.get_all_latest_envs():
+    max_steps = 50
+    print(f'Testing {env}')
+    mdp_databunch = MDPDataBunch.from_env(env, max_steps=max_steps, num_workers=0)
+    if mdp_databunch is None:
+        print(f'Env {env} is probably Mujoco... Add imports if you want and try on your own. Don\'t like '
+              f'proprietary engines like this. If you have any issues, feel free to make a PR!')
+    else:
+        epochs = 1 # N episodes to run
+        for epoch in range(epochs):
+            for state in mdp_databunch.train_dl:
+                # Instead of random action, you would have your agent here
+                mdp_databunch.train_ds.actions = mdp_databunch.train_ds.get_random_action()
+    
+            for state in mdp_databunch.valid_dl:
+                # Instead of random action, you would have your agent here and have exploration to 0
+                mdp_databunch.valid_ds.actions = mdp_databunch.valid_ds.get_random_action()
+```
+->>> [ ] DQN Agent: Working on this right now. Reference: `tests/test_Learner/test_basic_dqn_model_maze`. This test is
+kind of a hell-scape. You will notice I plan to use Learner callbacks for a fit function. Also note, the gym_maze envs
+will be important for at least discrete testing because you can heatmap the maze with the model's rewards. 
+- [ ] ReinforcementInterpretation: Probably done immediately after the first DQN agent. First method will be heatmapping
+the image / state space of the environment with the expected rewards for super important debugging.
+- [ ] Learner Basic: After DQN and adding DDQN, Fixed targeting, DDDQN, we need to convert this (most likely) messy test
+into a suitable object. Will be similar to the basic learner.
+- [ ] DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
+could give discrete agents the ability to operate in a continuous domain via binning. 
+- [ ] Learner Refactor: DDPG will probably screw up everything lol. We will need to rethink the learner / maybe try to
+eliminate some custom methods for native Fastai library methods. 
+**Additional**
+- [ ] Single Global fit function like Fastai's. Better yet, actually just use their universal fit function.
+
+
 ## Code 
 Some of the key take aways is Fastai's use of callbacks. Not only do callbacks allow for logging, but in fact adding a
 callback to a generic fit function can change its behavior drastically. My goal is to have a library that is as easy

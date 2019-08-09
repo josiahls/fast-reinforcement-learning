@@ -5,7 +5,7 @@ from fastai.vision import ImageDataBunch
 import numpy as np
 
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, MarkovDecisionProcessList, \
-    MarkovDecisionProcessDataBunch, MarkovDecisionProcessDataset
+    MDPDataBunch, MDPDataset
 
 
 def test_MarkovDecisionProcessDataBunch_init():
@@ -14,10 +14,10 @@ def test_MarkovDecisionProcessDataBunch_init():
 
     max_steps = 50
     # Create 2 itemlists
-    train_list = MarkovDecisionProcessDataset(gym.make('CartPole-v1'), max_steps=max_steps)
-    valid_list = MarkovDecisionProcessDataset(gym.make('CartPole-v1'), max_steps=max_steps)
+    train_list = MDPDataset(gym.make('CartPole-v1'), max_steps=max_steps)
+    valid_list = MDPDataset(gym.make('CartPole-v1'), max_steps=max_steps)
 
-    env_databunch = MarkovDecisionProcessDataBunch.create(train_list, valid_list, num_workers=0)
+    env_databunch = MDPDataBunch.create(train_list, valid_list, num_workers=0)
     epochs = 1
 
     assert max_steps == len(train_list)
@@ -46,9 +46,9 @@ def test_MarkovDecisionProcessDataBunch_init_no_valid():
 
     max_steps = 50
     # Create 2 itemlists
-    train_list = MarkovDecisionProcessDataset(gym.make('CartPole-v1'), max_steps=max_steps)
+    train_list = MDPDataset(gym.make('CartPole-v1'), max_steps=max_steps)
 
-    env_databunch = MarkovDecisionProcessDataBunch.create(train_list, num_workers=0)
+    env_databunch = MDPDataBunch.create(train_list, num_workers=0)
     env_databunch.valid_dl = None
     epochs = 3
 

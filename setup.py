@@ -19,5 +19,6 @@ setup(name='fast_rl',
       packages=[package for package in find_packages()
                 if package.startswith('fast_rl')],
       zip_safe=False,
-      install_requires=['numpy', 'tqdm', 'pillow', 'pandas', 'fastai', 'gym', ],
+      install_requires=['numpy', 'tqdm', 'pillow', 'pandas', 'fastai', 'gym[box2d, atari]', 'jupyter', 'namedlist',
+                        'pytest-asyncio', 'pytest'],
       )
