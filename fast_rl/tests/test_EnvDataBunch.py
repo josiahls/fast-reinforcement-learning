@@ -8,7 +8,7 @@ from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, Marko
     MarkovDecisionProcessDataBunch, MarkovDecisionProcessDataset
 
 
-def test_MarkovDecisionProcessSlice_init():
+def test_MarkovDecisionProcessDataBunch_init():
     error_msg = 'state space is %s but should be %s'
     error_msg2 = 'the datasets in the dataloader seem to be different from the data bunches datasets...'
 
@@ -39,3 +39,29 @@ def test_MarkovDecisionProcessSlice_init():
             print(f'state {element} action {env_databunch.valid_dl.dl.dataset.actions}')
             assert current_s == actual_s, error_msg % (current_s, actual_s)
             assert np.equal(env_databunch.valid_dl.dl.dataset.actions, env_databunch.valid_ds.actions), error_msg2
+
+def test_MarkovDecisionProcessDataBunch_init_no_valid():
+    error_msg = 'state space is %s but should be %s'
+    error_msg2 = 'the datasets in the dataloader seem to be different from the data bunches datasets...'
+
+    max_steps = 50
+    # Create 2 itemlists
+    train_list = MarkovDecisionProcessDataset(gym.make('CartPole-v1'), max_steps=max_steps)
+
+    env_databunch = MarkovDecisionProcessDataBunch.create(train_list, num_workers=0)
+    env_databunch.valid_dl = None
+    epochs = 3
+
+    assert max_steps == len(train_list)
+    assert max_steps == len(train_list)
+    assert max_steps == len(env_databunch.train_dl)
+    assert env_databunch.valid_dl is None
+
+    for epoch in range(epochs):
+        print(f'epoch {epoch}')
+        for element in env_databunch.train_dl:
+            env_databunch.train_ds.actions = env_databunch.train_ds.env.action_space.sample()
+            current_s, actual_s = element.shape[1], train_list.env.observation_space.shape[0]
+            print(f'state {element} action {env_databunch.train_dl.dl.dataset.actions}')
+            assert current_s == actual_s, error_msg % (current_s, actual_s)
+            assert np.equal(env_databunch.train_dl.dl.dataset.actions, env_databunch.train_ds.actions), error_msg2
