@@ -9,35 +9,37 @@ from typing import Collection
 
 from fast_rl.agents.BaseAgent import BaseAgent
 from fast_rl.agents.DQN import DQN
+from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
-t = tabular_learner()
+
 def test_basic_dqn_model_maze():
     msg = 'the datasets in the dataloader seem to be different from the data bunches datasets...'
 
     data = MDPDataBunch.from_env('maze-random-10x10-plus-v0')
     model = DQN(data)
+    learn = AgentLearner(data, model)
 
     epochs = 450
 
-    callbacks = [model.callbacks]  # type: Collection[LearnerCallback]
-    [c.on_train_begin() for c in callbacks]
+    callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
+    [c.on_train_begin(max_episodes=epochs) for c in callbacks]
     for epoch in range(epochs):
-        [c.on_epoch_begin() for c in callbacks]
-        model.train()
-        for element in data.train_dl:
-            data.train_ds.actions = model(element)
+        [c.on_epoch_begin(episode=epoch) for c in callbacks]
+        learn.model.train()
+        for element in learn.data.train_dl:
+            learn.data.train_ds.actions = learn.predict(element)
             # print(f'state {element} action {mdp_databunch.train_dl.dl.dataset.actions}')
-            assert np.sum(np.equal(data.train_dl.dl.dataset.actions, data.train_ds.actions)) == \
-                np.size(data.train_ds.actions), msg
-            [c.on_step_end() for c in callbacks]
+            # assert np.sum(np.equal(learn.data.train_dl.dl.dataset.actions, learn.data.train_ds.actions)) == \
+            #     np.size(learn.data.train_ds.actions), msg
+            [c.on_step_end(learn=learn) for c in callbacks]
         [c.on_epoch_end() for c in callbacks]
 
-        # For now we are going to avoid executing callbacks here.
-        model.eval()
-        for element in data.valid_dl:
-            data.valid_ds.actions = model(element)
-            # print(f'state {element} action {mdp_databunch.valid_dl.dl.dataset.actions}')
-            assert np.sum(np.equal(data.train_dl.dl.dataset.actions, data.train_ds.actions)) == \
-                np.size(data.train_ds.actions), msg
+        # # For now we are going to avoid executing callbacks here.
+        # learn.model.eval()
+        # for element in learn.data.valid_dl:
+        #     learn.data.valid_ds.actions = learn.predict(element)
+        #     # print(f'state {element} action {mdp_databunch.valid_dl.dl.dataset.actions}')
+        #     assert np.sum(np.equal(learn.data.train_dl.dl.dataset.actions, learn.data.train_ds.actions)) == \
+        #         np.size(learn.data.train_ds.actions), msg
     [c.on_train_end() for c in callbacks]

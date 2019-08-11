@@ -36,7 +36,7 @@ from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 # note "get_all_latest_envs" has a key inclusion and exclusion so if you don't have some of these envs installed, 
 # you can avoid this here.
 for env in Envs.get_all_latest_envs():
-    max_steps = 50
+    max_steps = 50  # Limit the number of per episode iterations for now.
     print(f'Testing {env}')
     mdp_databunch = MDPDataBunch.from_env(env, max_steps=max_steps, num_workers=0)
     if mdp_databunch is None:

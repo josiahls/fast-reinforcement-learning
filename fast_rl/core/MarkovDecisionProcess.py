@@ -1,6 +1,8 @@
 from numbers import Integral
 
 import gym
+from gym.spaces import Discrete, Box
+
 try:
     # noinspection PyUnresolvedReferences
     import pybulletgym.envs
@@ -103,11 +105,16 @@ class MDPDataset(Dataset):
 
 
 class MDPDataBunch(DataBunch):
+    def _get_sizes(self, item):
+        if isinstance(item, Discrete): return item.n
+        if isinstance(item, Box) and len(item.shape) == 1: return item.shape[0]
+
+    # noinspection PyUnresolvedReferences
     def get_action_state_size(self):
         if self.train_ds is not None: a_s, s_s = self.train_ds.env.action_space, self.train_ds.env.observation_space
         elif self.valid_ds is not None: a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.env.observation_space
         else: return None
-        return a_s, s_s
+        return tuple(map(self._get_sizes, [a_s, s_s]))
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, test_ds: Optional[Dataset] = None,
