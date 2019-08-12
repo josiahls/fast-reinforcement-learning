@@ -27,22 +27,30 @@ Very soon I would like to add some form of scripting to install some complicated
 **1.a FastAI**
 [Install Fastai](https://github.com/fastai/fastai/blob/master/README.md#installation)
 or if you are Anaconda (which is a good idea I would use Anaconda) you can do:
+
 `conda install -c pytorch -c fastai fastai`
 
 
 **1.b Optional / Extra Envs**
 OpenAI all gyms:
+
 `pip install gym[all]`
+
 Mazes:
+
 `https://github.com/MattChanTK/gym-maze.git`
+
 `cd gym-maze`
+
 `python setup.py install`
 
 
 **2 Actual Repo**
 
 `https://github.com/josiahls/fast-reinforcement-learning.git`
+
 `cd fast-reinforcement-learning`
+
 `python setup.py install`
 
 ## Roadmap (kind of)
