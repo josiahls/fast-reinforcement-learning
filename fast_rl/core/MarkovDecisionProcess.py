@@ -33,21 +33,27 @@ FEED_TYPE_STATE = 1
 
 
 class MDPDataset(Dataset):
-    def __init__(self, env: gym.Env, feed_type=FEED_TYPE_IMAGE, render='rgb_array', max_steps=None):
+    def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None):
         # noinspection PyUnresolvedReferences,PyProtectedMember
         self.max_steps = env._max_episode_steps if max_steps is None else max_steps
         self.render = render
         self.feed_type = feed_type
         self.env = env
+        # MDP specific values
         self.actions = self.get_random_action(env.action_space)
         self.is_done = True
-        self.reward = None
-        self.last_state = None
+        self.current_state = None
+        self.current_image = None
 
         self.env_specific_handle()
         self.counter = -1
         self.x = self.new(0)
         self.item = None
+
+    @property
+    def state_size(self):
+        if self.feed_type == FEED_TYPE_STATE: return self.env.observation_space
+        else: return gym.spaces.Box(0, 255, shape=self.env.render('rgb_array').shape)
 
     def __del__(self):
         self.env.close()
@@ -62,28 +68,48 @@ class MDPDataset(Dataset):
         action_space = action_space if action_space is not None else self.env.action_space
         return action_space.sample()
 
+    def _get_image(self):
+        # Specifically for the stupid blackjack-v0 env >:(
+        try:
+            current_image = self.env.render(self.render)
+        except NotImplementedError:
+            print(f'{b_colors.WARNING} {self.env.unwrapped.spec} Not returning Image {b_colors.ENDC}')
+            current_image = None
+        return current_image
+
     def new(self, _):
+        """
+        New element is a query of the environment
+
+        Args:
+            _:
+
+        Returns:
+
+        """
+        # First Phase: decide on episode reset. Collect current state and image representations.
         if self.is_done or self.counter > self.max_steps:
-            output, self.reward, self.is_done, info = self.env.reset(), 0, False, {}
+            self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
+            # Specifically for the stupid blackjack-v0 env >:(
+            self.current_image = self._get_image()
+
             if self.counter != -1:
                 self.counter = -1
                 raise StopIteration
-        else:
-            output, self.reward, self.is_done, info = self.env.step(self.actions)
+
+        result_state, reward, self.is_done, info = self.env.step(self.actions)
+        result_image = self._get_image()
         self.counter += 1
 
-        # Specifically for the stupid blackjack-v0 env >:(
-        try:
-            image = self.env.render(self.render)
-        except NotImplementedError:
-            print(f'{b_colors.WARNING} {self.env.unwrapped.spec} Not returning Image {b_colors.ENDC}')
-            image = None
-
-        current_state = image if self.feed_type == FEED_TYPE_IMAGE and image is not None else output
-        alternate_state = output if self.feed_type == FEED_TYPE_IMAGE or image is None else image
-        items = MarkovDecisionProcessSlice(current_state=current_state, last_state=self.last_state,
+        # Second Phase: Generate MDP slice
+        result_state = result_image if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
+        current_state = self.current_image if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
+        alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
+        items = MarkovDecisionProcessSlice(current_state=current_state, result_state=result_state,
                                            alternate_state=alternate_state, actions=self.actions,
-                                           reward=self.reward, done=self.is_done, feed_type=self.feed_type)
+                                           reward=reward, done=self.is_done, feed_type=self.feed_type)
+        self.current_state = result_state
+        self.current_image = result_image
 
         return MarkovDecisionProcessList([items])
 
@@ -111,21 +137,21 @@ class MDPDataBunch(DataBunch):
 
     # noinspection PyUnresolvedReferences
     def get_action_state_size(self):
-        if self.train_ds is not None: a_s, s_s = self.train_ds.env.action_space, self.train_ds.env.observation_space
-        elif self.valid_ds is not None: a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.env.observation_space
+        if self.train_ds is not None: a_s, s_s = self.train_ds.env.action_space, self.train_ds.state_size
+        elif self.valid_ds is not None: a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.state_size
         else: return None
         return tuple(map(self._get_sizes, [a_s, s_s]))
 
     @classmethod
-    def from_env(cls, env_name='CartPole-v1', max_steps=None, test_ds: Optional[Dataset] = None,
+    def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
                  path: PathOrStr = '.', bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
                  num_workers: int = 0,
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
                  collate_fn: Callable = data_collate, no_check: bool = False, **dl_kwargs):
 
         try:
-            train_list = MDPDataset(gym.make(env_name), max_steps=max_steps)
-            valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps)
+            train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
+            valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
         except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
             if e.args[0].lower().__contains__('mujoco'): return None
@@ -167,6 +193,21 @@ class MarkovDecisionProcessList(ItemList):
     _bunch = MDPDataBunch
 
     def __init__(self, items=np.array([]), feed_type=FEED_TYPE_IMAGE, **kwargs):
+        """
+        Represents a MDP sequence over episodes.
+
+
+        Notes:
+            Two important fields for you to be aware of: `items` and `x`.
+            `x` is just the values being used for directly being feed into the model.
+            `items` contains an ndarray of MarkovDecisionProcessSlice instances. These contain the the primary values
+            in x, but also the other important properties of a MDP.
+
+        Args:
+            items:
+            feed_type:
+            **kwargs:
+        """
         super(MarkovDecisionProcessList, self).__init__(items, **kwargs)
         self.feed_type = feed_type
         self.copy_new.append('feed_type')
@@ -178,21 +219,23 @@ class MarkovDecisionProcessList(ItemList):
 
     def reconstruct(self, t: Tensor, x: Tensor = None):
         if self.feed_type == FEED_TYPE_IMAGE:
-            return MarkovDecisionProcessSlice(current_state=Image(t), last_state=Image(x[0]),
+            return MarkovDecisionProcessSlice(current_state=Image(t), result_state=Image(x[0]),
                                               alternate_state=Floats(x[1]), actions=Floats(x[1]),
                                               reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
         else:
-            return MarkovDecisionProcessSlice(current_state=Floats(t), last_state=Floats(x[0]),
+            return MarkovDecisionProcessSlice(current_state=Floats(t), result_state=Floats(x[0]),
                                               alternate_state=Image(x[1]), actions=Floats(x[1]),
                                               reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
 
 
 class MarkovDecisionProcessSlice(ItemBase):
     # noinspection PyMissingConstructor
-    def __init__(self, current_state, last_state, alternate_state, actions, reward, done, feed_type=FEED_TYPE_IMAGE):
-        self.current_state, self.last_state, self.alternate_state, self.actions, self.reward, self.done = current_state, last_state, alternate_state, actions, reward, done
+    def __init__(self, current_state, result_state, alternate_state, actions, reward, done, feed_type=FEED_TYPE_IMAGE):
+        if isinstance(actions, int): actions = np.array(actions, ndmin=1)
+        if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
+        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done = current_state, result_state, alternate_state, actions, reward, done
         self.data, self.obj = [alternate_state] if feed_type == FEED_TYPE_IMAGE else [current_state], (
-            last_state, alternate_state, actions, reward, done)
+            result_state, alternate_state, actions, reward, done)
 
     def __str__(self):
         return Image(self.alternate_state)

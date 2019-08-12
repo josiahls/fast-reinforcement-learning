@@ -8,6 +8,7 @@ from traitlets import List
 from typing import Collection
 
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.agent_core import ExplorationStrategy
 
 
 class BaseAgent(nn.Module):
@@ -22,6 +23,7 @@ class BaseAgent(nn.Module):
         self.callbacks = []  # type: Collection[LearnerCallback]
         # Root model that will be accessed for action decisions
         self.action_model = None  # type: nn.Module
+        self.exploration_strategy = ExplorationStrategy(self.training)
 
     def forward(self, x):
         if isinstance(x, torch.Tensor): return x.float()
@@ -29,8 +31,8 @@ class BaseAgent(nn.Module):
 
     def pick_action(self, x):
         with torch.no_grad():
-            if isinstance(self.data.train_ds.env.action_space, Discrete): return x.argmax().numpy().item()
-            return x
+            if isinstance(self.data.train_ds.env.action_space, Discrete): x = x.argmax().numpy().item()
+            return self.exploration_strategy.perturb(x, self.data.train_ds.env.action_space)
 
 
 def create_nn_model(layer_list: list, action_size, state_size):

@@ -14,9 +14,7 @@ from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
 
 def test_basic_dqn_model_maze():
-    msg = 'the datasets in the dataloader seem to be different from the data bunches datasets...'
-
-    data = MDPDataBunch.from_env('maze-random-10x10-plus-v0')
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
     model = DQN(data)
     learn = AgentLearner(data, model)
 

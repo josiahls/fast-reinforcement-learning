@@ -53,11 +53,49 @@ for env in Envs.get_all_latest_envs():
                 # Instead of random action, you would have your agent here and have exploration to 0
                 mdp_databunch.valid_ds.actions = mdp_databunch.valid_ds.get_random_action()
 ```
-->>> [ ] DQN Agent: Working on this right now. Reference: `tests/test_Learner/test_basic_dqn_model_maze`. This test is
+- [X] DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. This test is
 kind of a hell-scape. You will notice I plan to use Learner callbacks for a fit function. Also note, the gym_maze envs
 will be important for at least discrete testing because you can heatmap the maze with the model's rewards. 
-- [ ] ReinforcementInterpretation: Probably done immediately after the first DQN agent. First method will be heatmapping
-the image / state space of the environment with the expected rewards for super important debugging.
+DQN Agent basic learning / optimization is done. It is undoubtedly unstable / buggy. Please note the next step.
+
+One of the biggest issues with basic DQNs is the fact that Q values are often always moving. The actual basic DQN should
+be a fixed targeting DQN, however lets move to some debugging tools so we are more effactive.
+
+Testable code:
+```python
+from fast_rl.agents.DQN import DQN
+from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+
+data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
+model = DQN(data)
+learn = AgentLearner(data, model)
+
+epochs = 450
+
+callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
+[c.on_train_begin(max_episodes=epochs) for c in callbacks]
+for epoch in range(epochs):
+    [c.on_epoch_begin(episode=epoch) for c in callbacks]
+    learn.model.train()
+    for element in learn.data.train_dl:
+        learn.data.train_ds.actions = learn.predict(element)
+
+        [c.on_step_end(learn=learn) for c in callbacks]
+    [c.on_epoch_end() for c in callbacks]
+[c.on_train_end() for c in callbacks]
+``` 
+Result:
+
+![](res/pre_interpretation_maze_dqn.gif)
+
+I believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
+going on!
+
+- [ ] **Working On** ReinforcementInterpretation: First method will be heatmapping the image / state space of the 
+environment with the expected rewards for super important debugging. In the code above, we are testing with a maze for a
+good reason. Heatmapping rewards over a maze is pretty easy as opposed to other environments.
+
 - [ ] Learner Basic: After DQN and adding DDQN, Fixed targeting, DDDQN, we need to convert this (most likely) messy test
 into a suitable object. Will be similar to the basic learner.
 - [ ] DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 

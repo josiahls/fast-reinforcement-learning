@@ -1,3 +1,4 @@
+import gym
 import numpy as np
 import pytest
 
@@ -68,3 +69,15 @@ def test_individual_env():
             assert np.sum(
                 np.equal(mdp_databunch.train_dl.dl.dataset.actions, mdp_databunch.train_ds.actions)) == np.size(
                 mdp_databunch.train_ds.actions), msg
+
+
+def test_individual_env_no_dl():
+    """Just a nice place to do sanity testing on new / untested envs."""
+    env = gym.make('maze-random-10x10-plus-v0')
+    for episode in range(100):
+        done = False
+        env.reset()
+        while not done:
+            output = env.step(env.action_space.sample())
+            done = output[2]
+            env.render('human')
