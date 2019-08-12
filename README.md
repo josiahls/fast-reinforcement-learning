@@ -59,7 +59,7 @@ will be important for at least discrete testing because you can heatmap the maze
 DQN Agent basic learning / optimization is done. It is undoubtedly unstable / buggy. Please note the next step.
 
 One of the biggest issues with basic DQNs is the fact that Q values are often always moving. The actual basic DQN should
-be a fixed targeting DQN, however lets move to some debugging tools so we are more effactive.
+be a fixed targeting DQN, however lets move to some debugging tools so we are more effective.
 
 Testable code:
 ```python
