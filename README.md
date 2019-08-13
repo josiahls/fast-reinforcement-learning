@@ -47,7 +47,7 @@ Mazes:
 
 **2 Actual Repo**
 
-`https://github.com/josiahls/fast-reinforcement-learning.git`
+`git clone https://github.com/josiahls/fast-reinforcement-learning.git`
 
 `cd fast-reinforcement-learning`
 
