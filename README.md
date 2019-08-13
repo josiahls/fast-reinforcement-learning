@@ -38,7 +38,7 @@ OpenAI all gyms:
 
 Mazes:
 
-`https://github.com/MattChanTK/gym-maze.git`
+`git clone https://github.com/MattChanTK/gym-maze.git`
 
 `cd gym-maze`
 
