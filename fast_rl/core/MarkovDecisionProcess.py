@@ -27,7 +27,6 @@ from gym.wrappers import TimeLimit
 
 from fast_rl.util.misc import b_colors
 
-
 FEED_TYPE_IMAGE = 0
 FEED_TYPE_STATE = 1
 
@@ -52,8 +51,10 @@ class MDPDataset(Dataset):
 
     @property
     def state_size(self):
-        if self.feed_type == FEED_TYPE_STATE: return self.env.observation_space
-        else: return gym.spaces.Box(0, 255, shape=self.env.render('rgb_array').shape)
+        if self.feed_type == FEED_TYPE_STATE:
+            return self.env.observation_space
+        else:
+            return gym.spaces.Box(0, 255, shape=self.env.render('rgb_array').shape)
 
     def __del__(self):
         self.env.close()
@@ -108,8 +109,8 @@ class MDPDataset(Dataset):
         items = MarkovDecisionProcessSlice(current_state=current_state, result_state=result_state,
                                            alternate_state=alternate_state, actions=self.actions,
                                            reward=reward, done=self.is_done, feed_type=self.feed_type)
-        self.current_state = result_state
-        self.current_image = result_image
+        self.current_state = copy(result_state)
+        self.current_image = copy(result_image)
 
         return MarkovDecisionProcessList([items])
 
@@ -120,7 +121,8 @@ class MDPDataset(Dataset):
         idxs = try_int(idxs)
         if isinstance(idxs, Integral):
             if self.item is None:
-                self.x.add(self.new(idxs))
+                item = self.new(idxs)
+                self.x.add(item)
                 # x = self.x[idxs]  # Perhaps have this as an option?
                 x = self.x[-1]
             else:
@@ -137,9 +139,12 @@ class MDPDataBunch(DataBunch):
 
     # noinspection PyUnresolvedReferences
     def get_action_state_size(self):
-        if self.train_ds is not None: a_s, s_s = self.train_ds.env.action_space, self.train_ds.state_size
-        elif self.valid_ds is not None: a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.state_size
-        else: return None
+        if self.train_ds is not None:
+            a_s, s_s = self.train_ds.env.action_space, self.train_ds.state_size
+        elif self.valid_ds is not None:
+            a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.state_size
+        else:
+            return None
         return tuple(map(self._get_sizes, [a_s, s_s]))
 
     @classmethod
@@ -150,8 +155,11 @@ class MDPDataBunch(DataBunch):
                  collate_fn: Callable = data_collate, no_check: bool = False, **dl_kwargs):
 
         try:
-            train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
-            valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
+            # train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
+            # valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
+            env = gym.make(env_name)
+            train_list = MDPDataset(env, max_steps=max_steps, render=render)
+            valid_list = MDPDataset(env, max_steps=max_steps, render=render)
         except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
             if e.args[0].lower().__contains__('mujoco'): return None

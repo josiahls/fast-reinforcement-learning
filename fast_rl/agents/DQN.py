@@ -57,7 +57,7 @@ class DQN(BaseAgent):
 
     def forward(self, x):
         x = super(DQN, self).forward(x)
-        return self.pick_action(self.action_model(x))
+        return self.action_model(x)
 
     def optimize(self):
         """

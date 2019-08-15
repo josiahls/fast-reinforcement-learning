@@ -87,14 +87,25 @@ for epoch in range(epochs):
 ``` 
 Result:
 
-![](res/pre_interpretation_maze_dqn.gif)
+| ![](res/pre_interpretation_maze_dqn.gif) |
+|:---:|
+| *Fig 1: We are now able to train an agent using some Fastai API* |
+
 
 I believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
 going on!
 
-- [ ] **Working On** ReinforcementInterpretation: First method will be heatmapping the image / state space of the 
+- [X] **Working On** ReinforcementInterpretation: First method will be heatmapping the image / state space of the 
 environment with the expected rewards for super important debugging. In the code above, we are testing with a maze for a
 good reason. Heatmapping rewards over a maze is pretty easy as opposed to other environments.
+
+
+| ![](res/heatmap_1.png) |
+|:---:|
+| *Fig 2: Cumulative rewards calculated over states during episode 0.* |
+| ![](res/heatmap_2.png) |
+| *Fig 3: After 1-3 episodes the rewards die out meaning we still need to debug and improve our agent.* |
+
 
 - [ ] Learner Basic: After DQN and adding DDQN, Fixed targeting, DDDQN, we need to convert this (most likely) messy test
 into a suitable object. Will be similar to the basic learner.
