@@ -175,8 +175,9 @@ interp = AgentInterpretationv1(learn)
 interp.plot_episode(epoch)
 ```
 We can get the following plots for specific episodes:
+
 | ![](res/reward_plot_1.png) |
-|:---:|
+|:----:|
 | *Fig 4: Rewards estimated by the agent during episode 0.* |
 | ![](res/reward_plot_2.png) |
 | *Fig 5: Rewards later estimated by the agent during episode 1.* |
