@@ -114,3 +114,45 @@ class AgentInterpretationv1(Interpretation):
             plt.show()
 
         return plots
+
+    def plot_episode(self, episode):
+        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+
+        episode_counter = 0
+        # For each episode
+        buffer = []
+        for item in items:
+            buffer.append(item)
+            if item.done:
+                if episode_counter == episode:
+                    break
+                episode_counter += 1
+                buffer = []
+
+        plots = []
+        with torch.no_grad():
+            agent_reward_plots = [self.learn.model(torch.from_numpy(np.array(i.current_state))).max().numpy() for i in buffer]
+            fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+            fig.suptitle(f'Episode {episode}')
+            ax.plot(agent_reward_plots)
+            ax.set_xlabel('Time Steps')
+            ax.set_ylabel('Max Expected Reward from Agent')
+
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png')
+            # Closing the figure prevents it from being displayed directly inside
+            # the notebook.
+            plt.close(fig)
+            buf.seek(0)
+            # Create Image object
+            plots.append(np.array(Image.open(buf))[:, :, :3])
+
+        for plot in plots:
+            plt.grid(False)
+            plt.xticks([])
+            plt.yticks([])
+            plt.tight_layout()
+            plt.imshow(plot)
+            plt.show()
+
+        return plots

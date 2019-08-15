@@ -46,7 +46,7 @@ class MDPDataset(Dataset):
 
         self.env_specific_handle()
         self.counter = -1
-        self.x = self.new(0)
+        self.x = MarkovDecisionProcessList()#self.new(0)
         self.item = None
 
     @property
@@ -89,7 +89,7 @@ class MDPDataset(Dataset):
 
         """
         # First Phase: decide on episode reset. Collect current state and image representations.
-        if self.is_done or self.counter > self.max_steps:
+        if self.is_done or self.counter >= self.max_steps - 2:
             self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
             # Specifically for the stupid blackjack-v0 env >:(
             self.current_image = self._get_image()
@@ -121,8 +121,12 @@ class MDPDataset(Dataset):
         idxs = try_int(idxs)
         if isinstance(idxs, Integral):
             if self.item is None:
-                item = self.new(idxs)
-                self.x.add(item)
+                try:
+                    item = self.new(idxs)
+                    self.x.add(item)
+                except StopIteration:
+                    raise StopIteration
+
                 # x = self.x[idxs]  # Perhaps have this as an option?
                 x = self.x[-1]
             else:
@@ -193,7 +197,7 @@ class MDPDataBunch(DataBunch):
     @staticmethod
     def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset] = None):
         # train_ds, but without training tfms
-        fix_ds = valid_ds.new(train_ds.x) if hasattr(valid_ds, 'new') else train_ds
+        fix_ds = copy(train_ds)  # valid_ds.new(train_ds.x) if hasattr(valid_ds, 'new') else train_ds
         return [o for o in (train_ds, valid_ds, fix_ds, test_ds) if o is not None]
 
 

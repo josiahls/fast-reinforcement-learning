@@ -26,31 +26,23 @@ Very soon I would like to add some form of scripting to install some complicated
 
 **1.a FastAI**
 [Install Fastai](https://github.com/fastai/fastai/blob/master/README.md#installation)
-or if you are Anaconda (which is a good idea I would use Anaconda) you can do:
-
+or if you are Anaconda (which is a good idea I would use Anaconda) you can do: \
 `conda install -c pytorch -c fastai fastai`
 
 
 **1.b Optional / Extra Envs**
-OpenAI all gyms:
-
+OpenAI all gyms: \
 `pip install gym[all]`
 
-Mazes:
-
-`git clone https://github.com/MattChanTK/gym-maze.git`
-
-`cd gym-maze`
-
+Mazes: \
+`git clone https://github.com/MattChanTK/gym-maze.git` \
+`cd gym-maze` \
 `python setup.py install`
 
 
-**2 Actual Repo**
-
-`git clone https://github.com/josiahls/fast-reinforcement-learning.git`
-
-`cd fast-reinforcement-learning`
-
+**2 Actual Repo** \
+`git clone https://github.com/josiahls/fast-reinforcement-learning.git` \
+`cd fast-reinforcement-learning` \
 `python setup.py install`
 
 ## Roadmap (kind of)
@@ -127,10 +119,43 @@ Result:
 I believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
 going on!
 
-- [X] **Working On** ReinforcementInterpretation: First method will be heatmapping the image / state space of the 
+- [X] AgentInterpretation: First method will be heatmapping the image / state space of the 
 environment with the expected rewards for super important debugging. In the code above, we are testing with a maze for a
 good reason. Heatmapping rewards over a maze is pretty easy as opposed to other environments.
 
+Usage example:
+```python
+from fast_rl.agents.DQN import DQN
+from fast_rl.core.Interpreter import AgentInterpretationv1
+from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+
+data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
+model = DQN(data)
+learn = AgentLearner(data, model)
+
+epochs = 10
+
+callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
+[c.on_train_begin(max_episodes=epochs) for c in callbacks]
+for epoch in range(epochs):
+    [c.on_epoch_begin(episode=epoch) for c in callbacks]
+    learn.model.train()
+    for element in learn.data.train_dl:
+        learn.data.train_ds.actions = learn.predict(element)
+        [c.on_step_end(learn=learn) for c in callbacks]
+    [c.on_epoch_end() for c in callbacks]
+
+    # For now we are going to avoid executing callbacks here.
+    learn.model.eval()
+    for element in learn.data.valid_dl:
+        learn.data.valid_ds.actions = learn.predict(element)
+
+    if epoch % 1 == 0:
+        interp = AgentInterpretationv1(learn)
+        interp.plot_heatmapped_episode(epoch)
+[c.on_train_end() for c in callbacks]
+```
 
 | ![](res/heatmap_1.png) |
 |:---:|
@@ -139,7 +164,27 @@ good reason. Heatmapping rewards over a maze is pretty easy as opposed to other 
 | *Fig 3: After 1-3 episodes the rewards die out meaning we still need to debug and improve our agent.* |
 
 
-- [ ] Learner Basic: After DQN and adding DDQN, Fixed targeting, DDDQN, we need to convert this (most likely) messy test
+If we change:
+```python
+interp = AgentInterpretationv1(learn)
+interp.plot_heatmapped_episode(epoch)
+```
+to:
+```python
+interp = AgentInterpretationv1(learn)
+interp.plot_episode(epoch)
+```
+We can get the following plots for specific episodes:
+| ![](res/reward_plot_1.png) |
+|:---:|
+| *Fig 4: Rewards estimated by the agent during episode 0.* |
+| ![](res/reward_plot_2.png) |
+| *Fig 5: Rewards later estimated by the agent during episode 1.* |
+
+As determined by our AgentInterpretation object, we need to either debug or improve our agent. 
+We will do this is parallel with creating our Learner fit function. 
+
+- [ ] **Working on** Learner Basic: After DQN and adding DDQN, Fixed targeting, DDDQN, we need to convert this (most likely) messy test
 into a suitable object. Will be similar to the basic learner.
 - [ ] DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
 could give discrete agents the ability to operate in a continuous domain via binning. 
