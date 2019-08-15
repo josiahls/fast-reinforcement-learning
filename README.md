@@ -21,6 +21,38 @@ Fastai for computer vision and tabular learning has been amazing. One would wish
 The purpose of this repo is to have a framework that is as easy as possible to start, but also designed for testing
 new agents. 
 
+## Installation
+Very soon I would like to add some form of scripting to install some complicated dependencies. We have 2 steps:
+
+**1.a FastAI**
+[Install Fastai](https://github.com/fastai/fastai/blob/master/README.md#installation)
+or if you are Anaconda (which is a good idea I would use Anaconda) you can do:
+
+`conda install -c pytorch -c fastai fastai`
+
+
+**1.b Optional / Extra Envs**
+OpenAI all gyms:
+
+`pip install gym[all]`
+
+Mazes:
+
+`git clone https://github.com/MattChanTK/gym-maze.git`
+
+`cd gym-maze`
+
+`python setup.py install`
+
+
+**2 Actual Repo**
+
+`git clone https://github.com/josiahls/fast-reinforcement-learning.git`
+
+`cd fast-reinforcement-learning`
+
+`python setup.py install`
+
 ## Roadmap (kind of)
 At the moment these are the things I personally urgently need, and then the nice things that will make this repo
 something akin to valuable. These are listed in kind of the order I am planning on executing them.
@@ -59,7 +91,7 @@ will be important for at least discrete testing because you can heatmap the maze
 DQN Agent basic learning / optimization is done. It is undoubtedly unstable / buggy. Please note the next step.
 
 One of the biggest issues with basic DQNs is the fact that Q values are often always moving. The actual basic DQN should
-be a fixed targeting DQN, however lets move to some debugging tools so we are more effactive.
+be a fixed targeting DQN, however lets us move to some debugging tools so we are more effective.
 
 Testable code:
 ```python
@@ -113,7 +145,9 @@ into a suitable object. Will be similar to the basic learner.
 could give discrete agents the ability to operate in a continuous domain via binning. 
 - [ ] Learner Refactor: DDPG will probably screw up everything lol. We will need to rethink the learner / maybe try to
 eliminate some custom methods for native Fastai library methods. 
+
 **Additional**
+
 - [ ] Single Global fit function like Fastai's. Better yet, actually just use their universal fit function.
 
 
@@ -147,12 +181,6 @@ OpenAI gyms.
 - DataBunch: First component needs to be done right, and well. We want to create a new type of DataBunch that 
 actually represents an environment. The point here is to make human inference easier in jupyter notebooks. Not only that
 we have an easy way to save a ran environment for later inference.
-
-### 1. Preprocessing
-
-### 2. Modeling
-
-### 3. Dashboard
 
 ## TODO
 
