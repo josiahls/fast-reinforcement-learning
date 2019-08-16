@@ -23,7 +23,7 @@ new agents.
 
 # Table of Contents
 1. [Installation](#installation)
-2. [Beta TODO](#beta-todo)
+2. [Alpha TODO](#alpha-todo)
 3. [Code](#code)
 5. [Versioning](#versioning)
 6. [Contributing](#contributing)
