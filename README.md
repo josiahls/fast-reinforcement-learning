@@ -14,19 +14,28 @@ However there are also frameworks in PyTorch most notably Facebook's Horizon:
 - [Horizon](https://github.com/facebookresearch/Horizon)
 - [DeepRL](https://github.com/ShangtongZhang/DeepRL)
 
-My motivation is that existing frameworks commonly use tensorflow, which nothing against tensorflow, but I have 
+Our motivation is that existing frameworks commonly use tensorflow, which nothing against tensorflow, but we have 
 accomplished more in shorter periods of time using PyTorch. 
 
 Fastai for computer vision and tabular learning has been amazing. One would wish that this would be the same for RL. 
 The purpose of this repo is to have a framework that is as easy as possible to start, but also designed for testing
 new agents. 
 
+# Table of Contents
+1. [Installation](#installation)
+2. [Beta TODO](#beta-todo)
+3. [Code](#code)
+5. [Versioning](#versioning)
+6. [Contributing](#contributing)
+7. [Style](#style)
+
+
 ## Installation
-Very soon I would like to add some form of scripting to install some complicated dependencies. We have 2 steps:
+Very soon we would like to add some form of scripting to install some complicated dependencies. We have 2 steps:
 
 **1.a FastAI**
 [Install Fastai](https://github.com/fastai/fastai/blob/master/README.md#installation)
-or if you are Anaconda (which is a good idea I would use Anaconda) you can do: \
+or if you are Anaconda (which is a good idea to use Anaconda) you can do: \
 `conda install -c pytorch -c fastai fastai`
 
 
@@ -45,9 +54,9 @@ Mazes: \
 `cd fast-reinforcement-learning` \
 `python setup.py install`
 
-## Roadmap (kind of)
-At the moment these are the things I personally urgently need, and then the nice things that will make this repo
-something akin to valuable. These are listed in kind of the order I am planning on executing them.
+## Alpha TODO
+At the moment these are the things we personally urgently need, and then the nice things that will make this repo
+something akin to valuable. These are listed in kind of the order we are planning on executing them.
 
 **Critical**
 - [X] MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
@@ -116,7 +125,7 @@ Result:
 | *Fig 1: We are now able to train an agent using some Fastai API* |
 
 
-I believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
+We believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
 going on!
 
 - [X] AgentInterpretation: First method will be heatmapping the image / state space of the 
@@ -200,9 +209,9 @@ eliminate some custom methods for native Fastai library methods.
 ## Code 
 Some of the key take aways is Fastai's use of callbacks. Not only do callbacks allow for logging, but in fact adding a
 callback to a generic fit function can change its behavior drastically. My goal is to have a library that is as easy
-as possible to run on a server or on one's own computer. I am also interested in this being easy to extend. 
+as possible to run on a server or on one's own computer. We are also interested in this being easy to extend. 
 
-I have a few assumptions that the code / support algorithms I believe should adhere to:
+We have a few assumptions that the code / support algorithms I believe should adhere to:
 - Environments should be pickle-able, and serializable. They should be able to shut down and start up multiple times
 during run time.
 - Agents should not need more information than images or state values for an environment per step. This means that 
@@ -210,7 +219,7 @@ environments should not be expected to allow output of contact points, sub-goals
 
 Rational:
 - Shutdown / Startup: Some environments (pybullet) have the issue of shutting down and starting different environments.
-Luckily, I have a fork of pybullet, so these modifications will be forced. 
+Luckily, we have a fork of pybullet, so these modifications will be forced. 
 - Pickling: Being able to encapsulate an environment as a `.pkl` can be important for saving it and all the information
 it generated.
 - Serializable: If we want to do parallel processing, environments need to be serializable to transport them between 
@@ -222,18 +231,27 @@ Some extra assumptions:
 These assumptions are necessary for us to implement other envs from other repos. We do not want to be tied to just
 OpenAI gyms. 
 
-### Key Components
+## Versioning
+At present the repo is in alpha stages being. We plan to move this from alpha to a pseudo beta / working versions. 
+Regardless of version, we will follow Python style versioning
 
-- DataBunch: First component needs to be done right, and well. We want to create a new type of DataBunch that 
-actually represents an environment. The point here is to make human inference easier in jupyter notebooks. Not only that
-we have an easy way to save a ran environment for later inference.
+_Alpha Versions_:  #.#.# e.g. 0.1.0. Alpha will never go above 0.99.99, at that point it will be full version 1.0.0.
+                   A key point is during alpha, coding will be quick and dirty with no promise of proper deprecation.
 
-## TODO
+_Beta / Full Versions_: These will be greater than 1.0.0. We follow the Python method of versions:
+                        **[Breaking Changes]**.**[Backward Compatible Features]**.**[Bug Fixes]**. These will be feature
+                        additions such new functions, tools, models, env support. Also proper deprecation will be used.
+                        
+_Pip update frequency_: We have a pip repository, however we do not plan to update it as frequently at the moment. 
+                        However, the current frequency will be during Beta / Full Version updates, we might every 0.5.0
+                        versions update pip.
 
-### Git + Workflow
+## Git + Workflow
+Follow the templates we have on github. Make a branch either from master or the most recent version branch.
+We recommend squashing commits / keep pointless ones to a minimum.
 
 
-### Style
+## Style
 Fastai does not follow closely with [google python style guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#3164-guidelines-derived-from-guidos-recommendations),
 however in this repo we will use this guide.  
 Some exceptions however (typically found in Fastai):

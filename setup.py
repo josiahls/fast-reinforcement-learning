@@ -1,11 +1,10 @@
 from setuptools import setup, find_packages
 import sys, os.path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'fast_rl'))
+with open("README.md", "r") as fh:
+    long_description = fh.read()
 
-VERSION = 0.1
-
-setup_py_dir = os.path.dirname(os.path.realpath(__file__))
+VERSION = "0.1.1"
 
 setup(name='fast_rl',
       version=VERSION,
@@ -14,11 +13,18 @@ setup(name='fast_rl',
                   'start, but also designed for testing new agents. ',
       url='https://github.com/josiahls/fast-reinforcement-learning',
       author='Josiah Laivins',
-      author_email='jlaivins@uncc.edu',
+      author_email='jokellum@northstate.net',
+      long_description=long_description,
+      long_description_content_type="text/markdown",
       license='',
-      packages=[package for package in find_packages()
-                if package.startswith('fast_rl')],
+      packages=find_packages(),
       zip_safe=False,
       install_requires=['numpy', 'tqdm', 'pillow', 'pandas', 'fastai', 'gym[box2d, atari]', 'jupyter', 'namedlist',
                         'pytest-asyncio', 'pytest'],
-      )
+      classifiers=[
+          "Development Status :: 3 - Alpha",
+          "Programming Language :: Python :: 3",
+          "License :: OSI Approved :: Apache Software License",
+          "Operating System :: OS Independent",
+      ],
+)
