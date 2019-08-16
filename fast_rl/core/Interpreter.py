@@ -17,7 +17,7 @@ from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
 
 
 class AgentInterpretationv1(Interpretation):
-    def __init__(self, learn: Learner):  # , losses: Tensor):
+    def __init__(self, learn: Learner, ds_type: DatasetType=DatasetType.Valid):  # , losses: Tensor):
         """
         Handles converting a learner, and it's runs into useful human interpretable information.
 
@@ -28,7 +28,7 @@ class AgentInterpretationv1(Interpretation):
         Args:
             learn:
         """
-        super().__init__(learn, None, None, None)
+        super().__init__(learn, None, None, None, ds_type=ds_type)
 
     @classmethod
     def from_learner(cls, learn: Learner, ds_type: DatasetType = DatasetType.Valid, activ: nn.Module = None):
@@ -73,16 +73,12 @@ class AgentInterpretationv1(Interpretation):
         items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
         heat_maps = []
 
-        episode_counter = 0
         # For each episode
         buffer = []
-        for item in items:
+        for item in [i for i in items if i.episode == episode]:
             buffer.append(item)
-            if item.done:
-                heat_map = self.reward_heatmap(buffer)
-                heat_maps.append((copy(heat_map), copy(item), copy(episode_counter)))
-                episode_counter += 1
-                buffer = []
+        heat_map = self.reward_heatmap(buffer)
+        heat_maps.append((copy(heat_map), copy(buffer[-1]), copy(episode)))
 
         plots = []
         for single_heatmap in [heat_maps[-1]]:

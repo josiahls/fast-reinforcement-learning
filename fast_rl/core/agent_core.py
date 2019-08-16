@@ -1,4 +1,5 @@
 import collections
+import math
 import random
 import numpy as np
 from collections import deque
@@ -6,6 +7,7 @@ from collections import deque
 from typing import List
 
 import gym
+from torch import nn
 
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
 
@@ -45,6 +47,7 @@ class GreedyEpsilon(ExplorationStrategy):
         self.epsilon_end = epsilon_end
         self.epsilon_start = epsilon_start
         self.epsilon = self.epsilon_start
+        self.steps_done = 0
 
     def perturb(self, action, action_space: gym.Space):
         """
@@ -64,7 +67,10 @@ class GreedyEpsilon(ExplorationStrategy):
     def update(self, current_episode, end_episode=0, **kwargs):
         super(GreedyEpsilon, self).update(**kwargs)
         self.end_episode = end_episode
-        self.epsilon = self.epsilon / (1.0 + (current_episode / self.decay))
+        self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
+                                           math.exp(-1. * (self.steps_done * self.decay))
+        self.steps_done += 1
+        print(f'ep {self.epsilon}')
 
 
 class Experience:

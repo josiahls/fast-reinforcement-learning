@@ -1,3 +1,4 @@
+from fastai.basic_data import DatasetType
 from fastai.callback import Callback
 from fastai.tabular import tabular_learner
 from fastai.vision import cnn_learner, models
@@ -41,29 +42,36 @@ def test_interpretation_heatmap():
     [c.on_train_end() for c in callbacks]
 
 def test_interpretation_plot_sequence():
-    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
     model = DQN(data)
     learn = AgentLearner(data, model)
 
-    epochs = 10
+    epochs = 20
 
     callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
     [c.on_train_begin(max_episodes=epochs) for c in callbacks]
     for epoch in range(epochs):
         [c.on_epoch_begin(episode=epoch) for c in callbacks]
         learn.model.train()
+        counter = 0
         for element in learn.data.train_dl:
             learn.data.train_ds.actions = learn.predict(element)
             [c.on_step_end(learn=learn) for c in callbacks]
+
+            counter += 1
+            # if counter % 100 == 0:# or counter == 0:
+        interp = AgentInterpretationv1(learn, ds_type=DatasetType.Train)
+        interp.plot_heatmapped_episode(epoch)
+
         [c.on_epoch_end() for c in callbacks]
 
-        # For now we are going to avoid executing callbacks here.
-        learn.model.eval()
-        for element in learn.data.valid_dl:
-            learn.data.valid_ds.actions = learn.predict(element)
+        # # For now we are going to avoid executing callbacks here.
+        # learn.model.eval()
+        # for element in learn.data.valid_dl:
+        #     learn.data.valid_ds.actions = learn.predict(element)
 
-        if epoch % 1 == 0:
-            interp = AgentInterpretationv1(learn)
-            interp.plot_episode(epoch)
+        # if epoch % 1 == 0:
+        #     interp = AgentInterpretationv1(learn)
+        #     interp.plot_heatmapped_episode(epoch)
 
     [c.on_train_end() for c in callbacks]

@@ -166,11 +166,16 @@ for epoch in range(epochs):
 [c.on_train_end() for c in callbacks]
 ```
 
-| ![](res/heatmap_1.png) |
+| ![](res/heat_map_1.png) |
 |:---:|
-| *Fig 2: Cumulative rewards calculated over states during episode 0.* |
-| ![](res/heatmap_2.png) |
-| *Fig 3: After 1-3 episodes the rewards die out meaning we still need to debug and improve our agent.* |
+| *Fig 2: Cumulative rewards calculated over states during episode 0* |
+| ![](res/heat_map_2.png) |
+| *Fig 3: Episode 7* |
+| ![](res/heat_map_3.png) |
+| *Fig 4: Unimportant parts are excluded via reward penalization* |
+| ![](res/heat_map_4.png) |
+| *Fig 5: Finally, state space is fully explored, and the highest rewards are near the goal state* |
+
 
 
 If we change:
@@ -187,9 +192,7 @@ We can get the following plots for specific episodes:
 
 | ![](res/reward_plot_1.png) |
 |:----:|
-| *Fig 4: Rewards estimated by the agent during episode 0.* |
-| ![](res/reward_plot_2.png) |
-| *Fig 5: Rewards later estimated by the agent during episode 1.* |
+| *Fig 6: Rewards estimated by the agent during episode 0* |
 
 As determined by our AgentInterpretation object, we need to either debug or improve our agent. 
 We will do this is parallel with creating our Learner fit function. 

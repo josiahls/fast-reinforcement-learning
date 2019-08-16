@@ -17,7 +17,7 @@ except ModuleNotFoundError as e:
 
 from fastai.core import *
 # noinspection PyProtectedMember
-from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader, try_int
+from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader
 from fastai.imports import torch
 from fastai.vision import Image
 from gym import error
@@ -46,6 +46,7 @@ class MDPDataset(Dataset):
 
         self.env_specific_handle()
         self.counter = -1
+        self.episode = 0
         self.x = MarkovDecisionProcessList()#self.new(0)
         self.item = None
 
@@ -94,10 +95,6 @@ class MDPDataset(Dataset):
             # Specifically for the stupid blackjack-v0 env >:(
             self.current_image = self._get_image()
 
-            if self.counter != -1:
-                self.counter = -1
-                raise StopIteration
-
         result_state, reward, self.is_done, info = self.env.step(self.actions)
         result_image = self._get_image()
         self.counter += 1
@@ -108,7 +105,7 @@ class MDPDataset(Dataset):
         alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
         items = MarkovDecisionProcessSlice(current_state=current_state, result_state=result_state,
                                            alternate_state=alternate_state, actions=self.actions,
-                                           reward=reward, done=self.is_done, feed_type=self.feed_type)
+                                           reward=reward, done=self.is_done, feed_type=self.feed_type, episode=self.episode)
         self.current_state = copy(result_state)
         self.current_image = copy(result_image)
 
@@ -117,23 +114,17 @@ class MDPDataset(Dataset):
     def __len__(self):
         return self.max_steps
 
-    def __getitem__(self, idxs: Union[int, np.ndarray]) -> 'MDPDataset':
-        idxs = try_int(idxs)
-        if isinstance(idxs, Integral):
-            if self.item is None:
-                try:
-                    item = self.new(idxs)
-                    self.x.add(item)
-                except StopIteration:
-                    raise StopIteration
-
-                # x = self.x[idxs]  # Perhaps have this as an option?
-                x = self.x[-1]
-            else:
-                x = self.item
-
-            return x.copy() if isinstance(x, np.ndarray) else x
-        return self.new(idxs)
+    def __getitem__(self, _) -> 'MDPDataset':
+        if (self.x and self.is_done and self.counter != -1) or \
+                (self.counter >= self.max_steps - 2):
+            self.counter = -1
+            self.episode += 1
+            raise StopIteration
+        item = self.new(_)
+        self.x.add(item)
+        # x = self.x[idxs]  # Perhaps have this as an option?
+        x = self.x[-1]
+        return x.copy() if isinstance(x, np.ndarray) else x
 
 
 class MDPDataBunch(DataBunch):
@@ -242,12 +233,12 @@ class MarkovDecisionProcessList(ItemList):
 
 class MarkovDecisionProcessSlice(ItemBase):
     # noinspection PyMissingConstructor
-    def __init__(self, current_state, result_state, alternate_state, actions, reward, done, feed_type=FEED_TYPE_IMAGE):
+    def __init__(self, current_state, result_state, alternate_state, actions, reward, done, episode, feed_type=FEED_TYPE_IMAGE):
         if isinstance(actions, int): actions = np.array(actions, ndmin=1)
         if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
-        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done = current_state, result_state, alternate_state, actions, reward, done
+        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode = current_state, result_state, alternate_state, actions, reward, done, episode
         self.data, self.obj = [alternate_state] if feed_type == FEED_TYPE_IMAGE else [current_state], (
-            result_state, alternate_state, actions, reward, done)
+            result_state, alternate_state, actions, reward, done, episode)
 
     def __str__(self):
         return Image(self.alternate_state)
