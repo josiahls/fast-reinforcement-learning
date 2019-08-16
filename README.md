@@ -246,7 +246,7 @@ _Pip update frequency_: We have a pip repository, however we do not plan to upda
                         However, the current frequency will be during Beta / Full Version updates, we might every 0.5.0
                         versions update pip.
 
-## Git + Workflow
+## Contributing
 Follow the templates we have on github. Make a branch either from master or the most recent version branch.
 We recommend squashing commits / keep pointless ones to a minimum.
 
