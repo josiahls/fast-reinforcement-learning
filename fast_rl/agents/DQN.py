@@ -33,7 +33,7 @@ class BaseDQNCallback(LearnerCallback):
         self.iteration += 1
 
 
-class FixedTargetCallback(BaseDQNCallback):
+class FixedTargetDQNCallback(BaseDQNCallback):
     def __init__(self, learn, copy_over_frequency=3):
         super().__init__(learn)
         self.copy_over_frequency = copy_over_frequency
@@ -63,11 +63,11 @@ class DQN(BaseAgent):
         self.discount = 0.99
         self.lr = 0.001
         self.loss_func = F.smooth_l1_loss
-        self.memory = ExperienceReplay(10000)
+        self.memory = ExperienceReplay(1000)
         self.action_model = create_nn_model([10, 10, 10], *data.get_action_state_size())
         self.optimizer = optim.Adam(self.action_model.parameters(), lr=self.lr)
         self.callbacks += [BaseDQNCallback(self)]
-        self.exploration_strategy = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.01,
+        self.exploration_strategy = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001,
                                                   do_exploration=self.training)
 
     def forward(self, x):
@@ -112,7 +112,7 @@ class FixedTargetDQN(DQN):
     def __init__(self, data: MDPDataBunch):
         super().__init__(data)
         self.target_net = deepcopy(self.action_model)
-        self.callbacks += [FixedTargetCallback(self, 10)]
+        self.callbacks += [FixedTargetDQNCallback(self, 10)]
 
     def target_copy_over(self):
         self.target_net.load_state_dict(self.action_model.state_dict())
@@ -151,3 +151,54 @@ class FixedTargetDQN(DQN):
             for param in self.action_model.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
+
+
+class DoubleDQN(FixedTargetDQN):
+    def __init__(self, data: MDPDataBunch):
+        """
+        Double DQN training.
+
+        References:
+            [1] Van Hasselt, Hado, Arthur Guez, and David Silver. "Deep reinforcement learning with double q-learning."
+            Thirtieth AAAI conference on artificial intelligence. 2016.
+
+        Args:
+            learn:
+        """
+        super().__init__(data)
+
+    def optimize(self):
+        """
+        Uses ER to optimize the Q-net.
+
+        Uses the equation:
+
+        .. math::
+                Q^{*}(s, a) = \mathbb{E}_{s'∼ \Big\epsilon} \Big[r + \lambda \displaystyle\max_{}(Q^{*}(s' , \
+                argmax_{a'}(Q(s', \Theta)), \Theta^{-})) \;|\; s, a \Big]
+
+
+        Returns:
+        """
+        if len(self.memory) == self.memory.max_size:
+            # Perhaps have memory as another itemlist? Should investigate.
+            sampled = self.memory.sample(self.batch_size)
+            with torch.no_grad():
+                r = torch.from_numpy(np.array([item.reward for item in sampled])).float()
+                s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
+                s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
+                a = torch.from_numpy(np.array([item.actions for item in sampled])).long()
+
+            # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
+            # since r is just Nx1, we spread the reward into the actions.
+            y_hat = self.action_model(s).gather(1, a)
+            y = self.discount * self.target_net(s_prime).gather(1, self.action_model(s_prime).argmax(axis=1).unsqueeze(1)) + r.expand_as(y_hat)
+
+            loss = self.loss_func(y, y_hat)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            for param in self.action_model.parameters():
+                param.grad.data.clamp_(-1, 1)
+            self.optimizer.step()
+
