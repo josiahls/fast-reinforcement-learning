@@ -70,7 +70,6 @@ class GreedyEpsilon(ExplorationStrategy):
         self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
                                            math.exp(-1. * (self.steps_done * self.decay))
         self.steps_done += 1
-        print(f'ep {self.epsilon}')
 
 
 class Experience:

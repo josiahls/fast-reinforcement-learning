@@ -197,8 +197,9 @@ We can get the following plots for specific episodes:
 As determined by our AgentInterpretation object, we need to either debug or improve our agent. 
 We will do this is parallel with creating our Learner fit function. 
 
-- [ ] **Working on** Learner Basic: After DQN and adding DDQN, Fixed targeting, DDDQN, we need to convert this (most likely) messy test
-into a suitable object. Will be similar to the basic learner.
+- [X] Add DQNs: DQN, Dueing DQN, Double DQN, Fixed Target DQN, DDDDQN.
+- [ ] **Working** Learner Basic: We need to convert this into a suitable object. Will be similar to the basic fasai learner
+hopefully. Possibly as add prioritize replay?
 - [ ] DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
 could give discrete agents the ability to operate in a continuous domain via binning. 
 - [ ] Learner Refactor: DDPG will probably screw up everything lol. We will need to rethink the learner / maybe try to
