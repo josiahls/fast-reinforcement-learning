@@ -29,9 +29,10 @@ class BaseDQNCallback(LearnerCallback):
 
     def on_step_end(self, learn: AgentLearner, **kwargs: Any):
         """Performs memory updates, exploration updates, and model optimization."""
-        learn.model.memory.update(learn.data.x.items[-1])
+        learn.model.memory.update(item=learn.data.x.items[-1])
         learn.model.exploration_strategy.update(self.episode, self.max_episodes, do_exploration=learn.model.training)
-        learn.model.optimize()
+        post_optimize = learn.model.optimize()
+        learn.model.memory.refresh(post_optimize)
         self.iteration += 1
 
 
@@ -117,7 +118,12 @@ class DQN(BaseAgent):
 
             self.optimizer.zero_grad()
             loss.backward()
+            for param in self.action_model.parameters():
+                param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
+
+            post_info = {'td_error', y - y_hat}
+            return post_info
 
 
 class FixedTargetDQN(DQN):
@@ -157,7 +163,7 @@ class FixedTargetDQN(DQN):
         Returns:
         """
         if len(self.memory) == self.memory.max_size:
-            # Perhaps have memory as another itemlist? Should investigate.
+            # Perhaps have memory as another item list? Should investigate.
             sampled = self.memory.sample(self.batch_size)
             with torch.no_grad():
                 r = torch.from_numpy(np.array([item.reward for item in sampled])).float()
@@ -177,6 +183,9 @@ class FixedTargetDQN(DQN):
             for param in self.action_model.parameters():
                 param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
+
+            post_info = {'td_error', y - y_hat}
+            return post_info
 
 
 class DoubleDQN(FixedTargetDQN):

@@ -1,4 +1,5 @@
 import collections
+import heapq
 import math
 import random
 import numpy as np
@@ -10,6 +11,7 @@ import gym
 from torch import nn
 
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
+from fast_rl.core.data_structures import PriorityItem
 
 
 class ExplorationStrategy:
@@ -73,15 +75,32 @@ class GreedyEpsilon(ExplorationStrategy):
 
 
 class Experience:
+    def __init__(self, memory_size):
+        self.max_size = memory_size
+
     def sample(self, **kwargs):
         pass
 
     def update(self, **kwargs):
         pass
 
+    def refresh(self, **kwargs):
+        pass
+
 
 class ExperienceReplay(Experience):
     def __init__(self, memory_size):
+        """
+        Basic store-er of state space transitions for training agents.
+
+        References:
+            [1] Mnih, Volodymyr, et al. "Playing atari with deep reinforcement learning."
+            arXiv preprint arXiv:1312.5602 (2013).
+
+        Args:
+            memory_size (int): Max N samples to store
+        """
+        super().__init__(memory_size)
         self.max_size = memory_size
         self.memory = deque(maxlen=memory_size)  # type: List[MarkovDecisionProcessSlice]
 
@@ -94,3 +113,61 @@ class ExperienceReplay(Experience):
 
     def update(self, item, **kwargs):
         self.memory.append(item)
+
+
+class PriorityExperienceReplay(Experience):
+    def __init__(self, memory_size, batch_size=64, epsilon=0.001, alpha=1):
+        """
+        Prioritizes sampling based on samples requiring the most learning.
+
+        References:
+            [1] Schaul, Tom, et al. "Prioritized experience replay." arXiv preprint arXiv:1511.05952 (2015).
+
+        Args:
+            batch_size (int): Size of sample, and thus size of expected index update.
+            alpha (float): Changes the sampling behavior 1 (non-uniform) -> 0 (uniform)
+            epsilon (float): Keeps the probabilities of items from being 0
+            memory_size (int): Max N samples to store
+        """
+        super().__init__(memory_size)
+        self.batch_size = batch_size
+        self.alpha = alpha
+        self.epsilon = epsilon
+        self.memory = []  # type: np.array([PriorityItem])
+        # When sampled, store the sample indices for refresh.
+        self._indices = np.array([])  # type: List[int]
+
+    def refresh(self, td_error, **kwargs):
+        np.array(self.memory)[self._indices] = td_error
+
+    def sample(self, **kwargs):
+        self._indices = [np.random.randint(0, len(self.memory)) for _ in range(self.batch_size)]
+        return np.array(self.memory)[self._indices]
+
+    def update(self, item, **kwargs):
+        """
+        Updates the memory of PER.
+
+        If the memory is at its max, we ensure that the inserted item has the max possible priority so that it
+        can be sampled and ultimately given a proper priority value.
+
+        Args:
+            item:
+
+        Returns:
+
+        """
+        if len(self.memory) < self.max_size: heapq.heappush(self.memory, PriorityItem(item, 1 + self.epsilon))
+        else: heapq.heappushpop(self.memory, PriorityItem(item, self.memory[0] + self.epsilon))
+
+
+
+
+
+
+
+
+
+
+
+
