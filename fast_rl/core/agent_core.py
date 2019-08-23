@@ -11,7 +11,6 @@ import gym
 from torch import nn
 
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
-from fast_rl.core.data_structures import PriorityItem
 
 
 class ExplorationStrategy:

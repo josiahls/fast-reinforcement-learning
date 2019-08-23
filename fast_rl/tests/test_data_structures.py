@@ -1,18 +1,18 @@
-from fast_rl.core.agent_core import PriorityExperienceReplay
-import numpy as np
-
-from fast_rl.core.data_structures import SumTree, Node, print_tree
+from fast_rl.core.data_structures import print_tree, SumTree
 
 
-def test_sum_tree():
-    memory = SumTree(30)
+def test_sum_tree_with_max_size():
+    memory = SumTree(10)
 
-    values = [1, 2, 5, 2, 2, 4]
+    values = [1, 1, 1, 1, 1, 1]
     data = [f'data with priority: {i}' for i in values]
 
-    print('\n')
     for element, value in zip(data, values):
-        print(f'Adding {value}\n')
-        memory.insert(element, value)
-        print_tree(memory.root)
-        print('\n')
+        memory.add(value, element)
+
+    print_tree(memory)
+    # memory.remove(4)
+    # print_tree(memory)
+
+
+

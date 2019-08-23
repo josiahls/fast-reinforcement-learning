@@ -1,178 +1,139 @@
-from collections import deque
-
-from typing import Dict
+"""
 
 
-class Node(object):
-    def __init__(self, data, value, parent):
-        self.data = data
-        self.value = value
-        self.d = 0
-
-        self.ref = {'parent': parent, 'right': None, 'left': None}  # type: Dict[str: Node, str: Node, str: Node]
-
-    def __str__(self):
-        elements = [str(self.value), str(self.ref['right']) if self.ref['right'] is not None else None,
-                    str(self.ref['left']) if self.ref['left'] is not None else None]
-        return ','.join([el for el in elements if el is not None])
-
-    def add_element(self, node):
-        """
-        Adds a Node to the tree.
-
-        Args:
-            node:
-
-        Returns:
-        """
-        raise NotImplementedError('Needs to be subclassed')
-
-    def __eq__(self, other):
-        return self.value == other.value
-
-    def __le__(self, other):
-        return self.value <= other.value
-
-    def __lt__(self, other):
-        return self.value < other.value
+Notices:
+  [1] SumTree implementation belongs to: https://github.com/rlcode/per
+  As of 8/23/2019, does not have a license provided. As another note, this code is modified.
 
 
-class SumTreeNode(Node):
-    def add_element(self, node):
-        """
-        When adding an element we have 3 steps:
-        - add element to either right or left node
-        - update current value (sum) if data is not None
+"""
 
-        Notes:
-            Leaf nodes should never have their values changed if their data fields are not None.
-            If the data fields are not None, they should be leaf nodes.
-
-        Args:
-            node:
-
-        Returns:
-
-        """
-        # Add
-        node.d += 1
-        if self.data is None: self.value += node.value
-        # If the current node is (should be) a leaf then create a summation node.
-        if self.data is not None:
-            # Create summation node and change over parents.
-            parent = PriorityItem(None, self.value + node.value)
-            if self.ref['parent'] is not None:
-                parent.ref['parent'] = self.ref['parent']
-                # Rewire the parent's child pointers
-                if parent.ref['parent'].ref['left'] is self: parent.ref['parent'].ref['left'] = parent
-                if parent.ref['parent'].ref['right'] is self: parent.ref['parent'].ref['right'] = parent
-            parent.ref['left'] = self if self < node else node
-            parent.ref['right'] = self if self >= node else node
-        else:
-            # If the current node is a summation node, then propagate down the tree like usual.
-            if self.ref['left'] is None:
-                node.ref['parent'] = self
-                self.ref['left'] = node
-            elif self.ref['left'] <= node and self.ref['right'] is None:
-                node.ref['parent'] = self
-                self.ref['right'] = node
-            elif self.ref['left'] > node:
-                self.ref['left'].add_element(node)
-            else:
-                self.ref['right'].add_element(node)
-
-
-class PriorityItem(SumTreeNode):
-
-    def __init__(self, data, value, parent=None):
-        super().__init__(data, value, parent)
-        self.priority = value
+import numpy as np
 
 
 class SumTree(object):
-    def __init__(self, max_size):
-        """
-        Should be a regular sum tree however, the parents are the sums of their children where the leaf nodes are the
-        actual actionable items. What we can do is keep a list of of a actual items and have the tree contain the
-        indices.
+    write = 0
 
-        if we have the root list as a queue, then we can remove elements that do not appear as often.
-
+    def __init__(self, capacity):
         """
-        self.max_size = max_size
-        self.root = None
 
-    def insert(self, item, value):
-        """
-        On insert:
-        if root is None: make root
-        if larger than root, swap
+        References:
+              [1] SumTree implementation belongs to: https://github.com/rlcode/per
+
+        Notes:
+            As of 8/23/2019, does not have a license provided. As another note, this code is modified.
+
 
         Args:
-            item:
-            value:
-
-        Returns:
-
+            capacity:
         """
-        node = PriorityItem(item, value)
-        if self.root is None:
-            self.root = node
-        elif node > self.root:
-            # If the node is greater than the root,
-            if node.data is None:
-                # -- If node.data is None, replace root
-                node.ref = self.root.ref
-                node.add_element(self.root)
-                self.root = node
-            else:
-                # -- If node.data is not None and root.data is None, create SumNode, make both children
-                root = PriorityItem(None, 0)
-                root.add_element(self.root)
-                root.add_element(node)
-                self.root = root
+
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+        self.n_entries = 0
+
+    def _propagate(self, idx, change):
+        """ Update to the root node """
+        parent = (idx - 1) // 2
+
+        self.tree[parent] += change
+
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def get_left(self, index):
+        return 2 * index + 1
+
+    def get_right(self, index):
+        return self.get_left(index) + 1
+
+    def _retrieve(self, idx, s):
+        """ Finds sample on leaf node """
+        left = self.get_left(idx)
+        right = self.get_right(idx)
+
+        if left >= len(self.tree):
+            return idx
+
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
         else:
-            self.root.add_element(node)
+            return self._retrieve(right, s - self.tree[left])
 
-    def __str__(self):
-        if self.root is not None:
-            return '[' + str(self.root) + ']'
-        else:
-            return '[ ] Tree is empty.'
+    def total(self):
+        return self.tree[0]
+
+    def add(self, p, data):
+        """ Store priority and sample """
+        idx = self.write + self.capacity - 1
+
+        self.data[self.write] = data
+        self.update(idx, p)
+
+        self.write += 1
+        if self.write >= self.capacity:
+            self.write = 0
+
+        if self.n_entries < self.capacity:
+            self.n_entries += 1
+
+    def update(self, idx, p):
+        """ Update priority """
+        change = p - self.tree[idx]
+
+        self.tree[idx] = p
+        self._propagate(idx, change)
+
+    def get(self, s):
+        """ Get priority and sample """
+        idx = self._retrieve(0, s)
+        data_index = idx - self.capacity + 1
+
+        return idx, self.tree[idx], self.data[data_index]
 
 
-def print_tree(root: Node):
-    if root is None:
-        print('')
+def print_tree(tree: SumTree):
+    print('\n')
+    if tree.n_entries == 0:
+        print('empty')
         return
-    temp = root
-    d = temp.d
-    while temp.ref['left'] is not None:
-        temp = temp.ref['left']
-        d = temp.d
 
-    string_len_max = len(str(root.value))
-    temp = root
-    current_layer_nodes = []
+    max_d = int(np.log2(len(tree.tree)))
+    string_len_max = len(str(tree.tree[-1]))
 
-    while True:
-        tabbing = ' ' * (string_len_max * d + 1)
-        space = ' ' * string_len_max
-
-        if not current_layer_nodes:
-            print(tabbing, '', temp.value)
-            if temp.ref['left'] is not None: current_layer_nodes.append(temp.ref['left'])
-            if temp.ref['right'] is not None: current_layer_nodes.append(temp.ref['right'])
+    tree_strings = []
+    display_values = None
+    display_indexes = None
+    for layer in range(max_d + 1):
+        # Get the indexes in the current layer d
+        if display_indexes is None:
+            display_indexes = [[0]]
         else:
-            d -= 1
-            printable = [str(_.value) for _ in current_layer_nodes]
-            print(tabbing, space.join(printable))
-            temp_list = []
-            for node in current_layer_nodes:
-                if node.ref['left'] is not None: temp_list.append(node.ref['left'])
-                if node.ref['right'] is not None: temp_list.append(node.ref['right'])
-            current_layer_nodes = temp_list
-        if not current_layer_nodes: break
+            local_list = []
+            for i in [_ for _ in display_indexes[-1] if _ < len(tree.tree)]:
+                if tree.get_left(i) < len(tree.tree): local_list.append(tree.get_left(i))
+                if tree.get_right(i) < len(tree.tree): local_list.append(tree.get_right(i))
+            display_indexes.append(local_list)
 
+    for layer in display_indexes:
+        # Get the values contained in current layer d
+        if display_values is None:
+            display_values = [[tree.tree[i] for i in layer]]
+        else:
+            display_values.append([tree.tree[i] for i in layer])
 
+    tab_sizes = []
+    spacings = []
+    for i, layer in enumerate(display_values):
+        # for now ignore string length
+        tab_sizes.append(0 if i == 0 else (tab_sizes[-1] + 1) * 2)
+        spacings.append(3 if i == 0 else (spacings[-1] * 2 + 1))
 
+    for i, layer in enumerate(display_values):
+        # tree_strings.append('*' * list(reversed(tab_sizes))[i])
+        values = ''.join(str(v) + ' ' * (string_len_max * list(reversed(spacings))[i]) for v in layer)
+        tree_strings.append(' ' * (string_len_max * list(reversed(tab_sizes))[i]) + values)
+
+    for tree_string in tree_strings:
+        print(tree_string)
