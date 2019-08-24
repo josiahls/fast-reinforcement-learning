@@ -20,7 +20,7 @@ class BaseDQNCallback(LearnerCallback):
         self.episode = 0
         self.iteration = 0
 
-    def on_train_begin(self, max_episodes, **kwargs: Any):
+    def on_train_begin(self, learn: AgentLearner, max_episodes, **kwargs: Any):
         self.max_episodes = max_episodes
 
     def on_epoch_begin(self, episode, **kwargs: Any):
@@ -54,7 +54,7 @@ class FixedTargetDQNCallback(BaseDQNCallback):
 
 
 class DQN(BaseAgent):
-    def __init__(self, data: MDPDataBunch):
+    def __init__(self, data: MDPDataBunch, memory):
         """Trains an Agent using the Q Learning method on a neural net.
 
         Notes:
@@ -71,12 +71,12 @@ class DQN(BaseAgent):
         # TODO add recommend cnn based on state size?
         self.batch_size = 64
         self.discount = 0.99
-        self.lr = 0.001
+        self.lr = 0.005
         self.loss_func = F.smooth_l1_loss
-        self.memory = ExperienceReplay(1000)
-        self.action_model = self.initialize_action_model([10, 10, 10], data)
+        self.memory = memory
+        self.action_model = self.initialize_action_model([12, 12, 12], data)
         self.optimizer = optim.Adam(self.action_model.parameters(), lr=self.lr)
-        self.callbacks += [BaseDQNCallback(self)]
+        self.callbacks += [BaseDQNCallback(self)] + self.memory.callbacks
         self.exploration_strategy = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001,
                                                   do_exploration=self.training)
 
@@ -127,7 +127,7 @@ class DQN(BaseAgent):
 
 
 class FixedTargetDQN(DQN):
-    def __init__(self, data: MDPDataBunch):
+    def __init__(self, data: MDPDataBunch, memory):
         """Trains an Agent using the Q Learning method on a 2 neural nets.
 
         Notes:
@@ -141,9 +141,9 @@ class FixedTargetDQN(DQN):
             [1] Mnih, Volodymyr, et al. "Playing atari with deep reinforcement learning."
             arXiv preprint arXiv:1312.5602 (2013).
         """
-        super().__init__(data)
+        super().__init__(data, memory)
         self.target_net = deepcopy(self.action_model)
-        self.callbacks += [FixedTargetDQNCallback(self, 10)]
+        self.callbacks += [FixedTargetDQNCallback(self, 2)]
 
     def target_copy_over(self):
         """ Updates the target network from calls in the FixedTargetDQNCallback callback."""
@@ -173,8 +173,11 @@ class FixedTargetDQN(DQN):
 
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
-            y_hat = self.action_model(s).gather(1, a)
-            y = self.discount * self.target_net(s_prime).max(axis=1)[0] + r.expand_as(y_hat)
+            try:
+                y_hat = self.action_model(s).gather(1, a)
+            except:
+                print('uhoh')
+            y = self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) + r.expand_as(y_hat)
 
             loss = self.loss_func(y, y_hat)
 
@@ -184,12 +187,13 @@ class FixedTargetDQN(DQN):
                 param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
 
-            post_info = {'td_error', y - y_hat}
-            return post_info
+            with torch.no_grad():
+                post_info = {'td_error': (y - y_hat).numpy()}
+                return post_info
 
 
 class DoubleDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunch):
+    def __init__(self, data: MDPDataBunch, memory):
         """
         Double DQN training.
 
@@ -200,7 +204,7 @@ class DoubleDQN(FixedTargetDQN):
         Args:
             data: Used for size input / output information.
         """
-        super().__init__(data)
+        super().__init__(data, memory)
 
     def optimize(self):
         """
@@ -237,6 +241,10 @@ class DoubleDQN(FixedTargetDQN):
                 param.grad.data.clamp_(-1, 1)
             self.optimizer.step()
 
+            with torch.no_grad():
+                post_info = {'td_error': (y - y_hat).numpy()}
+                return post_info
+
 
 class DuelingDQNModule(nn.Module):
     def __init__(self, layers, data):
@@ -271,7 +279,7 @@ class DuelingDQNModule(nn.Module):
 
 
 class DuelingDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunch):
+    def __init__(self, data: MDPDataBunch, memory):
         """Replaces the basic action model with a DuelingDQNModule which splits the basic model into 2 streams.
 
 
@@ -282,18 +290,18 @@ class DuelingDQN(FixedTargetDQN):
         Args:
             data:
         """
-        super().__init__(data)
+        super().__init__(data, memory)
 
     def initialize_action_model(self, layers, data):
         return DuelingDQNModule(data=data, layers=layers)
 
 
 class DoubleDuelingDQN(DoubleDQN, DuelingDQN):
-    def __init__(self, data: MDPDataBunch):
+    def __init__(self, data: MDPDataBunch, memory):
         """
         Combines both Dueling DQN and DDQN.
 
         Args:
             data: Used for size input / output information.
         """
-        super().__init__(data)
+        super().__init__(data, memory)

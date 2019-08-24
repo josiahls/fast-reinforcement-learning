@@ -17,15 +17,14 @@ from fast_rl.core.agent_core import PriorityExperienceReplay
 
 def test_priority_experience_replay():
     data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
-    model = FixedTargetDQN(data)
-    model.memory = PriorityExperienceReplay(1000)
+    model = FixedTargetDQN(data, memory=PriorityExperienceReplay(1000))
 
     learn = AgentLearner(data, model)
 
     epochs = 20
 
     callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
-    [c.on_train_begin(max_episodes=epochs) for c in callbacks]
+    [c.on_train_begin(learn=learn, max_episodes=epochs) for c in callbacks]
     for epoch in range(epochs):
         [c.on_epoch_begin(episode=epoch) for c in callbacks]
         learn.model.train()

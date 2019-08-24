@@ -2,15 +2,20 @@ import collections
 import heapq
 import math
 import random
+from functools import partial
+import torch
 import numpy as np
 from collections import deque
-
+from math import ceil
 from typing import List
 
 import gym
+from fastai.basic_train import LearnerCallback
+from fastai.callback import Callback
 from torch import nn
 
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
+from fast_rl.core.data_structures import SumTree
 
 
 class ExplorationStrategy:
@@ -69,13 +74,14 @@ class GreedyEpsilon(ExplorationStrategy):
         super(GreedyEpsilon, self).update(**kwargs)
         self.end_episode = end_episode
         self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
-                                           math.exp(-1. * (self.steps_done * self.decay))
+                       math.exp(-1. * (self.steps_done * self.decay))
         self.steps_done += 1
 
 
 class Experience:
     def __init__(self, memory_size):
         self.max_size = memory_size
+        self.callbacks = []
 
     def sample(self, **kwargs):
         pass
@@ -114,8 +120,17 @@ class ExperienceReplay(Experience):
         self.memory.append(item)
 
 
+class PriorityExperienceReplayCallback(Callback):
+    def on_train_begin(self, learn, **kwargs):
+        learn.model.loss_func = partial(learn.model.memory.handle_loss, base_function=learn.model.loss_func)
+
+
 class PriorityExperienceReplay(Experience):
-    def __init__(self, memory_size, batch_size=64, epsilon=0.001, alpha=1):
+
+    def handle_loss(self, y, y_hat, base_function):
+        return (base_function(y, y_hat) * torch.from_numpy(self.priority_weights).float()).mean().float()
+
+    def __init__(self, memory_size, batch_size=64, epsilon=0.001, alpha=0.6, beta=0.5):
         """
         Prioritizes sampling based on samples requiring the most learning.
 
@@ -131,24 +146,35 @@ class PriorityExperienceReplay(Experience):
         super().__init__(memory_size)
         self.batch_size = batch_size
         self.alpha = alpha
+        self.beta = beta
+        self.b_inc = -0.00001
+        self.priority_weights = np.zeros(self.batch_size, dtype=float)
         self.epsilon = epsilon
-        self.memory = []  # type: np.array([PriorityItem])
+        self.memory = SumTree(self.max_size)
+        self.callbacks = [PriorityExperienceReplayCallback()]
         # When sampled, store the sample indices for refresh.
-        self._indices = np.array([])  # type: List[int]
+        self._indices = np.zeros(self.batch_size, dtype=int)
 
-    def refresh(self, td_error, **kwargs):
-        np.array(self.memory)[self._indices] = td_error
+    def __len__(self):
+        return self.memory.n_entries
 
-    def sample(self, **kwargs):
-        self._indices = [np.random.randint(0, len(self.memory)) for _ in range(self.batch_size)]
-        return np.array(self.memory)[self._indices]
+    def refresh(self, post_optimize, **kwargs):
+        if post_optimize is not None:
+            self.memory.update(self._indices.astype(int), np.abs(post_optimize['td_error']) + self.epsilon)
+
+    def sample(self, batch, **kwargs):
+        self.beta = np.min([1., self.beta + self.b_inc])
+        ranges = np.linspace(0, self.memory.total(), num=ceil(self.memory.total() / self.batch_size))
+        uniform_ranges = [np.random.uniform(ranges[i], ranges[i + 1]) for i in range(len(ranges) - 1)]
+        self._indices, weights, samples = self.memory.batch_get(uniform_ranges)
+        self.priority_weights = self.memory.anneal_weights(weights, self.beta)
+        return samples
 
     def update(self, item, **kwargs):
         """
         Updates the memory of PER.
 
-        If the memory is at its max, we ensure that the inserted item has the max possible priority so that it
-        can be sampled and ultimately given a proper priority value.
+        Assigns maximal priority per [1] Alg:1, thus guaranteeing that sample being visited once.
 
         Args:
             item:
@@ -156,17 +182,5 @@ class PriorityExperienceReplay(Experience):
         Returns:
 
         """
-        if len(self.memory) < self.max_size: heapq.heappush(self.memory, PriorityItem(item, 1 + self.epsilon))
-        else: heapq.heappushpop(self.memory, PriorityItem(item, self.memory[0] + self.epsilon))
-
-
-
-
-
-
-
-
-
-
-
-
+        maximal_priority = self.alpha
+        self.memory.add(np.abs(maximal_priority) + self.epsilon, item)

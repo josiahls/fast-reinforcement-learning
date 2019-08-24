@@ -48,7 +48,7 @@ def create_nn_model(layer_list: list, action_size, state_size):
     ps = [0] * len(layer_list)
     use_bn = False  # For now sets avoid the number of params to input. Later experiment with adding later.
     sizes = [state_size] + layer_list + [action_size]
-    actns = [nn.ReLU(inplace=True) for _ in range(len(sizes) - 2)] + [None]
+    actns = [nn.Tanh() for _ in range(len(sizes) - 2)] + [None]
     layers = []
     for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):
         layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)

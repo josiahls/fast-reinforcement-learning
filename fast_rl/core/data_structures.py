@@ -16,6 +16,7 @@ class SumTree(object):
 
     def __init__(self, capacity):
         """
+        Used for PER.
 
         References:
               [1] SumTree implementation belongs to: https://github.com/rlcode/per
@@ -39,7 +40,8 @@ class SumTree(object):
 
         self.tree[parent] += change
 
-        if parent != 0:
+        if (np.isscalar(parent) and parent != 0) or (not np.isscalar(parent) and all(parent != 0)):
+            if not np.isscalar(parent): change[parent == 0] = 0
             self._propagate(parent, change)
 
     def get_left(self, index):
@@ -80,6 +82,7 @@ class SumTree(object):
 
     def update(self, idx, p):
         """ Update priority """
+        p = p.flatten() if not np.isscalar(p) else p
         change = p - self.tree[idx]
 
         self.tree[idx] = p
@@ -91,6 +94,15 @@ class SumTree(object):
         data_index = idx - self.capacity + 1
 
         return idx, self.tree[idx], self.data[data_index]
+
+    def anneal_weights(self, priorities, beta):
+        sampling_probabilities = priorities / self.total()
+        is_weight = np.power(self.n_entries * sampling_probabilities, -beta)
+        is_weight /= is_weight.max()
+        return is_weight.astype(float)
+
+    def batch_get(self, ss):
+        return np.array(list(zip(*list([self.get(s) for s in ss]))))
 
 
 def print_tree(tree: SumTree):

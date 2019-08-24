@@ -103,13 +103,15 @@ class MDPDataset(Dataset):
         result_state = result_image if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
         current_state = self.current_image if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
         alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
-        items = MarkovDecisionProcessSlice(current_state=current_state, result_state=result_state,
-                                           alternate_state=alternate_state, actions=self.actions,
-                                           reward=reward, done=self.is_done, feed_type=self.feed_type, episode=self.episode)
+        items = MarkovDecisionProcessSlice(current_state=np.copy(current_state), result_state=np.copy(result_state),
+                                           alternate_state=np.copy(alternate_state), actions=self.actions,
+                                           reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
+                                           episode=copy(self.episode))
         self.current_state = copy(result_state)
         self.current_image = copy(result_image)
 
-        return MarkovDecisionProcessList([items])
+        list_item = MarkovDecisionProcessList([items])
+        return list_item
 
     def __len__(self):
         return self.max_steps
@@ -234,7 +236,9 @@ class MarkovDecisionProcessList(ItemList):
 class MarkovDecisionProcessSlice(ItemBase):
     # noinspection PyMissingConstructor
     def __init__(self, current_state, result_state, alternate_state, actions, reward, done, episode, feed_type=FEED_TYPE_IMAGE):
-        if isinstance(actions, int): actions = np.array(actions, ndmin=1)
+        actions = np.copy(actions)
+        if len(actions.shape) == 0: actions = np.array(actions, ndmin=1)
+        if isinstance(np.copy(actions), int): actions = np.array(actions, ndmin=1)
         if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
         self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode = current_state, result_state, alternate_state, actions, reward, done, episode
         self.data, self.obj = [alternate_state] if feed_type == FEED_TYPE_IMAGE else [current_state], (
