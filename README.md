@@ -58,6 +58,9 @@ Mazes: \
 At the moment these are the things we personally urgently need, and then the nice things that will make this repo
 something akin to valuable. These are listed in kind of the order we are planning on executing them.
 
+At present, we are in the Alpha stages of agents not being fully tested / debugged. The final step will be doing an
+evaluation of the DQN and DDPG agent implementations and verifying each performs the best it can at known environments.
+
 **Critical**
 - [X] MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
 Example:
@@ -203,6 +206,7 @@ hopefully. Possibly as add prioritize replay?
     - Added PER.
 - [ ] **Working** DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
 could give discrete agents the ability to operate in a continuous domain via binning. 
+    - The DDPG paper contains a visualization for Q learning might prove useful.
 - [ ] Learner Refactor: DDPG will probably screw up everything lol. We will need to rethink the learner / maybe try to
 eliminate some custom methods for native Fastai library methods. 
 

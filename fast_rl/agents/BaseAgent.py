@@ -1,10 +1,12 @@
+import gym
 import torch
 from fastai.basic_train import LearnerCallback, Any
 from fastai.callback import Callback
 from fastai.layers import bn_drop_lin
-from gym.spaces import Discrete
+from gym.spaces import Discrete, Box
 from torch import nn
 from traitlets import List
+import numpy as np
 from typing import Collection
 
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
@@ -30,12 +32,17 @@ class BaseAgent(nn.Module):
         return x
 
     def pick_action(self, x):
+        x = self(x)
+
         with torch.no_grad():
             if isinstance(self.data.train_ds.env.action_space, Discrete): x = x.argmax().numpy().item()
+            elif isinstance(self.data.train_ds.env.action_space, Box): x = x.squeeze(0).numpy()
+
+            if len(x.shape) > 1: raise ValueError('The agent is outputting actions with more than 1 dimension...')
             return self.exploration_strategy.perturb(x, self.data.train_ds.env.action_space)
 
 
-def create_nn_model(layer_list: list, action_size, state_size):
+def create_nn_model(layer_list: list, action_size, state_size, use_bn=False):
     """Generates an nn module.
 
     Notes:
@@ -46,7 +53,6 @@ def create_nn_model(layer_list: list, action_size, state_size):
     """
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
-    use_bn = False  # For now sets avoid the number of params to input. Later experiment with adding later.
     sizes = [state_size] + layer_list + [action_size]
     actns = [nn.Tanh() for _ in range(len(sizes) - 2)] + [None]
     layers = []

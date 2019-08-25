@@ -78,6 +78,24 @@ class GreedyEpsilon(ExplorationStrategy):
         self.steps_done += 1
 
 
+class OrnsteinUhlenbeck(GreedyEpsilon):
+    def __init__(self, epsilon_start, epsilon_end, decay, **kwargs):
+        """
+
+        References:
+            [1] From https://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
+            [2] Cumulatively based on
+
+        Args:
+            epsilon_start:
+            epsilon_end:
+            decay:
+            **kwargs:
+        """
+        super().__init__(epsilon_start, epsilon_end, decay, **kwargs)
+
+
+
 class Experience:
     def __init__(self, memory_size):
         self.max_size = memory_size

@@ -104,7 +104,7 @@ class MDPDataset(Dataset):
         current_state = self.current_image if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
         alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
         items = MarkovDecisionProcessSlice(current_state=np.copy(current_state), result_state=np.copy(result_state),
-                                           alternate_state=np.copy(alternate_state), actions=self.actions,
+                                           alternate_state=np.copy(alternate_state), actions=np.copy(self.actions),
                                            reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
                                            episode=copy(self.episode))
         self.current_state = copy(result_state)

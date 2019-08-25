@@ -14,4 +14,4 @@ class AgentLearner(object):
         self.data = data
 
     def predict(self, element):
-        return self.model.pick_action(self.model(element))
+        return self.model.pick_action(element)

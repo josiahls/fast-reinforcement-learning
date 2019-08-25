@@ -4,7 +4,7 @@ import sys, os.path
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-VERSION = "0.1.1"
+VERSION = "0.4.1"
 
 setup(name='fast_rl',
       version=VERSION,
