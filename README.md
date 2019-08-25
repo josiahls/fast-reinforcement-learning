@@ -62,7 +62,7 @@ At present, we are in the Alpha stages of agents not being fully tested / debugg
 evaluation of the DQN and DDPG agent implementations and verifying each performs the best it can at known environments.
 
 **Critical**
-- [X] MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
+- [X] 0.0.0 MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
 Example:
 ```python
 from fast_rl.core.Envs import Envs
@@ -89,7 +89,7 @@ for env in Envs.get_all_latest_envs():
                 # Instead of random action, you would have your agent here and have exploration to 0
                 mdp_databunch.valid_ds.actions = mdp_databunch.valid_ds.get_random_action()
 ```
-- [X] DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. This test is
+- [X] 0.1.0 DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. This test is
 kind of a hell-scape. You will notice I plan to use Learner callbacks for a fit function. Also note, the gym_maze envs
 will be important for at least discrete testing because you can heatmap the maze with the model's rewards. 
 DQN Agent basic learning / optimization is done. It is undoubtedly unstable / buggy. Please note the next step.
@@ -131,7 +131,7 @@ Result:
 We believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
 going on!
 
-- [X] AgentInterpretation: First method will be heatmapping the image / state space of the 
+- [X] 0.2.0 AgentInterpretation: First method will be heatmapping the image / state space of the 
 environment with the expected rewards for super important debugging. In the code above, we are testing with a maze for a
 good reason. Heatmapping rewards over a maze is pretty easy as opposed to other environments.
 
@@ -200,19 +200,22 @@ We can get the following plots for specific episodes:
 As determined by our AgentInterpretation object, we need to either debug or improve our agent. 
 We will do this is parallel with creating our Learner fit function. 
 
-- [X] Add DQNs: DQN, Dueling DQN, Double DQN, Fixed Target DQN, DDDQN.
-- [X] Learner Basic: We need to convert this into a suitable object. Will be similar to the basic fasai learner
+- [X] 0.3.0 Add DQNs: DQN, Dueling DQN, Double DQN, Fixed Target DQN, DDDQN.
+- [X] 0.4.0 Learner Basic: We need to convert this into a suitable object. Will be similar to the basic fasai learner
 hopefully. Possibly as add prioritize replay?
     - Added PER.
-- [ ] **Working** DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
+- [ ] 0.5.0 **Working** DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
 could give discrete agents the ability to operate in a continuous domain via binning. 
-    - The DDPG paper contains a visualization for Q learning might prove useful.
-- [ ] Learner Refactor: DDPG will probably screw up everything lol. We will need to rethink the learner / maybe try to
-eliminate some custom methods for native Fastai library methods. 
+    - [X] 0.5.0 DDPG added.
+    - [ ] 0.5.0 The DDPG paper contains a visualization for Q learning might prove useful. Add to interpreter.
+    - [ ] 0.5.0 Add HER
+- [ ] 0.6.0 Single Global fit function like Fastai's. Think about the missing batch step.
+- [ ] 0.7.0 Full test suite using multi-processing. Connect to CI.
+- [ ] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. 
+- [ ] 0.9.0 Notebook demonstrations of basic model usage
+- [ ] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
+this point, all models should have guaranteed environments they should succeed in. 
 
-**Additional**
-
-- [ ] Single Global fit function like Fastai's. Better yet, actually just use their universal fit function.
 
 
 ## Code 
