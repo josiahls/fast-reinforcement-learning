@@ -9,7 +9,7 @@ from typing import Collection
 
 from fast_rl.agents.BaseAgent import BaseAgent
 from fast_rl.agents.DQN import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
-from fast_rl.core.Interpreter import AgentInterpretationv1
+from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.agent_core import PriorityExperienceReplay
@@ -35,7 +35,7 @@ def test_priority_experience_replay():
 
             counter += 1
             # if counter % 100 == 0:# or counter == 0:
-        interp = AgentInterpretationv1(learn, ds_type=DatasetType.Train)
+        interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
         interp.plot_heatmapped_episode(epoch)
 
         [c.on_epoch_end(learn=learn) for c in callbacks]

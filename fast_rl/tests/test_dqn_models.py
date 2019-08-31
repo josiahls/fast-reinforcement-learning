@@ -9,7 +9,7 @@ from typing import Collection
 
 from fast_rl.agents.BaseAgent import BaseAgent
 from fast_rl.agents.DQN import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
-from fast_rl.core.Interpreter import AgentInterpretationv1
+from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
@@ -52,7 +52,7 @@ def test_fixed_target_dqn_model_maze():
 
             counter += 1
             # if counter % 100 == 0:# or counter == 0:
-        # interp = AgentInterpretationv1(learn, ds_type=DatasetType.Train)
+        # interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
         # interp.plot_heatmapped_episode(epoch)
 
         [c.on_epoch_end(learn=learn) for c in callbacks]
@@ -63,7 +63,7 @@ def test_fixed_target_dqn_model_maze():
         #     learn.data.valid_ds.actions = learn.predict(element)
 
         # if epoch % 1 == 0:
-        #     interp = AgentInterpretationv1(learn)
+        #     interp = AgentInterpretationAlpha(learn)
         #     interp.plot_heatmapped_episode(epoch)
 
     [c.on_train_end() for c in callbacks]
@@ -88,7 +88,7 @@ def test_double_dqn_model_maze():
 
             counter += 1
             # if counter % 100 == 0:# or counter == 0:
-        # interp = AgentInterpretationv1(learn, ds_type=DatasetType.Train)
+        # interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
         # interp.plot_heatmapped_episode(epoch)
 
         [c.on_epoch_end(learn=learn) for c in callbacks]
@@ -99,7 +99,7 @@ def test_double_dqn_model_maze():
         #     learn.data.valid_ds.actions = learn.predict(element)
 
         # if epoch % 1 == 0:
-        #     interp = AgentInterpretationv1(learn)
+        #     interp = AgentInterpretationAlpha(learn)
         #     interp.plot_heatmapped_episode(epoch)
 
     [c.on_train_end() for c in callbacks]
@@ -124,7 +124,7 @@ def test_dueling_dqn_model_maze():
 
             counter += 1
             # if counter % 100 == 0:# or counter == 0:
-        # interp = AgentInterpretationv1(learn, ds_type=DatasetType.Train)
+        # interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
         # interp.plot_heatmapped_episode(epoch)
 
         [c.on_epoch_end(learn=learn) for c in callbacks]
@@ -135,7 +135,7 @@ def test_dueling_dqn_model_maze():
         #     learn.data.valid_ds.actions = learn.predict(element)
 
         # if epoch % 1 == 0:
-        #     interp = AgentInterpretationv1(learn)
+        #     interp = AgentInterpretationAlpha(learn)
         #     interp.plot_heatmapped_episode(epoch)
 
     [c.on_train_end() for c in callbacks]
@@ -160,7 +160,7 @@ def test_double_dueling_dqn_model_maze():
 
             counter += 1
             # if counter % 100 == 0:# or counter == 0:
-        # interp = AgentInterpretationv1(learn, ds_type=DatasetType.Train)
+        # interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
         # interp.plot_heatmapped_episode(epoch)
 
         [c.on_epoch_end(learn=learn) for c in callbacks]
@@ -171,7 +171,7 @@ def test_double_dueling_dqn_model_maze():
         #     learn.data.valid_ds.actions = learn.predict(element)
 
         # if epoch % 1 == 0:
-        #     interp = AgentInterpretationv1(learn)
+        #     interp = AgentInterpretationAlpha(learn)
         #     interp.plot_heatmapped_episode(epoch)
 
     [c.on_train_end() for c in callbacks]

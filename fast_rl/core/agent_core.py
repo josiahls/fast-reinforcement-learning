@@ -95,7 +95,6 @@ class OrnsteinUhlenbeck(GreedyEpsilon):
         super().__init__(epsilon_start, epsilon_end, decay, **kwargs)
 
 
-
 class Experience:
     def __init__(self, memory_size):
         self.max_size = memory_size
@@ -202,3 +201,17 @@ class PriorityExperienceReplay(Experience):
         """
         maximal_priority = self.alpha
         self.memory.add(np.abs(maximal_priority) + self.epsilon, item)
+
+
+class HindsightExperienceReplay(Experience):
+    def __init__(self, memory_size):
+        """
+
+        References:
+            [1] Andrychowicz, Marcin, et al. "Hindsight experience replay."
+            Advances in Neural Information Processing Systems. 2017.
+
+        Args:
+            memory_size:
+        """
+        super().__init__(memory_size)

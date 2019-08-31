@@ -90,7 +90,7 @@ class MDPDataset(Dataset):
 
         """
         # First Phase: decide on episode reset. Collect current state and image representations.
-        if self.is_done or self.counter >= self.max_steps - 2:
+        if self.is_done or self.counter >= self.max_steps - 3:
             self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
             # Specifically for the stupid blackjack-v0 env >:(
             self.current_image = self._get_image()
@@ -117,12 +117,14 @@ class MDPDataset(Dataset):
         return self.max_steps
 
     def __getitem__(self, _) -> 'MDPDataset':
+        item = self.new(_)
         if (self.x and self.is_done and self.counter != -1) or \
                 (self.counter >= self.max_steps - 2):
+            self.x.add(item)
             self.counter = -1
             self.episode += 1
             raise StopIteration
-        item = self.new(_)
+
         self.x.add(item)
         # x = self.x[idxs]  # Perhaps have this as an option?
         x = self.x[-1]

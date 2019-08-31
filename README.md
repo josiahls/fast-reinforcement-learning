@@ -164,7 +164,7 @@ for epoch in range(epochs):
         learn.data.valid_ds.actions = learn.predict(element)
 
     if epoch % 1 == 0:
-        interp = AgentInterpretationv1(learn)
+        interp = AgentInterpretationAlpha(learn)
         interp.plot_heatmapped_episode(epoch)
 [c.on_train_end() for c in callbacks]
 ```
@@ -183,12 +183,12 @@ for epoch in range(epochs):
 
 If we change:
 ```python
-interp = AgentInterpretationv1(learn)
+interp = AgentInterpretationAlpha(learn)
 interp.plot_heatmapped_episode(epoch)
 ```
 to:
 ```python
-interp = AgentInterpretationv1(learn)
+interp = AgentInterpretationAlpha(learn)
 interp.plot_episode(epoch)
 ```
 We can get the following plots for specific episodes:
@@ -207,7 +207,30 @@ hopefully. Possibly as add prioritize replay?
 - [ ] 0.5.0 **Working** DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
 could give discrete agents the ability to operate in a continuous domain via binning. 
     - [X] 0.5.0 DDPG added.
-    - [ ] 0.5.0 The DDPG paper contains a visualization for Q learning might prove useful. Add to interpreter.
+    - [X] 0.5.0 The DDPG paper contains a visualization for Q learning might prove useful. Add to interpreter.
+
+Added q value interpretation per explanation by Lillicrap et al., 2016. Currently both models (DQN and DDPG) have 
+unstable q value approximations. Below is an example from DQN.
+```python
+interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
+interp.plot_q_density(epoch)
+```
+Can be referenced in `fast_rl/tests/test_interpretation` for usage. A good agent will have mostly a diagonal line, 
+a failing one will look globular or horizontal.
+
+| ![](res/dqn_q_estimate_1.jpg) |
+|:----:|
+| *Fig 7: Initial Q Value Estimate. Seems globular which is expected for an initial model.* |
+
+| ![](res/dqn_q_estimate_2.jpg) |
+|:----:|
+| *Fig 8: Seems like the DQN is not learning...* |
+
+| ![](res/dqn_q_estimate_3.jpg) |
+|:----:|
+| *Fig 9: Alarming later epoch results. It seems that the DQN converges to predicting a single Q value.* |
+   
+    
     - [ ] 0.5.0 Add HER
 - [ ] 0.6.0 Single Global fit function like Fastai's. Think about the missing batch step.
 - [ ] 0.7.0 Full test suite using multi-processing. Connect to CI.

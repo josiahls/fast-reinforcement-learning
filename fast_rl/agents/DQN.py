@@ -125,6 +125,15 @@ class DQN(BaseAgent):
             post_info = {'td_error', y - y_hat}
             return post_info
 
+    def interpret_q(self, items):
+        with torch.no_grad():
+            r = torch.from_numpy(np.array([item.reward for item in items])).float()
+            s_prime = torch.from_numpy(np.array([item.result_state for item in items])).float()
+            s = torch.from_numpy(np.array([item.current_state for item in items])).float()
+            a = torch.from_numpy(np.array([item.actions for item in items])).long()
+
+            return self.action_model(s).gather(1, a)
+
 
 class FixedTargetDQN(DQN):
     def __init__(self, data: MDPDataBunch, memory=ExperienceReplay(10000)):

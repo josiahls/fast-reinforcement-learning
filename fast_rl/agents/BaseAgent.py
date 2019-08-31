@@ -35,11 +35,15 @@ class BaseAgent(nn.Module):
         x = self(x)
 
         with torch.no_grad():
+            if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
+
             if isinstance(self.data.train_ds.env.action_space, Discrete): x = x.argmax().numpy().item()
             elif isinstance(self.data.train_ds.env.action_space, Box): x = x.squeeze(0).numpy()
 
-            if len(x.shape) > 1: raise ValueError('The agent is outputting actions with more than 1 dimension...')
             return self.exploration_strategy.perturb(x, self.data.train_ds.env.action_space)
+
+    def interpret_q(self, items):
+        raise NotImplementedError
 
 
 def create_nn_model(layer_list: list, action_size, state_size, use_bn=False):

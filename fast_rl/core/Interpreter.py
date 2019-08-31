@@ -5,24 +5,25 @@ from fastai.train import Interpretation, DatasetType, copy
 from gym.spaces import Box
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy.linalg import LinAlgError
 from torch import Tensor, nn
 import numpy as np
 from typing import List, Tuple
 import torch
-
+import scipy.stats as st
 import matplotlib.pyplot as plt
 from fast_rl.core import Learner
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
 
 
-class AgentInterpretationv1(Interpretation):
+class AgentInterpretationAlpha(Interpretation):
     def __init__(self, learn: Learner, ds_type: DatasetType=DatasetType.Valid):  # , losses: Tensor):
         """
         Handles converting a learner, and it's runs into useful human interpretable information.
 
         Notes:
-            This class is called AgentInterpretationv1 because it will overall get deprecated.
+            This class is called AgentInterpretationAlpha because it will overall get deprecated.
             The final working version will be called AgentInterpretation.
 
         Args:
@@ -33,6 +34,13 @@ class AgentInterpretationv1(Interpretation):
     @classmethod
     def from_learner(cls, learn: Learner, ds_type: DatasetType = DatasetType.Valid, activ: nn.Module = None):
         raise NotImplementedError
+
+    def normalize(self, item: np.array):
+        if np.max(item) - np.min(item) != 0:
+            return np.divide(item + np.min(item), np.max(item) - np.min(item))
+        else:
+            item.fill(1)
+            return item
 
     def top_losses(self, k: int = None, largest=True):
         raise NotImplementedError
@@ -152,3 +160,65 @@ class AgentInterpretationv1(Interpretation):
             plt.show()
 
         return plots
+
+    def get_q_density(self, items, episode_num=None):
+        x = None
+        y = None
+
+        for episode in [_ for _ in list(set(mdp.episode for mdp in items)) if episode_num is None or episode_num == _]:
+            subset = [item for item in items if item.episode == episode]
+            r = np.array([_.reward for _ in subset])
+            # Gets the total accumulated r over a single markov chain
+            actual_returns = np.flip([np.cumsum(r)[i:][0] for i in np.flip(np.arange(len(r)))]).reshape(1, -1)
+            estimated_returns = self.learn.model.interpret_q(subset).view(1, -1).numpy()
+            x = actual_returns if x is None else np.hstack((x, actual_returns))
+            y = estimated_returns if y is None else np.hstack((y, estimated_returns))
+
+        return self.normalize(x), self.normalize(y)
+
+    def plot_q_density(self, episode_num=None):
+        """
+        Heat maps the density of actual vs estimated q values. Good reference for this is at [1].
+
+        References:
+            [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.
+            https://towardsdatascience.com/simple-example-of-2d-density-plots-in-python-83b83b934f67
+
+        Returns:
+
+        """
+        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+        x, y = self.get_q_density(items, episode_num)
+
+        # Define the borders
+        deltaX = (np.max(x) - np.min(x)) / 10
+        deltaY = (np.max(y) - np.min(y)) / 10
+        xmin = np.min(x) - deltaX
+        xmax = np.max(x) + deltaX
+        ymin = np.min(y) - deltaY
+        ymax = np.max(y) + deltaY
+        print(xmin, xmax, ymin, ymax)
+        # Create meshgrid
+        xx, yy = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+
+        positions = np.vstack([xx.ravel(), yy.ravel()])
+        values = np.vstack([x, y])
+
+        kernel = st.gaussian_kde(values)
+
+        f = np.reshape(kernel(positions).T, xx.shape)
+
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.gca()
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        cfset = ax.contourf(xx, yy, f, cmap='coolwarm')
+        ax.imshow(np.rot90(f), cmap='coolwarm', extent=[xmin, xmax, ymin, ymax])
+        cset = ax.contour(xx, yy, f, colors='k')
+        ax.clabel(cset, inline=1, fontsize=10)
+        ax.set_xlabel('Actual Returns')
+        ax.set_ylabel('Estimated Q')
+        if episode_num is None: plt.title('2D Gaussian Kernel Q Density Estimation')
+        else: plt.title(f'2D Gaussian Kernel Q Density Estimation for episode {episode_num}')
+        plt.show()
+
