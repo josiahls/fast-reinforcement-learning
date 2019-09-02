@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-VERSION = "0.4.1"
+VERSION = "0.6.0"
 
 setup(name='fast_rl',
       version=VERSION,
@@ -13,12 +13,13 @@ setup(name='fast_rl',
       url='https://github.com/josiahls/fast-reinforcement-learning',
       author='Josiah Laivins',
       author_email='jokellum@northstate.net',
+      python_requires  = '>=3.6',
       long_description=long_description,
       long_description_content_type="text/markdown",
       license='',
       packages=find_packages(),
       zip_safe=False,
-      install_requires=['fastai', 'gym[box2d, atari]', 'jupyter', 'namedlist', 'pytest-asyncio', 'pytest', 'scipy'],
+      install_requires=['fastai', 'gym[box2d, atari]', 'jupyter', 'pytest-asyncio', 'pytest'],
       classifiers=[
           "Development Status :: 3 - Alpha",
           "Programming Language :: Python :: 3",

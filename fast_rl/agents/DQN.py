@@ -1,7 +1,8 @@
 from copy import deepcopy
+from functools import partial
 
 import torch
-from fastai.basic_train import LearnerCallback, Any, F
+from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper
 from torch import optim, nn
 from torch.nn import MSELoss
 import numpy as np
@@ -19,20 +20,22 @@ class BaseDQNCallback(LearnerCallback):
         self.max_episodes = 0
         self.episode = 0
         self.iteration = 0
+        # For the callback handler
+        self._order = 0
 
-    def on_train_begin(self, learn: AgentLearner, max_episodes, **kwargs: Any):
-        self.max_episodes = max_episodes
+    def on_train_begin(self, n_epochs, **kwargs: Any):
+        self.max_episodes = n_epochs
 
-    def on_epoch_begin(self, episode, **kwargs: Any):
-        self.episode = episode
+    def on_epoch_begin(self, epoch, **kwargs: Any):
+        self.episode = epoch
         self.iteration = 0
 
-    def on_step_end(self, learn: AgentLearner, **kwargs: Any):
+    def on_loss_begin(self, **kwargs: Any):
         """Performs memory updates, exploration updates, and model optimization."""
-        learn.model.memory.update(item=learn.data.x.items[-1])
-        learn.model.exploration_strategy.update(self.episode, self.max_episodes, do_exploration=learn.model.training)
-        post_optimize = learn.model.optimize()
-        learn.model.memory.refresh(post_optimize=post_optimize)
+        self.learn.model.memory.update(item=self.learn.data.x.items[-1])
+        self.learn.model.exploration_strategy.update(self.episode, self.max_episodes, do_exploration=self.learn.model.training)
+        post_optimize = self.learn.model.optimize()
+        self.learn.model.memory.refresh(post_optimize=post_optimize)
         self.iteration += 1
 
 
@@ -46,11 +49,11 @@ class FixedTargetDQNCallback(BaseDQNCallback):
             copy_over_frequency: Per how many episodes we want to update the target model.
         """
         super().__init__(learn)
+        self._order = 1
         self.copy_over_frequency = copy_over_frequency
 
-    def on_epoch_end(self, learn: AgentLearner, **kwargs: Any):
-        if self.episode % self.copy_over_frequency == 0:
-            learn.model.target_copy_over()
+    def on_epoch_end(self, **kwargs: Any):
+        if self.episode % self.copy_over_frequency == 0: self.learn.model.target_copy_over()
 
 
 class DQN(BaseAgent):
@@ -75,8 +78,8 @@ class DQN(BaseAgent):
         self.loss_func = F.smooth_l1_loss
         self.memory = memory
         self.action_model = self.initialize_action_model([12, 12, 12], data)
-        self.optimizer = optim.Adam(self.action_model.parameters(), lr=self.lr)
-        self.callbacks += [BaseDQNCallback(self)] + self.memory.callbacks
+        self.opt = OptimWrapper.create(optim.Adam, lr=self.lr, layer_groups=self.action_model)
+        self.learner_callbacks += [BaseDQNCallback] + self.memory.callbacks
         self.exploration_strategy = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001,
                                                   do_exploration=self.training)
 
@@ -112,18 +115,21 @@ class DQN(BaseAgent):
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
             y_hat = self.action_model(s).gather(1, a)
-            y = self.discount * self.action_model(s_prime).max(axis=1)[0] + r.expand_as(y_hat)
+            y = self.discount * self.action_model(s_prime).max(axis=1)[0].unsqueeze(1) + r.expand_as(y_hat)
 
             loss = self.loss_func(y, y_hat)
 
-            self.optimizer.zero_grad()
-            loss.backward()
-            for param in self.action_model.parameters():
-                param.grad.data.clamp_(-1, 1)
-            self.optimizer.step()
+            if self.training:
+                self.opt.zero_grad()
+                loss.backward()
+                for param in self.action_model.parameters():
+                    param.grad.data.clamp_(-1, 1)
+                self.opt.step()
 
-            post_info = {'td_error', y - y_hat}
-            return post_info
+            with torch.no_grad():
+                self.loss = loss
+                post_info = {'td_error': (y - y_hat).numpy()}
+                return post_info
 
     def interpret_q(self, items):
         with torch.no_grad():
@@ -152,7 +158,7 @@ class FixedTargetDQN(DQN):
         """
         super().__init__(data, memory)
         self.target_net = deepcopy(self.action_model)
-        self.callbacks += [FixedTargetDQNCallback(self, 2)]
+        self.learner_callbacks += [partial(FixedTargetDQNCallback, copy_over_frequency=2)]
 
     def target_copy_over(self):
         """ Updates the target network from calls in the FixedTargetDQNCallback callback."""
@@ -186,12 +192,14 @@ class FixedTargetDQN(DQN):
             y = self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) + r.expand_as(y_hat)
 
             loss = self.loss_func(y, y_hat)
+            self.loss = loss
 
-            self.optimizer.zero_grad()
-            loss.backward()
-            for param in self.action_model.parameters():
-                param.grad.data.clamp_(-1, 1)
-            self.optimizer.step()
+            if self.training:
+                self.opt.zero_grad()
+                loss.backward()
+                for param in self.action_model.parameters():
+                    param.grad.data.clamp_(-1, 1)
+                self.opt.step()
 
             with torch.no_grad():
                 post_info = {'td_error': (y - y_hat).numpy()}
@@ -240,12 +248,13 @@ class DoubleDQN(FixedTargetDQN):
                 1)) + r.expand_as(y_hat)
 
             loss = self.loss_func(y, y_hat)
+            self.loss = loss
 
-            self.optimizer.zero_grad()
+            self.opt.zero_grad()
             loss.backward()
             for param in self.action_model.parameters():
                 param.grad.data.clamp_(-1, 1)
-            self.optimizer.step()
+            self.opt.step()
 
             with torch.no_grad():
                 post_info = {'td_error': (y - y_hat).numpy()}
@@ -253,11 +262,8 @@ class DoubleDQN(FixedTargetDQN):
 
 
 class DuelingDQNModule(nn.Module):
-    def __init__(self, layers, data):
+    def __init__(self, a_s, stream_input_size):
         super().__init__()
-        self.base = create_nn_model(layers, *data.get_action_state_size())[:-1]
-        a_s = data.get_action_state_size()
-        stream_input_size = self.base[-2].out_features
 
         self.val = create_nn_model([stream_input_size], 1, stream_input_size)
         self.adv = create_nn_model([stream_input_size], a_s[0], stream_input_size)
@@ -276,7 +282,6 @@ class DuelingDQNModule(nn.Module):
         Returns:
 
         """
-        x = self.base(x)
         val = self.val(x)
         adv = self.adv(x)
 
@@ -299,7 +304,11 @@ class DuelingDQN(FixedTargetDQN):
         super().__init__(data, memory)
 
     def initialize_action_model(self, layers, data):
-        return DuelingDQNModule(data=data, layers=layers)
+        base = create_nn_model(layers, *data.get_action_state_size())[:-1]
+        a_s = data.get_action_state_size()
+        stream_input_size = base[-2].out_features
+        dueling_head = DuelingDQNModule(a_s=a_s, stream_input_size=stream_input_size)
+        return nn.Sequential(base, dueling_head)
 
 
 class DoubleDuelingDQN(DoubleDQN, DuelingDQN):

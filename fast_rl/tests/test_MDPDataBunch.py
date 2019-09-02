@@ -40,6 +40,7 @@ def test_MarkovDecisionProcessDataBunch_init():
             assert current_s == actual_s, error_msg % (current_s, actual_s)
             assert np.equal(env_databunch.valid_dl.dl.dataset.actions, env_databunch.valid_ds.actions), error_msg2
 
+
 def test_MarkovDecisionProcessDataBunch_init_no_valid():
     error_msg = 'state space is %s but should be %s'
     error_msg2 = 'the datasets in the dataloader seem to be different from the data bunches datasets...'

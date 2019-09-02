@@ -16,13 +16,17 @@ from fast_rl.core.agent_core import ExplorationStrategy
 class BaseAgent(nn.Module):
     """
     One of the basic differences between this model type and typical openai models is that this will have its
-    own callbacks. This is due to the often strange and beautiful methods created for training RL agents.
+    own learner_callbacks. This is due to the often strange and beautiful methods created for training RL agents.
 
     """
     def __init__(self, data: MDPDataBunch):
         super().__init__()
         self.data = data
-        self.callbacks = []  # type: Collection[LearnerCallback]
+        # Some definition of loss needs to be implemented
+        self.loss = None
+        self.out = None
+        self.opt = None
+        self.learner_callbacks = []  # type: Collection[LearnerCallback]
         # Root model that will be accessed for action decisions
         self.action_model = None  # type: nn.Module
         self.exploration_strategy = ExplorationStrategy(self.training)
@@ -33,6 +37,7 @@ class BaseAgent(nn.Module):
 
     def pick_action(self, x):
         x = self(x)
+        self.out = x
 
         with torch.no_grad():
             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')

@@ -151,14 +151,14 @@ class MDPDataBunch(DataBunch):
                  path: PathOrStr = '.', bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
                  num_workers: int = 0,
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
-                 collate_fn: Callable = data_collate, no_check: bool = False, **dl_kwargs):
+                 collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
 
         try:
             # train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
             # valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
             env = gym.make(env_name)
             train_list = MDPDataset(env, max_steps=max_steps, render=render)
-            valid_list = MDPDataset(env, max_steps=max_steps, render=render)
+            valid_list = MDPDataset(env, max_steps=max_steps, render=render) if add_valid else None
         except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
             if e.args[0].lower().__contains__('mujoco'): return None

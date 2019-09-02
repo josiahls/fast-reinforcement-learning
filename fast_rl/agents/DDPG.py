@@ -1,5 +1,5 @@
 import torch
-from fastai.basic_train import LearnerCallback, Any
+from fastai.basic_train import LearnerCallback, Any, OptimWrapper
 import numpy as np
 from fastai.metrics import RMSE
 from torch.nn import MSELoss
@@ -19,24 +19,24 @@ class BaseDDPGCallback(LearnerCallback):
         self.iteration = 0
         self.copy_over_frequency = 2
 
-    def on_train_begin(self, learn: AgentLearner, max_episodes, **kwargs: Any):
-        self.max_episodes = max_episodes
+    def on_train_begin(self, n_epochs, **kwargs: Any):
+        self.max_episodes = n_epochs
 
-    def on_epoch_begin(self, episode, **kwargs: Any):
-        self.episode = episode
+    def on_epoch_begin(self, epoch, **kwargs: Any):
+        self.episode = epoch
         self.iteration = 0
 
-    def on_step_end(self, learn: AgentLearner, **kwargs: Any):
+    def on_loss_begin(self, **kwargs: Any):
         """Performs memory updates, exploration updates, and model optimization."""
-        learn.model.memory.update(item=learn.data.x.items[-1])
-        learn.model.exploration_strategy.update(self.episode, self.max_episodes, do_exploration=learn.model.training)
-        post_optimize = learn.model.optimize()
-        learn.model.memory.refresh(post_optimize=post_optimize)
+        self.learn.model.memory.update(item=self.learn.data.x.items[-1])
+        self.learn.model.exploration_strategy.update(self.episode, self.max_episodes, do_exploration=self.learn.model.training)
+        post_optimize = self.learn.model.optimize()
+        self.learn.model.memory.refresh(post_optimize=post_optimize)
         self.iteration += 1
 
-    def on_epoch_end(self, learn: AgentLearner, **kwargs: Any):
+    def on_epoch_end(self, **kwargs: Any):
         if self.episode % self.copy_over_frequency == 0:
-            learn.model.target_copy_over()
+            self.learn.model.target_copy_over()
 
 
 class DDPG(BaseAgent):
@@ -60,7 +60,7 @@ class DDPG(BaseAgent):
             tau: Defines how "soft/hard" we will copy the target networks over to the primary networks.
             batch: Size of per memory query.
             discount: Determines the amount of discounting the existing Q reward.
-            lr: Rate that the optimizer will learn parameter gradients.
+            lr: Rate that the opt will learn parameter gradients.
         """
         super().__init__(data)
         self.lr = lr
@@ -72,15 +72,15 @@ class DDPG(BaseAgent):
         self.action_model = self.initialize_action_model([64, 64], data)
         self.critic_model = self.initialize_critic_model([64, 64], data)
 
-        self.actor_optimizer = Adam(self.action_model.parameters(), lr=lr)
-        self.critic_optimizer = Adam(self.critic_model.parameters(), lr=lr)
+        self.opt = OptimWrapper.create(Adam, lr=lr, layer_groups=self.action_model)
+        self.critic_optimizer = OptimWrapper.create(Adam, lr=lr, layer_groups=self.action_model)
 
         self.t_action_model = self.initialize_action_model([64, 64], data)
         self.t_critic_model = self.initialize_critic_model([64, 64], data)
 
         self.target_copy_over()
 
-        self.callbacks = [BaseDDPGCallback(self)]
+        self.callbacks = [BaseDDPGCallback]
 
         self.loss_func = MSELoss()
         # TODO Move to Ornstein-Uhlenbeck process
@@ -130,21 +130,25 @@ class DDPG(BaseAgent):
 
             critic_loss = self.loss_func(y, y_hat)
 
-            # Optimize critic network
-            self.critic_optimizer.zero_grad()
-            critic_loss.backward()
-            for param in self.critic_model.parameters():
-                param.grad.data.clamp_(-1, 1)
-            self.critic_optimizer.step()
+            if self.training:
+                # Optimize critic network
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                for param in self.critic_model.parameters():
+                    param.grad.data.clamp_(-1, 1)
+                self.critic_optimizer.step()
 
             actor_loss = -self.critic_model(torch.cat((s, self.action_model(s)), 1)).mean()
 
-            # Optimize actor network
-            self.actor_optimizer.zero_grad()
-            actor_loss.backward()
-            for param in self.action_model.parameters():
-                param.grad.data.clamp_(-1, 1)
-            self.actor_optimizer.step()
+            self.loss = critic_loss
+
+            if self.training:
+                # Optimize actor network
+                self.opt.zero_grad()
+                actor_loss.backward()
+                for param in self.action_model.parameters():
+                    param.grad.data.clamp_(-1, 1)
+                self.opt.step()
 
     def forward(self, x):
         x = super(DDPG, self).forward(x)

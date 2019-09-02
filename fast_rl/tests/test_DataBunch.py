@@ -1,4 +1,3 @@
-from fastai.basic_train import Learner
 from fastai.vision import ImageDataBunch
 
 from fast_rl.util.file_handlers import get_absolute_path

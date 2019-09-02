@@ -11,8 +11,5 @@ def test_sum_tree_with_max_size():
         memory.add(value, element)
 
     print_tree(memory)
-    # memory.remove(4)
-    # print_tree(memory)
-
 
 

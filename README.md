@@ -58,8 +58,10 @@ Mazes: \
 At the moment these are the things we personally urgently need, and then the nice things that will make this repo
 something akin to valuable. These are listed in kind of the order we are planning on executing them.
 
-At present, we are in the Alpha stages of agents not being fully tested / debugged. The final step will be doing an
-evaluation of the DQN and DDPG agent implementations and verifying each performs the best it can at known environments.
+At present, we are in the Alpha stages of agents not being fully tested / debugged. The final step (before 1.0.0) will 
+be doing an evaluation of the DQN and DDPG agent implementations and verifying each performs the best it can at 
+known environments. Prior to 1.0.0, new changes might break previous code versions, and models are not guaranteed to be
+working at their best. Post 1.0.0 will be more formal feature development with CI, unit testing, etc. 
 
 **Critical**
 - [X] 0.0.0 MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
@@ -70,7 +72,8 @@ from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
 # At present will try to load OpenAI, box2d, pybullet, atari, maze.
 # note "get_all_latest_envs" has a key inclusion and exclusion so if you don't have some of these envs installed, 
-# you can avoid this here.
+# you can avoid this here. Certain envs just flat out do not work / are unusual. You are welcome to see how to get them
+# working.
 for env in Envs.get_all_latest_envs():
     max_steps = 50  # Limit the number of per episode iterations for now.
     print(f'Testing {env}')
@@ -89,13 +92,8 @@ for env in Envs.get_all_latest_envs():
                 # Instead of random action, you would have your agent here and have exploration to 0
                 mdp_databunch.valid_ds.actions = mdp_databunch.valid_ds.get_random_action()
 ```
-- [X] 0.1.0 DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. This test is
-kind of a hell-scape. You will notice I plan to use Learner callbacks for a fit function. Also note, the gym_maze envs
-will be important for at least discrete testing because you can heatmap the maze with the model's rewards. 
-DQN Agent basic learning / optimization is done. It is undoubtedly unstable / buggy. Please note the next step.
-
-One of the biggest issues with basic DQNs is the fact that Q values are often always moving. The actual basic DQN should
-be a fixed targeting DQN, however lets us move to some debugging tools so we are more effective.
+- [X] 0.1.0 DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. We use Learner callbacks for 
+handling the different fit behaviors. 
 
 Testable code:
 ```python
@@ -106,20 +104,7 @@ from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
 learn = AgentLearner(data, model)
-
-epochs = 450
-
-callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
-[c.on_train_begin(max_episodes=epochs) for c in callbacks]
-for epoch in range(epochs):
-    [c.on_epoch_begin(episode=epoch) for c in callbacks]
-    learn.model.train()
-    for element in learn.data.train_dl:
-        learn.data.train_ds.actions = learn.predict(element)
-
-        [c.on_step_end(learn=learn) for c in callbacks]
-    [c.on_epoch_end() for c in callbacks]
-[c.on_train_end() for c in callbacks]
+learn.fit(450)
 ``` 
 Result:
 
@@ -138,35 +123,16 @@ good reason. Heatmapping rewards over a maze is pretty easy as opposed to other 
 Usage example:
 ```python
 from fast_rl.agents.DQN import DQN
-from fast_rl.core.Interpreter import AgentInterpretationv1
+from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
 learn = AgentLearner(data, model)
-
-epochs = 10
-
-callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
-[c.on_train_begin(max_episodes=epochs) for c in callbacks]
-for epoch in range(epochs):
-    [c.on_epoch_begin(episode=epoch) for c in callbacks]
-    learn.model.train()
-    for element in learn.data.train_dl:
-        learn.data.train_ds.actions = learn.predict(element)
-        [c.on_step_end(learn=learn) for c in callbacks]
-    [c.on_epoch_end() for c in callbacks]
-
-    # For now we are going to avoid executing callbacks here.
-    learn.model.eval()
-    for element in learn.data.valid_dl:
-        learn.data.valid_ds.actions = learn.predict(element)
-
-    if epoch % 1 == 0:
-        interp = AgentInterpretationAlpha(learn)
-        interp.plot_heatmapped_episode(epoch)
-[c.on_train_end() for c in callbacks]
+learn.fit(10)
+interp = AgentInterpretationAlpha(learn)
+interp.plot_heatmapped_episode(5)
 ```
 
 | ![](res/heat_map_1.png) |
@@ -178,8 +144,6 @@ for epoch in range(epochs):
 | *Fig 4: Unimportant parts are excluded via reward penalization* |
 | ![](res/heat_map_4.png) |
 | *Fig 5: Finally, state space is fully explored, and the highest rewards are near the goal state* |
-
-
 
 If we change:
 ```python
@@ -198,15 +162,15 @@ We can get the following plots for specific episodes:
 | *Fig 6: Rewards estimated by the agent during episode 0* |
 
 As determined by our AgentInterpretation object, we need to either debug or improve our agent. 
-We will do this is parallel with creating our Learner fit function. 
+We will do this in parallel with creating our Learner fit function. 
 
 - [X] 0.3.0 Add DQNs: DQN, Dueling DQN, Double DQN, Fixed Target DQN, DDDQN.
 - [X] 0.4.0 Learner Basic: We need to convert this into a suitable object. Will be similar to the basic fasai learner
 hopefully. Possibly as add prioritize replay?
     - Added PER.
-- [ ] 0.5.0 **Working** DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
+- [X] 0.5.0 DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
 could give discrete agents the ability to operate in a continuous domain via binning. 
-    - [X] 0.5.0 DDPG added.
+    - [X] 0.5.0 DDPG added. let us move
     - [X] 0.5.0 The DDPG paper contains a visualization for Q learning might prove useful. Add to interpreter.
 
 Added q value interpretation per explanation by Lillicrap et al., 2016. Currently both models (DQN and DDPG) have 
@@ -229,16 +193,37 @@ a failing one will look globular or horizontal.
 | ![](res/dqn_q_estimate_3.jpg) |
 |:----:|
 | *Fig 9: Alarming later epoch results. It seems that the DQN converges to predicting a single Q value.* |
-   
-    
-    - [ ] 0.5.0 Add HER
-- [ ] 0.6.0 Single Global fit function like Fastai's. Think about the missing batch step.
-- [ ] 0.7.0 Full test suite using multi-processing. Connect to CI.
+
+- [X] 0.6.0 Single Global fit function like Fastai's. Think about the missing batch step. Noted some of the changes to 
+the existing the Fastai 
+
+| ![](res/fit_func_out.jpg) |
+|:----:|
+| *Fig 10: Resulting output of a typical fit function using ref code below.* |
+
+```python
+from fast_rl.agents.DQN import DuelingDQN
+from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+
+
+data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
+model = DuelingDQN(data)
+# model = DQN(data)
+learn = AgentLearner(data, model)
+
+learn.fit(5)
+```
+
+
+- [ ] **Working On** 0.7.0 Full test suite using multi-processing. Connect to CI.
 - [ ] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. 
 - [ ] 0.9.0 Notebook demonstrations of basic model usage
 - [ ] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
-
+- [ ] 1.2.0 Add PyBullet Fetch Environments
+    - [ ] 1.2.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
+    - [ ] 1.2.0 Add HER
 
 
 ## Code 
