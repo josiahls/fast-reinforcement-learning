@@ -19,7 +19,7 @@ setup(name='fast_rl',
       license='',
       packages=find_packages(),
       zip_safe=False,
-      install_requires=['fastai', 'gym[box2d, atari]', 'jupyter', 'pytest-asyncio', 'pytest'],
+      install_requires=['fastai', 'gym[box2d, atari]', 'jupyter', 'pytest-asyncio', 'pytest', 'moviepy'],
       classifiers=[
           "Development Status :: 3 - Alpha",
           "Programming Language :: Python :: 3",

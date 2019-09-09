@@ -63,6 +63,7 @@ class DDPG(BaseAgent):
             lr: Rate that the opt will learn parameter gradients.
         """
         super().__init__(data)
+        self.name = 'DDPG'
         self.lr = lr
         self.discount = discount
         self.batch = batch

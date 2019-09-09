@@ -1,24 +1,31 @@
 import io
+from functools import partial
+
 from itertools import permutations, combinations_with_replacement, product
 from PIL import Image
 from fastai.train import Interpretation, DatasetType, copy
 from gym.spaces import Box
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from moviepy.video.VideoClip import VideoClip
+from moviepy.video.io.bindings import mplfig_to_npimage
 from numpy.linalg import LinAlgError
+from moviepy import editor as mpy
 from torch import Tensor, nn
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import torch
 import scipy.stats as st
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+
 from fast_rl.core import Learner
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
+from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, FEED_TYPE_IMAGE
 
 
 class AgentInterpretationAlpha(Interpretation):
-    def __init__(self, learn: Learner, ds_type: DatasetType=DatasetType.Valid):  # , losses: Tensor):
+    def __init__(self, learn: Learner, ds_type: DatasetType = DatasetType.Valid):  # , losses: Tensor):
         """
         Handles converting a learner, and it's runs into useful human interpretable information.
 
@@ -30,6 +37,7 @@ class AgentInterpretationAlpha(Interpretation):
             learn:
         """
         super().__init__(learn, None, None, None, ds_type=ds_type)
+        self.current_animation = None
 
     @classmethod
     def from_learner(cls, learn: Learner, ds_type: DatasetType = DatasetType.Valid, activ: nn.Module = None):
@@ -57,7 +65,9 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        current_state_slice = [p for p in product(np.arange(min(self.ds.env.observation_space.low), max(self.ds.env.observation_space.high) + 1), repeat=len(self.ds.env.observation_space.high))]
+        current_state_slice = [p for p in product(
+            np.arange(min(self.ds.env.observation_space.low), max(self.ds.env.observation_space.high) + 1),
+            repeat=len(self.ds.env.observation_space.high))]
         heat_map = np.zeros(np.add(self.ds.env.observation_space.high, 1))
         with torch.no_grad():
             for state in current_state_slice:
@@ -135,7 +145,8 @@ class AgentInterpretationAlpha(Interpretation):
 
         plots = []
         with torch.no_grad():
-            agent_reward_plots = [self.learn.model(torch.from_numpy(np.array(i.current_state))).max().numpy() for i in buffer]
+            agent_reward_plots = [self.learn.model(torch.from_numpy(np.array(i.current_state))).max().numpy() for i in
+                                  buffer]
             fig, ax = plt.subplots(1, 1, figsize=(5, 5))
             fig.suptitle(f'Episode {episode}')
             ax.plot(agent_reward_plots)
@@ -158,8 +169,6 @@ class AgentInterpretationAlpha(Interpretation):
             plt.tight_layout()
             plt.imshow(plot)
             plt.show()
-
-        return plots
 
     def get_q_density(self, items, episode_num=None):
         x = None
@@ -218,7 +227,73 @@ class AgentInterpretationAlpha(Interpretation):
         ax.clabel(cset, inline=1, fontsize=10)
         ax.set_xlabel('Actual Returns')
         ax.set_ylabel('Estimated Q')
-        if episode_num is None: plt.title('2D Gaussian Kernel Q Density Estimation')
-        else: plt.title(f'2D Gaussian Kernel Q Density Estimation for episode {episode_num}')
+        if episode_num is None:
+            plt.title('2D Gaussian Kernel Q Density Estimation')
+        else:
+            plt.title(f'2D Gaussian Kernel Q Density Estimation for episode {episode_num}')
         plt.show()
 
+    def plot_rewards_over_iterations(self, cumulative=False):
+        items = self.ds.x.items
+        r_iter = [el.reward[0] if np.ndim(el.reward) == 0 else np.average(el.reward) for el in items]
+        if cumulative: r_iter = np.cumsum(r_iter)
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.gca()
+        fig.suptitle(f'{self.learn.model.name} for {self.ds.env.spec._env_name}')
+        ax.set_ylabel('Rewards' if not cumulative else 'Cumulative Rewards')
+        ax.set_xlabel('Iterations')
+        ax.plot(r_iter)
+        plt.show()
+
+    def plot_rewards_over_episodes(self, cumulative=False):
+        items = self.ds.x.items
+        r_iter = [(el.reward[0] if np.ndim(el.reward) == 0 else np.average(el.reward), el.episode) for el in items]
+        rewards, episodes = zip(*r_iter)
+        if cumulative: rewards = np.cumsum(rewards)
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.gca()
+        fig.suptitle(f'{self.learn.model.name} for {self.ds.env.spec._env_name}')
+        ax.set_ylabel('Rewards' if not cumulative else 'Cumulative Rewards')
+        ax.set_xlabel('Episodes')
+        ax.xaxis.set_ticks([i for i, el in enumerate(episodes) if episodes[i - 1] != el or i == 0])
+        ax.xaxis.set_ticklabels([el for i, el in enumerate(episodes) if episodes[i - 1] != el or i == 0])
+        ax.plot(rewards)
+        plt.show()
+
+    def episode_video_frames(self, episode=None) -> Dict[str, np.array]:
+        """ Returns numpy arrays representing purely episode frames. """
+        items = self.ds.x.items
+        if episode is None: episode_frames = {key: None for key in list(set([_.episode for _ in items]))}
+        else: episode_frames = {episode: None}
+
+        for key in episode_frames:
+            if self.ds.feed_type == FEED_TYPE_IMAGE:
+                episode_frames[key] = np.array([_.current_state for _ in items if key == _.episode])
+            else:
+                episode_frames[key] = np.array([_.alternate_state for _ in items if key == _.episode])
+
+        return episode_frames
+
+    def episode_to_gif(self, episode=None, path='', fps=30):
+        frames = self.episode_video_frames(episode)
+
+        for ep in frames:
+            fig, ax = plt.subplots()
+            animation = VideoClip(partial(self._make_frame, frames=frames[ep], axes=ax, fig=fig, title=f'Episode {ep}'),
+                                  duration=frames[ep].shape[0])
+            animation.write_gif(path + f'episode_{ep}.gif', fps=fps)
+
+    def _make_frame(self, t, frames, axes, fig, title):
+        axes.clear()
+        fig.suptitle(title)
+        axes.imshow(frames[int(t)])
+        return mplfig_to_npimage(fig)
+
+    def iplot_episode(self, episode, fps=30):
+        if episode is None: raise ValueError('The episode cannot be None for jupyter display')
+        x = self.episode_video_frames(episode)[episode]
+        fig, ax = plt.subplots()
+
+        self.current_animation = VideoClip(partial(self._make_frame, frames=x, axes=ax, fig=fig,
+                                                   title=f'Episode {episode}'), duration=x.shape[0])
+        self.current_animation.ipython_display(fps=fps, loop=True, autoplay=True)

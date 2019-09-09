@@ -17,13 +17,15 @@ except ModuleNotFoundError as e:
 
 from fastai.core import *
 # noinspection PyProtectedMember
-from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader
+from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader, PreProcessors
 from fastai.imports import torch
 from fastai.vision import Image
 from gym import error
 from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
 from gym.envs.toy_text import discrete
 from gym.wrappers import TimeLimit
+from datetime import datetime
+import pickle
 
 from fast_rl.util.misc import b_colors
 
@@ -32,7 +34,9 @@ FEED_TYPE_STATE = 1
 
 
 class MDPDataset(Dataset):
-    def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None):
+    def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None, bs=8,
+                 x=None):
+        self.bs = bs
         # noinspection PyUnresolvedReferences,PyProtectedMember
         self.max_steps = env._max_episode_steps if max_steps is None else max_steps
         self.render = render
@@ -47,7 +51,7 @@ class MDPDataset(Dataset):
         self.env_specific_handle()
         self.counter = -1
         self.episode = 0
-        self.x = MarkovDecisionProcessList()#self.new(0)
+        self.x = MarkovDecisionProcessList() if x is None else x  # self.new(0)
         self.item = None
 
     @property
@@ -73,7 +77,7 @@ class MDPDataset(Dataset):
     def _get_image(self):
         # Specifically for the stupid blackjack-v0 env >:(
         try:
-            current_image = self.env.render(self.render)
+            current_image = self.env.render('rgb_array')
         except NotImplementedError:
             print(f'{b_colors.WARNING} {self.env.unwrapped.spec} Not returning Image {b_colors.ENDC}')
             current_image = None
@@ -103,8 +107,8 @@ class MDPDataset(Dataset):
         result_state = result_image if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
         current_state = self.current_image if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
         alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
-        items = MarkovDecisionProcessSlice(current_state=np.copy(current_state), result_state=np.copy(result_state),
-                                           alternate_state=np.copy(alternate_state), actions=np.copy(self.actions),
+        items = MarkovDecisionProcessSlice(state=np.copy(current_state), state_prime=np.copy(result_state),
+                                           alt_state=np.copy(alternate_state), action=np.copy(self.actions),
                                            reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
                                            episode=copy(self.episode))
         self.current_state = copy(result_state)
@@ -130,6 +134,16 @@ class MDPDataset(Dataset):
         x = self.x[-1]
         return x.copy() if isinstance(x, np.ndarray) else x
 
+    def to_csv(self, root_path, name):
+        df = self.x.to_df()  # type: pd.DateFrame()
+        if not os.path.exists(root_path): os.makedirs(root_path)
+        df.to_csv(root_path / (name + '.csv'), index=False)
+
+    def to_pickle(self, root_path, name):
+        if not os.path.exists(root_path): os.makedirs(root_path)
+        if not self.x: raise IOError('The dataset is empty, cannot pickle.')
+        pickle.dump(self.x, open(root_path / (name + ".pickle"), "wb"), pickle.HIGHEST_PROTOCOL)
+
 
 class MDPDataBunch(DataBunch):
     def _get_sizes(self, item):
@@ -148,7 +162,7 @@ class MDPDataBunch(DataBunch):
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
-                 path: PathOrStr = '.', bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
+                 path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
                  num_workers: int = 0,
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
                  collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
@@ -157,15 +171,63 @@ class MDPDataBunch(DataBunch):
             # train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
             # valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
             env = gym.make(env_name)
-            train_list = MDPDataset(env, max_steps=max_steps, render=render)
-            valid_list = MDPDataset(env, max_steps=max_steps, render=render) if add_valid else None
+            val_bs = bs if val_bs is None else val_bs
+            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs)
+            valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs) if add_valid else None
         except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
             if e.args[0].lower().__contains__('mujoco'): return None
 
+        bs, val_bs = 1, None
+        path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
+
         return cls.create(train_list, valid_list, num_workers=num_workers, test_ds=test_ds, path=path, bs=bs,
                           feed_type=feed_type, val_bs=val_bs, dl_tfms=dl_tfms, device=device, collate_fn=collate_fn,
                           no_check=no_check, **dl_kwargs)
+
+    @classmethod
+    def from_pickle(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
+                    path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
+                    num_workers: int = 0,
+                    dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
+                    collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
+
+        if path is None:
+            path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0].lower())]
+            if not path: raise IOError(f'There is no pickle dirs file found in ./data/ with the env name {env_name}')
+            path = Path('./data/' + path[0])
+
+        try:
+            env = gym.make(env_name)
+            val_bs = bs if val_bs is None else val_bs
+            train_ls = pickle.load(open(path / 'train.pickle', 'rb'))
+            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=train_ls)
+
+            if add_valid:
+                valid_ls = pickle.load(open(path / 'valid.pickle', 'rb'))
+                valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs, x=valid_ls)
+            else:
+                valid_list = None
+
+        except error.DependencyNotInstalled as e:
+            print('Mujoco is not installed. Returning None')
+            if e.args[0].lower().__contains__('mujoco'): return None
+
+        bs, val_bs = 1, None
+        if path is None: path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
+
+        return cls.create(train_list, valid_list, num_workers=num_workers, test_ds=test_ds, path=path, bs=bs,
+                          feed_type=feed_type, val_bs=val_bs, dl_tfms=dl_tfms, device=device, collate_fn=collate_fn,
+                          no_check=no_check, **dl_kwargs)
+
+    @classmethod
+    def from_csv(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
+                 path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
+                 num_workers: int = 0,
+                 dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
+                 collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
+        raise NotImplementedError('Not implemented for now. Saving state data into a csv seems extremely clunky.'
+                                  ' Suggested to use to_pickle and from_pickle due to easier numpy conversion.')
 
     @classmethod
     def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None,
@@ -188,6 +250,14 @@ class MDPDataBunch(DataBunch):
         dls = [DataLoader(d, b, shuffle=s, drop_last=s, num_workers=num_workers, **dl_kwargs) for d, b, s in
                zip(datasets, (bs, val_bs, val_bs, val_bs), (False, False, False, False)) if d is not None]
         return cls(*dls, path=path, device=device, dl_tfms=dl_tfms, collate_fn=collate_fn, no_check=no_check)
+
+    def to_csv(self):
+        if self.train_ds is not None: self.train_ds.to_csv(self.path, 'train')
+        if self.valid_ds is not None: self.valid_ds.to_csv(self.path, 'valid')
+
+    def to_pickle(self):
+        if self.train_ds is not None: self.train_ds.to_pickle(self.path, 'train')
+        if self.valid_ds is not None: self.valid_ds.to_pickle(self.path, 'valid')
 
     @staticmethod
     def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset] = None):
@@ -220,31 +290,39 @@ class MarkovDecisionProcessList(ItemList):
         self.copy_new.append('feed_type')
         self.ignore_empty = True
 
+    def to_df(self):
+        return pd.DataFrame([i.obj for i in self.items])
+
+    def to_dict(self):
+        return [i.obj for i in self.items]
+
     def get(self, i):
-        res = super(MarkovDecisionProcessList, self).get(i)
-        return res.current_state
+        return self.items[i].data
 
     def reconstruct(self, t: Tensor, x: Tensor = None):
         if self.feed_type == FEED_TYPE_IMAGE:
-            return MarkovDecisionProcessSlice(current_state=Image(t), result_state=Image(x[0]),
-                                              alternate_state=Floats(x[1]), actions=Floats(x[1]),
+            return MarkovDecisionProcessSlice(state=Image(t), state_prime=Image(x[0]),
+                                              alt_state=Floats(x[1]), action=Floats(x[1]),
                                               reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
         else:
-            return MarkovDecisionProcessSlice(current_state=Floats(t), result_state=Floats(x[0]),
-                                              alternate_state=Image(x[1]), actions=Floats(x[1]),
+            return MarkovDecisionProcessSlice(state=Floats(t), state_prime=Floats(x[0]),
+                                              alt_state=Image(x[1]), action=Floats(x[1]),
                                               reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
 
 
 class MarkovDecisionProcessSlice(ItemBase):
     # noinspection PyMissingConstructor
-    def __init__(self, current_state, result_state, alternate_state, actions, reward, done, episode, feed_type=FEED_TYPE_IMAGE):
-        actions = np.copy(actions)
-        if len(actions.shape) == 0: actions = np.array(actions, ndmin=1)
-        if isinstance(np.copy(actions), int): actions = np.array(actions, ndmin=1)
+    def __init__(self, state, state_prime, alt_state, action, reward, done, episode,
+                 feed_type=FEED_TYPE_IMAGE):
+        action = np.copy(action)
+        if len(action.shape) == 0: action = np.array(action, ndmin=1)
+        if isinstance(np.copy(action), int): action = np.array(action, ndmin=1)
         if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
-        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode = current_state, result_state, alternate_state, actions, reward, done, episode
-        self.data, self.obj = [alternate_state] if feed_type == FEED_TYPE_IMAGE else [current_state], (
-            result_state, alternate_state, actions, reward, done, episode)
+        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode = state, state_prime, alt_state, action, reward, done, episode
+        self.data, self.obj = alt_state if feed_type == FEED_TYPE_IMAGE else state, \
+                              {'state': state, 'state_prime': state_prime, 'alt_state': alt_state,
+                               'action': action, 'reward': reward, 'done': done, 'episode': episode,
+                               'feed_type': feed_type}
 
     def __str__(self):
         return Image(self.alternate_state)

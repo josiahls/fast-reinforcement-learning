@@ -22,6 +22,7 @@ class BaseAgent(nn.Module):
     def __init__(self, data: MDPDataBunch):
         super().__init__()
         self.data = data
+        self.name = ''
         # Some definition of loss needs to be implemented
         self.loss = None
         self.out = None
