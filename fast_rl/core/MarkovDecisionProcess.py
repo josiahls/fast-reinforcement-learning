@@ -78,6 +78,7 @@ class MDPDataset(Dataset):
         # Specifically for the stupid blackjack-v0 env >:(
         try:
             current_image = self.env.render('rgb_array')
+            if self.render == 'human': self.env.render(self.render)
         except NotImplementedError:
             print(f'{b_colors.WARNING} {self.env.unwrapped.spec} Not returning Image {b_colors.ENDC}')
             current_image = None
@@ -325,7 +326,12 @@ class MarkovDecisionProcessSlice(ItemBase):
                                'feed_type': feed_type}
 
     def __str__(self):
-        return Image(self.alternate_state)
+        formatted = (
+            map(lambda y: f'{y}:{self.obj[y].shape}', filter(lambda y: y.__contains__('state'), self.obj.keys())),
+            map(lambda y: f'{y}:{self.obj[y]}', filter(lambda y: not y.__contains__('state'), self.obj.keys()))
+        )
+
+        return ', '.join(list(formatted[0]) + list(formatted[1]))
 
     def to_one(self):
         return Image(self.alternate_state)

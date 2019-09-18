@@ -71,10 +71,11 @@ class GreedyEpsilon(ExplorationStrategy):
 
     def update(self, current_episode, end_episode=0, **kwargs):
         super(GreedyEpsilon, self).update(**kwargs)
-        self.end_episode = end_episode
-        self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
-                       math.exp(-1. * (self.steps_done * self.decay))
-        self.steps_done += 1
+        if self.do_exploration:
+            self.end_episode = end_episode
+            self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
+                           math.exp(-1. * (self.steps_done * self.decay))
+            self.steps_done += 1
 
 
 class OrnsteinUhlenbeck(GreedyEpsilon):
@@ -237,7 +238,7 @@ def validate(learn, dl, cb_handler: Optional[CallbackHandler] = None,
         # TODO 1st change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
         for element in progress_bar(dl, parent=pbar):
             dl.actions = learn.predict(element)
-            if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.train_ds.actions)
+            if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.train_ds.actions, train=False)
             val_loss = loss_batch(learn.model, cb_handler=cb_handler)
             if val_loss is None: continue
             val_losses.append(val_loss)
@@ -294,6 +295,7 @@ def fit(epochs: int, learn: BasicLearner, callbacks: Optional[CallbackList] = No
                     loss = loss_batch(learn.model, cb_handler)
                     if cb_handler.on_batch_end(loss): break
 
+            loss = None
             if not cb_handler.skip_validate and not learn.data.empty_val:
                 val_loss = validate(learn, learn.data.valid_dl, cb_handler=cb_handler, pbar=pbar)
             else: val_loss = None
