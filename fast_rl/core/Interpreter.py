@@ -50,7 +50,7 @@ class AgentInterpretationAlpha(Interpretation):
     def top_losses(self, k: int = None, largest=True):
         raise NotImplementedError
 
-    def reward_heatmap(self, episode_slices: List[MarkovDecisionProcessSlice]):
+    def reward_heatmap(self, episode_slices: List[MarkovDecisionProcessSlice], action=None):
         """
         Takes a state_space and uses the agent to heat map rewards over the space.
 
@@ -62,16 +62,19 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
+        if action is not None: action = torch.tensor(action).long()
         current_state_slice = [p for p in product(
             np.arange(min(self.ds.env.observation_space.low), max(self.ds.env.observation_space.high) + 1),
             repeat=len(self.ds.env.observation_space.high))]
         heat_map = np.zeros(np.add(self.ds.env.observation_space.high, 1))
         with torch.no_grad():
             for state in current_state_slice:
-                heat_map[state] = self.learn.model(torch.from_numpy(np.array(state))).max().numpy()
+                if action is not None:
+                    heat_map[state] = self.learn.model(torch.from_numpy(np.array(state)).unsqueeze(0))[0].gather(0, action)
+                else: heat_map[state] = self.learn.model(torch.from_numpy(np.array(state)).unsqueeze(0))[0].max().numpy()
         return heat_map
 
-    def plot_heatmapped_episode(self, episode, fig_size=(13, 5), return_heat_maps=False):
+    def plot_heatmapped_episode(self, episode, fig_size=(13, 5), action_index=None, return_heat_maps=False):
         """
         Generates plots of heatmapped state spaces for analyzing reward distribution.
 
@@ -93,7 +96,7 @@ class AgentInterpretationAlpha(Interpretation):
         episode = episode if episode != -1 else list(set([i.episode for i in items]))[-1]
         for item in [i for i in items if i.episode == episode]:
             buffer.append(item)
-        heat_map = self.reward_heatmap(buffer)
+        heat_map = self.reward_heatmap(buffer, action=action_index)
         heat_maps.append((copy(heat_map), copy(buffer[-1]), copy(episode)))
 
         plots = []
@@ -167,6 +170,50 @@ class AgentInterpretationAlpha(Interpretation):
             plt.tight_layout()
             plt.imshow(plot)
             plt.show()
+
+    def get_agent_accuracy_density(self, items, episode_num=None):
+        x = None
+        y = None
+
+        for episode in [_ for _ in list(set(mdp.episode for mdp in items)) if episode_num is None or episode_num == _]:
+            subset = [item for item in items if item.episode == episode]
+            state = np.array([_.current_state for _ in subset])
+            result_state = np.array([_.result_state for _ in subset])
+
+            prim_q_pred = self.learn.model(torch.from_numpy(state))
+            target_q_pred = self.learn.model.target_net(torch.from_numpy(state).float())
+            state_difference = (prim_q_pred - target_q_pred).sum(1)
+            prim_q_pred = self.learn.model(torch.from_numpy(result_state))
+            target_q_pred = self.learn.model.target_net(torch.from_numpy(result_state).float())
+            result_state_difference = (prim_q_pred - target_q_pred).sum(1)
+
+            x = state_difference if x is None else np.hstack((x, state_difference))
+            y = result_state_difference if y is None else np.hstack((y, result_state_difference))
+
+        return x, y
+
+    def plot_agent_accuracy_density(self, episode_num=None):
+        """
+        Heat maps the density of actual vs estimated q values. Good reference for this is at [1].
+
+        References:
+            [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.
+            https://towardsdatascience.com/simple-example-of-2d-density-plots-in-python-83b83b934f67
+
+        Returns:
+
+        """
+        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+        x, y = self.get_agent_accuracy_density(items, episode_num)
+
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.gca()
+        fig.suptitle(f'{self.learn.model.name} for {self.ds.env.spec._env_name}')
+        ax.set_ylabel('State / State Prime Q Value Deviation')
+        ax.set_xlabel('Iterations')
+        ax.plot(np.hstack([x, y]))
+        plt.show()
+
 
     def get_q_density(self, items, episode_num=None):
         x = None
@@ -303,6 +350,7 @@ class AgentInterpretationAlpha(Interpretation):
             raise IndexError(f'Your batch size {batch_size} > the memory\'s batch size {len(self.learn.model.memory)}')
         if key not in samples[0].obj.keys(): raise ValueError(f'Key {key} not in {samples[0].obj.keys()}')
         return [s.obj[key] for s in samples]
+
 
     def plot_memory_samples(self, batch_size=None, key='reward', fig_size=(8, 8)):
         values_of_interest = self.get_memory_samples(batch_size, key)

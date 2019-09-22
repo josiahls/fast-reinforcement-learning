@@ -7,16 +7,17 @@ from torch import optim, nn
 from torch.nn import MSELoss
 import numpy as np
 
-from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model
+from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, FEED_TYPE_IMAGE
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
 
 class BaseDQNCallback(LearnerCallback):
-    def __init__(self, learn, max_episodes=None):
+    def __init__(self, learn, max_episodes=None, copy_over_frequency=1):
         """Handles basic DQN end of step model optimization."""
         super().__init__(learn)
+        self.copy_over_frequency = copy_over_frequency
         self._persist = max_episodes is not None
         self.max_episodes = max_episodes
         self.episode = -1
@@ -37,8 +38,9 @@ class BaseDQNCallback(LearnerCallback):
             self.learn.model.memory.update(item=self.learn.data.x.items[-1])
         self.learn.model.exploration_strategy.update(self.episode, self.max_episodes,
                                                      do_exploration=self.learn.model.training)
-        post_optimize = self.learn.model.optimize()
-        if self.learn.model.training: self.learn.model.memory.refresh(post_optimize=post_optimize)
+        if self.iteration % self.copy_over_frequency == 0:
+            post_optimize = self.learn.model.optimize()
+            if self.learn.model.training: self.learn.model.memory.refresh(post_optimize=post_optimize)
         self.iteration += 1
 
 
@@ -55,13 +57,14 @@ class FixedTargetDQNCallback(BaseDQNCallback):
         self._order = 1
         self.copy_over_frequency = copy_over_frequency
 
-    def on_epoch_end(self, **kwargs: Any):
-        if self.episode % self.copy_over_frequency == 0 and self.learn.model.training:
+    def on_step_end(self, **kwargs: Any):
+        if self.iteration % self.copy_over_frequency == 0 and self.learn.model.training:
             self.learn.model.target_copy_over()
 
 
 class DQN(BaseAgent):
-    def __init__(self, data: MDPDataBunch, memory=None, batch_size=32, lr=0.001, grad_clip=5, max_episodes=None):
+    def __init__(self, data: MDPDataBunch, memory=None, batch_size=32, lr=0.001, discount=0.99, grad_clip=5,
+                 max_episodes=None):
         """Trains an Agent using the Q Learning method on a neural net.
 
         Notes:
@@ -78,11 +81,11 @@ class DQN(BaseAgent):
         # TODO add recommend cnn based on state size?
         self.name = 'DQN'
         self.batch_size = batch_size
-        self.discount = 0.99
+        self.discount = discount
         self.lr = lr
         self.gradient_clipping_norm = grad_clip
         self.loss_func = F.smooth_l1_loss
-        self.memory = ifnone(memory, ExperienceReplay(100000))
+        self.memory = ifnone(memory, ExperienceReplay(1000))
         self.action_model = self.initialize_action_model([64, 64], data)
         self.opt = OptimWrapper.create(optim.Adam, lr=self.lr, layer_groups=self.action_model)
         self.learner_callbacks += [partial(BaseDQNCallback, max_episodes=max_episodes)] + self.memory.callbacks
@@ -90,7 +93,8 @@ class DQN(BaseAgent):
                                                   do_exploration=self.training)
 
     def initialize_action_model(self, layers, data):
-        return create_nn_model(layers, *data.get_action_state_size())
+        if self.data.train_ds.feed_type == FEED_TYPE_IMAGE: return create_cnn_model(layers, *data.get_action_state_size())
+        else: return create_nn_model(layers, *data.get_action_state_size())
 
     def forward(self, x):
         x = super(DQN, self).forward(x)
@@ -149,7 +153,7 @@ class DQN(BaseAgent):
 
 
 class FixedTargetDQN(DQN):
-    def __init__(self, data: MDPDataBunch, copy_over_frequency=1, memory=None, **kwargs):
+    def __init__(self, data: MDPDataBunch, copy_over_frequency=1, tau=0.01, memory=None, **kwargs):
         """Trains an Agent using the Q Learning method on a 2 neural nets.
 
         Notes:
@@ -165,12 +169,15 @@ class FixedTargetDQN(DQN):
         """
         super().__init__(data, memory, **kwargs)
         self.name = 'DQN Fixed Targeting'
+        self.tau = tau
         self.target_net = deepcopy(self.action_model)
         self.learner_callbacks += [partial(FixedTargetDQNCallback, copy_over_frequency=copy_over_frequency)]
 
     def target_copy_over(self):
         """ Updates the target network from calls in the FixedTargetDQNCallback callback."""
-        self.target_net.load_state_dict(self.action_model.state_dict())
+        # self.target_net.load_state_dict(self.action_model.state_dict())
+        for target_param, local_param in zip(self.target_net.parameters(), self.action_model.parameters()):
+            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
     def optimize(self):
         """
@@ -205,7 +212,7 @@ class FixedTargetDQN(DQN):
             if self.training:
                 self.opt.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.action_model.parameters(), self.gradient_clipping_norm)
+                # torch.nn.utils.clip_grad_norm_(self.action_model.parameters(), self.gradient_clipping_norm)
                 for param in self.action_model.parameters():
                     param.grad.data.clamp_(-1, 1)
                 self.opt.step()

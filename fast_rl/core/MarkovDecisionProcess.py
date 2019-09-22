@@ -105,8 +105,8 @@ class MDPDataset(Dataset):
         self.counter += 1
 
         # Second Phase: Generate MDP slice
-        result_state = result_image if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
-        current_state = self.current_image if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
+        result_state = result_image.transpose(2, 0, 1) if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
+        current_state = self.current_image.transpose(2, 0, 1) if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
         alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
         items = MarkovDecisionProcessSlice(state=np.copy(current_state), state_prime=np.copy(result_state),
                                            alt_state=np.copy(alternate_state), action=np.copy(self.actions),
@@ -147,9 +147,10 @@ class MDPDataset(Dataset):
 
 
 class MDPDataBunch(DataBunch):
-    def _get_sizes(self, item):
-        if isinstance(item, Discrete): return item.n
-        if isinstance(item, Box) and len(item.shape) == 1: return item.shape[0]
+    def _get_sizes_and_possible_values(self, item):
+        if isinstance(item, Discrete): return item.n, item.n
+        if isinstance(item, Box) and len(item.shape) > 1: return item.shape, np.prod(item.high)
+        if isinstance(item, Box) and len(item.shape) == 1: return item.shape[0], np.prod(item.high)
 
     # noinspection PyUnresolvedReferences
     def get_action_state_size(self):
@@ -159,7 +160,7 @@ class MDPDataBunch(DataBunch):
             a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.state_size
         else:
             return None
-        return tuple(map(self._get_sizes, [a_s, s_s]))
+        return tuple(map(self._get_sizes_and_possible_values, [a_s, s_s]))
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
