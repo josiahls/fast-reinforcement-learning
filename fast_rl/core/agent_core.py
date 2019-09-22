@@ -1,3 +1,4 @@
+import copy
 import math
 import random
 from collections import deque
@@ -134,7 +135,7 @@ class ExperienceReplay(Experience):
         return random.sample(self.memory, batch)
 
     def update(self, item, **kwargs):
-        self.memory.append(item)
+        self.memory.append(copy.deepcopy(item))
 
 
 class PriorityExperienceReplayCallback(LearnerCallback):

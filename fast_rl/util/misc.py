@@ -14,7 +14,7 @@ class b_colors:
 
 
 def is_goal_env(env, suppress_errors=True):
-    msg = 'GoalEnv requires the "{}" key to be part of the observation dictionary.'
+    msg = 'GoalEnv requires the "{}" key to be part of the observation d.'
     # Enforce that each GoalEnv uses a Goal-compatible observation space.
     if not isinstance(env.observation_space, gym.spaces.Dict):
         if not suppress_errors:

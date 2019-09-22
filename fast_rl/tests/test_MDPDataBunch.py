@@ -4,8 +4,11 @@ from fastai.basic_train import Learner, ItemLists
 from fastai.vision import ImageDataBunch
 import numpy as np
 
+from fast_rl.agents.DQN import FixedTargetDQN
+from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, MarkovDecisionProcessList, \
     MDPDataBunch, MDPDataset
+from fast_rl.core.agent_core import ExperienceReplay
 
 
 def test_MarkovDecisionProcessDataBunch_init():
@@ -39,6 +42,15 @@ def test_MarkovDecisionProcessDataBunch_init():
             print(f'state {element} action {env_databunch.valid_dl.dl.dataset.actions}')
             assert current_s == actual_s, error_msg % (current_s, actual_s)
             assert np.equal(env_databunch.valid_dl.dl.dataset.actions, env_databunch.valid_ds.actions), error_msg2
+
+
+def test_MDPDataset_MemoryManagement():
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=100, add_valid=False)
+    model = FixedTargetDQN(data, batch_size=128, max_episodes=10000, lr=0.001, copy_over_frequency=3,
+                           memory=ExperienceReplay(10000), discount=0.99)
+    learn = AgentLearner(data, model, mem_strategy='k_top_best')
+
+    learn.fit(10)
 
 
 def test_MarkovDecisionProcessDataBunch_init_no_valid():

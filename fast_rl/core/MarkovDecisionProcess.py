@@ -1,6 +1,7 @@
 from numbers import Integral
 
 import gym
+from fastai.basic_train import LearnerCallback
 from gym.spaces import Discrete, Box
 
 try:
@@ -33,9 +34,153 @@ FEED_TYPE_IMAGE = 0
 FEED_TYPE_STATE = 1
 
 
+class MDPMemoryManager(LearnerCallback):
+    def __init__(self, learn, mem_strategy, k, max_episodes=None, episode=0, iteration=0):
+        """
+        Handles different ways of memory management:
+        - (k_partitions_best)  keep partition best episodes
+        - (k_partitions_worst) keep partition worst episodes
+        - (k_partitions_both)  keep partition worst best episodes
+        - (k_top_best)         keep high fidelity k top episodes
+        - (k_top_worst)        keep k top worst
+        - (k_top_both)         keep k top worst and best
+        - (none)                keep none, only load into memory (always keep first)
+        - (all):               keep all steps will be kept (most memory inefficient)
+
+        Args:
+            learn:
+            mem_strategy:
+            k:
+            max_episodes:
+            episode:
+            iteration:
+        """
+        super().__init__(learn)
+        self.mem_strategy = mem_strategy
+        self.k = k
+        self.ds = None
+        self.max_episodes = max_episodes
+        self.episode = episode
+        self.iteration = iteration
+        self._persist = max_episodes is not None
+
+        # Private Util Fields
+        self._train_episodes_keep = {}
+        self._valid_episodes_keep = {}
+        self._current_partition = 0
+
+        self._lower = 0
+        self._upper = 0
+
+    def _comp_less(self, key, d, episode): return d[key] < self.data.x.info[episode]
+    def _comp_greater(self, key, d, episode): return d[key] > self.data.x.info[episode]
+
+    def _k_top_best(self, episode, episodes_keep):
+        best = dict(filter(partial(self._comp_greater, d=episodes_keep, episode=episode), episodes_keep))
+        return list(dict(sorted(best.items(), reverse=True)).keys())
+
+    def _k_top_worst(self, episode, episodes_keep):
+        worst = dict(filter(partial(self._comp_less, d=episodes_keep, episode=episode), episodes_keep))
+        return list(dict(sorted(worst.items())).keys())
+
+    def _k_top_both(self, episode, episodes_keep):
+        best, worst = self._k_top_best(episode, episodes_keep), self._k_top_worst(episode, episodes_keep)
+        if best: return best
+        return worst
+
+    def _k_partitions_best(self, episode, episodes_keep):
+        # Filter episodes by their partition
+        if episode >= self._upper: self.lower, self._upper = self._upper, self._upper + self.max_episodes // self.k
+        filtered_episodes = {ep: episodes_keep[ep] for ep in episodes_keep if self._lower <= ep < self._upper}
+        best = dict(filter(partial(self._comp_greater, d=filtered_episodes, episode=episode), filtered_episodes))
+        return list(dict(sorted(best.items(), reverse=True)).keys())
+
+    def _k_partitions_worst(self, episode, episodes_keep):
+        # Filter episodes by their partition
+        if episode >= self._upper: self.lower, self._upper = self._upper, self._upper + self.max_episodes // self.k
+        filtered_episodes = {ep: episodes_keep[ep] for ep in episodes_keep if self._lower <= ep < self._upper}
+        worst = dict(filter(partial(self._comp_less, d=filtered_episodes, episode=episode), filtered_episodes))
+        return list(dict(sorted(worst.items())).keys())
+
+    def _k_partitions_both(self, episode, episodes_keep):
+        best, worst = self._k_partitions_best(episode, episodes_keep), self._k_partitions_worst(episode, episodes_keep)
+        if best: return best
+        return worst
+
+    def on_loss_begin(self, **kwargs: Any):
+        self.iteration += 1
+
+    def manage_memory(self, episodes_keep):
+        # We operate of the second to most recent episode so the agent still has an opportunity to use the full episode
+        episode = self.episode - 1
+        if episode not in self.ds.x.info: return
+        if len(episodes_keep) <= self.k:
+            episodes_keep[episode] = self.ds.x.info[episode]
+            return
+
+        # If the episodes to keep is full, then we have to decide which ones to remove
+        if self.mem_strategy == 'k_top_best': del_ep = self._k_top_best(episode, episodes_keep)
+        if self.mem_strategy == 'k_top_worst': del_ep = self._k_top_worst(episode, episodes_keep)
+        if self.mem_strategy == 'k_top_both': del_ep = self._k_top_both(episode, episodes_keep)
+        if self.mem_strategy == 'k_partitions_best': del_ep = self._k_partitions_best(episode, episodes_keep)
+        if self.mem_strategy == 'k_partitions_worst': del_ep = self.k_partitions_worst(episode, episodes_keep)
+        if self.mem_strategy == 'k_partitions_both': del_ep = self._k_partitions_both(episode, episodes_keep)
+        if self.mem_strategy == 'all': del_ep = [-1]
+
+        # If there are episodes to delete, then set them as the main episode to delete
+        if len(del_ep) != 0:
+            episodes_keep[episode] = self.ds.x.info[episode]
+            del episodes_keep[del_ep[0]]
+            episode = del_ep[0]
+        if episode != -1: self.ds.x.clean(episode)
+        print(self._train_episodes_keep)
+        print(self._valid_episodes_keep)
+
+    def on_train_begin(self, n_epochs, **kwargs: Any):
+        self.max_episodes = n_epochs if not self._persist else self.max_episodes
+        self._upper = self.max_episodes // self.k
+
+    def on_epoch_begin(self, epoch, **kwargs: Any):
+        self.episode = epoch if not self._persist else self.episode + 1
+        self.iteration = 0
+
+    def on_epoch_end(self, **kwargs: Any) -> None:
+        if self.learn.data.train_ds is not None:
+            self.ds = self.learn.data.train_ds
+            self.manage_memory(self._train_episodes_keep)
+        if self.learn.data.valid_ds is not None:
+            self.ds = self.learn.data.valid_ds
+            self.manage_memory(self._valid_episodes_keep)
+
+
 class MDPDataset(Dataset):
     def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None, bs=8,
-                 x=None):
+                 x=None, memory_management_strategy='k_partitions_best', k=0):
+        """
+        Handles the running and loading of environments, as well as storing episode steps.
+
+        mem_strategy has a few settings. This is for inference on the existing data:
+        - (k_partitions_best) keep partition best episodes
+        - (k_partitions_both) keep partition worst best episodes
+        - (k_top_best)        keep high fidelity k top episodes
+        - (k_top_worst)       keep k top worst
+        - (k_top_both)        keep k top worst and best
+        - (non)               keep non, only load into memory (always keep first)
+        - (all):              keep all steps will be kept (most memory inefficient)
+
+        Args:
+            env:
+            feed_type:
+            render:
+            max_steps:
+            bs:
+            x:
+            memory_management_strategy: Reference above. Tests `self` how to keep memory usage down.
+            k: Related to the `mem_strategy` and is either k quartiles and k most.
+            save_every: Skip adding to datasets.
+        """
+        self.k = k
+        self.mem_strat = memory_management_strategy
         self.bs = bs
         # noinspection PyUnresolvedReferences,PyProtectedMember
         self.max_steps = env._max_episode_steps if max_steps is None else max_steps
@@ -291,6 +436,19 @@ class MarkovDecisionProcessList(ItemList):
         self.feed_type = feed_type
         self.copy_new.append('feed_type')
         self.ignore_empty = True
+        self.info = {}
+
+    def clean(self, episode):
+        for item in self.items:
+            if item.episode == episode: item.clean()
+
+    def add(self, items: 'ItemList'):
+        # Update the episode related composition information
+        for item in items.items:
+            if item.episode in self.info: self.info[item.episode] = np.sum(self.info[item.episode] + item.reward)
+            else: self.info[item.episode] = item.reward
+
+        super().add(items)
 
     def to_df(self):
         return pd.DataFrame([i.obj for i in self.items])
@@ -322,9 +480,14 @@ class MarkovDecisionProcessSlice(ItemBase):
         if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
         self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode = state, state_prime, alt_state, action, reward, done, episode
         self.data, self.obj = alt_state if feed_type == FEED_TYPE_IMAGE else state, \
-                              {'state': state, 'state_prime': state_prime, 'alt_state': alt_state,
-                               'action': action, 'reward': reward, 'done': done, 'episode': episode,
-                               'feed_type': feed_type}
+                              {'state': self.current_state, 'state_prime': self.result_state,
+                               'alt_state': self.alternate_state, 'action': action, 'reward': reward, 'done': done,
+                               'episode': episode, 'feed_type': feed_type}
+
+    def clean(self):
+        self.current_state = None
+        self.result_state = None
+        self.alternate_state = None
 
     def __str__(self):
         formatted = (

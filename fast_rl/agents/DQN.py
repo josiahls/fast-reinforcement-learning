@@ -14,9 +14,11 @@ from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
 
 class BaseDQNCallback(LearnerCallback):
-    def __init__(self, learn, max_episodes=None, copy_over_frequency=1):
+    def __init__(self, learn, max_episodes=None, copy_over_frequency=1, skip_step=2):
         """Handles basic DQN end of step model optimization."""
         super().__init__(learn)
+        self.skip_step = skip_step
+        self.n_skipped = 0
         self.copy_over_frequency = copy_over_frequency
         self._persist = max_episodes is not None
         self.max_episodes = max_episodes
@@ -34,13 +36,17 @@ class BaseDQNCallback(LearnerCallback):
 
     def on_loss_begin(self, **kwargs: Any):
         """Performs memory updates, exploration updates, and model optimization."""
-        if self.learn.model.training:
-            self.learn.model.memory.update(item=self.learn.data.x.items[-1])
-        self.learn.model.exploration_strategy.update(self.episode, self.max_episodes,
-                                                     do_exploration=self.learn.model.training)
-        if self.iteration % self.copy_over_frequency == 0:
-            post_optimize = self.learn.model.optimize()
-            if self.learn.model.training: self.learn.model.memory.refresh(post_optimize=post_optimize)
+        if self.iteration % self.skip_step == 0 or self.learn.data.x.items[-1].done:
+            if self.learn.model.training:
+                self.learn.model.memory.update(item=self.learn.data.x.items[-1])
+            self.learn.model.exploration_strategy.update(self.episode, self.max_episodes,
+                                                         do_exploration=self.learn.model.training)
+            if self.n_skipped % self.copy_over_frequency == 0:
+                post_optimize = self.learn.model.optimize()
+                if self.learn.model.training: self.learn.model.memory.refresh(post_optimize=post_optimize)
+            else: self.model.loss = None #torch.from_numpy(np.zeros(1))
+            self.n_skipped += 1
+        else: self.model.loss = None# torch.from_numpy(np.zeros(1))
         self.iteration += 1
 
 
@@ -64,7 +70,7 @@ class FixedTargetDQNCallback(BaseDQNCallback):
 
 class DQN(BaseAgent):
     def __init__(self, data: MDPDataBunch, memory=None, batch_size=32, lr=0.001, discount=0.99, grad_clip=5,
-                 max_episodes=None):
+                 max_episodes=None, skip_step=2):
         """Trains an Agent using the Q Learning method on a neural net.
 
         Notes:
@@ -79,6 +85,7 @@ class DQN(BaseAgent):
         """
         super().__init__(data)
         # TODO add recommend cnn based on state size?
+        self.skip_step = skip_step
         self.name = 'DQN'
         self.batch_size = batch_size
         self.discount = discount

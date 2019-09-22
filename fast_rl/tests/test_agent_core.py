@@ -22,6 +22,7 @@ def test_priority_experience_replay():
     learn = AgentLearner(data, model)
     learn.fit(5)
 
+
 def test_stripped_fit():
     data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
     model = DQN(data)

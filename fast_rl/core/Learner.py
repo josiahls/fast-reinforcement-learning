@@ -3,7 +3,7 @@ from functools import partial
 from fastai.basic_train import Recorder, defaults, Learner, listify
 
 from fast_rl.agents.BaseAgent import BaseAgent
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, MDPMemoryManager
 from fast_rl.core.agent_core import fit
 from fast_rl.core.metrics import EpsilonMetric
 
@@ -11,7 +11,7 @@ from fast_rl.core.metrics import EpsilonMetric
 class AgentLearner(object):
     silent: bool = None
 
-    def __init__(self, data: MDPDataBunch, model: BaseAgent):
+    def __init__(self, data: MDPDataBunch, model: BaseAgent, mem_strategy='k_partitions_both', k=1):
         """
         Will very soon subclass the fastai learner class. For now we need to understand the important functional
         requirements needed in a learner.
@@ -23,7 +23,8 @@ class AgentLearner(object):
         self.opt = self.model.opt
         if self.silent is None: self.silent = defaults.silent
         self.add_time: bool = True
-        self.callbacks = [partial(Recorder, add_time=self.add_time, silent=self.silent), EpsilonMetric]
+        self.callbacks = [partial(Recorder, add_time=self.add_time, silent=self.silent), EpsilonMetric,
+                          partial(MDPMemoryManager, mem_strategy=mem_strategy, k=k)]
         self.callbacks = [f(self) for f in self.callbacks] + [f(learn=self) for f in self.model.learner_callbacks]
 
     def predict(self, element):
