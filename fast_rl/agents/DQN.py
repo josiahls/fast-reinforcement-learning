@@ -44,14 +44,12 @@ class BaseDQNCallback(LearnerCallback):
             if self.n_skipped % self.copy_over_frequency == 0:
                 post_optimize = self.learn.model.optimize()
                 if self.learn.model.training: self.learn.model.memory.refresh(post_optimize=post_optimize)
-            else: self.model.loss = None #torch.from_numpy(np.zeros(1))
             self.n_skipped += 1
-        else: self.model.loss = None# torch.from_numpy(np.zeros(1))
         self.iteration += 1
 
 
-class FixedTargetDQNCallback(BaseDQNCallback):
-    def __init__(self, learn, copy_over_frequency=1):
+class FixedTargetDQNCallback(LearnerCallback):
+    def __init__(self, learn, copy_over_frequency=3):
         """
         Handles updating the target model in a fixed target DQN.
 
@@ -61,16 +59,18 @@ class FixedTargetDQNCallback(BaseDQNCallback):
         """
         super().__init__(learn)
         self._order = 1
+        self.iteration = 0
         self.copy_over_frequency = copy_over_frequency
 
     def on_step_end(self, **kwargs: Any):
+        self.iteration += 1
         if self.iteration % self.copy_over_frequency == 0 and self.learn.model.training:
             self.learn.model.target_copy_over()
 
 
 class DQN(BaseAgent):
     def __init__(self, data: MDPDataBunch, memory=None, batch_size=32, lr=0.001, discount=0.99, grad_clip=5,
-                 max_episodes=None, skip_step=2):
+                 max_episodes=None, skip_step=2, exploration_strategy=None):
         """Trains an Agent using the Q Learning method on a neural net.
 
         Notes:
@@ -92,12 +92,13 @@ class DQN(BaseAgent):
         self.lr = lr
         self.gradient_clipping_norm = grad_clip
         self.loss_func = F.smooth_l1_loss
-        self.memory = ifnone(memory, ExperienceReplay(1000))
-        self.action_model = self.initialize_action_model([64, 64], data)
-        self.opt = OptimWrapper.create(optim.Adam, lr=self.lr, layer_groups=self.action_model)
+        self.memory = ifnone(memory, ExperienceReplay(10000))
+        self.action_model = self.initialize_action_model([30, 30], data)
+        self.opt = OptimWrapper.create(optim.Adam, lr=self.lr, layer_groups=[self.action_model])
         self.learner_callbacks += [partial(BaseDQNCallback, max_episodes=max_episodes)] + self.memory.callbacks
-        self.exploration_strategy = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001,
-                                                  do_exploration=self.training)
+        self.exploration_strategy = ifnone(exploration_strategy, GreedyEpsilon(epsilon_start=1, epsilon_end=0.1,
+                                                                               decay=0.001,
+                                                                               do_exploration=self.training))
 
     def initialize_action_model(self, layers, data):
         if self.data.train_ds.feed_type == FEED_TYPE_IMAGE: return create_cnn_model(layers, *data.get_action_state_size())
@@ -202,11 +203,11 @@ class FixedTargetDQN(DQN):
         if len(self.memory) > self.batch_size:
             # Perhaps have memory as another item list? Should investigate.
             sampled = self.memory.sample(self.batch_size)
-            with torch.no_grad():
-                r = torch.from_numpy(np.array([item.reward for item in sampled])).float()
-                s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
-                s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
-                a = torch.from_numpy(np.array([item.actions for item in sampled])).long()
+
+            r = torch.from_numpy(np.array([item.reward for item in sampled])).float()
+            s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
+            s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
+            a = torch.from_numpy(np.array([item.actions for item in sampled])).long()
 
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
@@ -214,7 +215,9 @@ class FixedTargetDQN(DQN):
             y = self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) + r.expand_as(y_hat)
 
             loss = self.loss_func(y, y_hat)
-            self.loss = loss
+            self.loss = loss.cpu().detach()
+
+            # print(f'{self.action_model(s).gather(1, a)[0][0]}, {(self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) + r.expand_as(y_hat))[0][0]}')
 
             if self.training:
                 self.opt.zero_grad()

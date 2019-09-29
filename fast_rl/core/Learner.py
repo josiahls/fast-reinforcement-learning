@@ -23,9 +23,10 @@ class AgentLearner(object):
         self.opt = self.model.opt
         if self.silent is None: self.silent = defaults.silent
         self.add_time: bool = True
-        self.callbacks = [partial(Recorder, add_time=self.add_time, silent=self.silent), EpsilonMetric,
-                          partial(MDPMemoryManager, mem_strategy=mem_strategy, k=k)]
-        self.callbacks = [f(self) for f in self.callbacks] + [f(learn=self) for f in self.model.learner_callbacks]
+        self.recorder = Recorder(learn=self, add_time=self.add_time, silent=self.silent)
+        self.recorder.no_val = self.data.empty_val
+        self.callbacks = [EpsilonMetric, partial(MDPMemoryManager, mem_strategy=mem_strategy, k=k)]
+        self.callbacks = [self.recorder] + [f(self) for f in self.callbacks] + [f(learn=self) for f in self.model.learner_callbacks]
 
     def predict(self, element):
         return self.model.pick_action(element)

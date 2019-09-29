@@ -238,8 +238,8 @@ def validate(learn, dl, cb_handler: Optional[CallbackHandler] = None,
         if cb_handler: cb_handler.set_dl(dl)
         # TODO 1st change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
         for element in progress_bar(dl, parent=pbar):
-            dl.actions = learn.predict(element)
-            if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.train_ds.actions, train=False)
+            learn.data.valid_ds.actions = learn.predict(element)
+            if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.valid_ds.actions, train=False)
             val_loss = loss_batch(learn.model, cb_handler=cb_handler)
             if val_loss is None: continue
             val_losses.append(val_loss)
@@ -275,6 +275,7 @@ def fit(epochs: int, learn: BasicLearner, callbacks: Optional[CallbackList] = No
     # Since CallbackHandler is a dataclass, these input fields will be automatically populated via
     # a default __init__
     cb_handler = CallbackHandler(callbacks, metrics)
+    cb_handler.state_dict['skip_validate'] = learn.data.empty_val
     pbar = master_bar(range(epochs))
     cb_handler.on_train_begin(epochs, pbar=pbar, metrics=metrics)
     # Note that metrics in the on_train begin method need a name field.

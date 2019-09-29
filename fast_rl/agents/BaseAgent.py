@@ -69,7 +69,7 @@ class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
 
-def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True):
+def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True, activation_fuction=None):
     """Generates an nn module.
 
     Notes:
@@ -78,15 +78,16 @@ def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use
     Returns:
 
     """
+    act = nn.LeakyReLU if activation_fuction is None else activation_fuction
     action_size = action_size[0]  # For now the dimension of the action does not make a difference.
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
     sizes = [state_size] + layer_list + [action_size]
-    actns = [nn.ReLU() for _ in range(len(sizes) - 2)] + [None]
+    actns = [act() for _ in range(len(sizes) - 2)] + [None]
     layers = []
     for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):
         if i == 0 and use_embed:
-            embedded, n_in = get_embedded(n_in[0], n_out, n_in[1], 20)
+            embedded, n_in = get_embedded(n_in[0], n_out, n_in[1], 5)
             layers += [ToLong(), embedded, Flatten()]
 
         layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)

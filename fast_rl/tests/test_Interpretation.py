@@ -14,7 +14,7 @@ def test_interpretation_heatmap():
     model = DQN(data)
     learn = AgentLearner(data, model)
 
-    learn.fit(4)
+    learn.fit(5)
     interp = AgentInterpretationAlpha(learn)
     interp.plot_heatmapped_episode(-1, action_index=0)
 
@@ -72,4 +72,14 @@ def test_inerpretation_plot_model_accuracy_fixeddqn():
 
     learn.fit(10)
     interp = AgentInterpretationAlpha(learn)
+    interp.plot_agent_accuracy_density()
+
+
+def test_interpretation_plot_q_density():
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000, add_valid=False)
+    model = FixedTargetDQN(data, batch_size=128, max_episodes=100, copy_over_frequency=3)
+    learn = AgentLearner(data, model)
+
+    learn.fit(4)
+    interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
     interp.plot_agent_accuracy_density()

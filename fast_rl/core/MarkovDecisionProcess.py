@@ -74,6 +74,7 @@ class MDPMemoryManager(LearnerCallback):
 
     def _comp_less(self, key, d, episode): return d[key] < self.data.x.info[episode]
     def _comp_greater(self, key, d, episode): return d[key] > self.data.x.info[episode]
+    def _dict_access(self, key, dictionary): return {key: dictionary[key]}
 
     def _k_top_best(self, episode, episodes_keep):
         best = dict(filter(partial(self._comp_greater, d=episodes_keep, episode=episode), episodes_keep))
@@ -92,14 +93,16 @@ class MDPMemoryManager(LearnerCallback):
         # Filter episodes by their partition
         if episode >= self._upper: self.lower, self._upper = self._upper, self._upper + self.max_episodes // self.k
         filtered_episodes = {ep: episodes_keep[ep] for ep in episodes_keep if self._lower <= ep < self._upper}
-        best = dict(filter(partial(self._comp_greater, d=filtered_episodes, episode=episode), filtered_episodes))
+        best = list(filter(partial(self._comp_greater, d=filtered_episodes, episode=episode), filtered_episodes))
+        best = {k: filtered_episodes[k] for k in filtered_episodes if k in best}
         return list(dict(sorted(best.items(), reverse=True)).keys())
 
     def _k_partitions_worst(self, episode, episodes_keep):
         # Filter episodes by their partition
         if episode >= self._upper: self.lower, self._upper = self._upper, self._upper + self.max_episodes // self.k
         filtered_episodes = {ep: episodes_keep[ep] for ep in episodes_keep if self._lower <= ep < self._upper}
-        worst = dict(filter(partial(self._comp_less, d=filtered_episodes, episode=episode), filtered_episodes))
+        worst = list(filter(partial(self._comp_less, d=filtered_episodes, episode=episode), filtered_episodes))
+        worst = {k: filtered_episodes[k] for k in filtered_episodes if k in worst}
         return list(dict(sorted(worst.items())).keys())
 
     def _k_partitions_both(self, episode, episodes_keep):
@@ -133,8 +136,7 @@ class MDPMemoryManager(LearnerCallback):
             del episodes_keep[del_ep[0]]
             episode = del_ep[0]
         if episode != -1: self.ds.x.clean(episode)
-        print(self._train_episodes_keep)
-        print(self._valid_episodes_keep)
+        self.ds.x.episodes_to_keep = episodes_keep
 
     def on_train_begin(self, n_epochs, **kwargs: Any):
         self.max_episodes = n_epochs if not self._persist else self.max_episodes
@@ -148,14 +150,14 @@ class MDPMemoryManager(LearnerCallback):
         if self.learn.data.train_ds is not None:
             self.ds = self.learn.data.train_ds
             self.manage_memory(self._train_episodes_keep)
-        if self.learn.data.valid_ds is not None:
+        if self.learn.data.valid_dl is not None:
             self.ds = self.learn.data.valid_ds
             self.manage_memory(self._valid_episodes_keep)
 
 
 class MDPDataset(Dataset):
     def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None, bs=8,
-                 x=None, memory_management_strategy='k_partitions_best', k=0):
+                 x=None, memory_management_strategy='k_partitions_best', k=0, skip=False):
         """
         Handles the running and loading of environments, as well as storing episode steps.
 
@@ -180,6 +182,10 @@ class MDPDataset(Dataset):
             save_every: Skip adding to datasets.
         """
         self.k = k
+        self.skip = False
+        if skip:
+            self.skip = skip
+            return
         self.mem_strat = memory_management_strategy
         self.bs = bs
         # noinspection PyUnresolvedReferences,PyProtectedMember
@@ -198,6 +204,7 @@ class MDPDataset(Dataset):
         self.episode = 0
         self.x = MarkovDecisionProcessList() if x is None else x  # self.new(0)
         self.item = None
+        self.episodes_to_keep = {}
 
     @property
     def state_size(self):
@@ -396,7 +403,9 @@ class MDPDataBunch(DataBunch):
         val_bs = ifnone(val_bs, bs)
         dls = [DataLoader(d, b, shuffle=s, drop_last=s, num_workers=num_workers, **dl_kwargs) for d, b, s in
                zip(datasets, (bs, val_bs, val_bs, val_bs), (False, False, False, False)) if d is not None]
-        return cls(*dls, path=path, device=device, dl_tfms=dl_tfms, collate_fn=collate_fn, no_check=no_check)
+        databunch = cls(*dls, path=path, device=device, dl_tfms=dl_tfms, collate_fn=collate_fn, no_check=no_check)
+        if valid_ds is None: databunch.valid_dl = None
+        return databunch
 
     def to_csv(self):
         if self.train_ds is not None: self.train_ds.to_csv(self.path, 'train')

@@ -35,6 +35,13 @@ class AgentInterpretationAlpha(Interpretation):
         super().__init__(learn, None, None, None, ds_type=ds_type)
         self.current_animation = None
         plt.rcParams["figure.figsize"] = base_chart_size
+        
+    def _get_items(self, ignore=True):
+        episodes = list(self.ds.x.episodes_to_keep.keys())
+        if ignore or len(episodes) == 0: return self.ds.x.itmes
+        return [item for item in self.ds.x.items if item.episode in episodes]
+
+
 
     @classmethod
     def from_learner(cls, learn: Learner, ds_type: DatasetType = DatasetType.Valid, activ: nn.Module = None):
@@ -88,7 +95,7 @@ class AgentInterpretationAlpha(Interpretation):
         if not isinstance(self.ds.state_size, Box):
             raise NotImplementedError('Currently only supports Box based state spaces with 2 dimensions')
 
-        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items()
         heat_maps = []
 
         # For each episode
@@ -101,7 +108,7 @@ class AgentInterpretationAlpha(Interpretation):
 
         plots = []
         for single_heatmap in [heat_maps[-1]]:
-            fig, ax = plt.subplots(1, 2, figsize=fig_size)  # type: Tuple[Figure, List[Axes]]
+            fig, ax = plt.subplots(1, 2, figsize=fig_size)
             fig.suptitle(f'Episode {episode}')
             ax[0].imshow(single_heatmap[1].to_one().data)
             im = ax[1].imshow(single_heatmap[0])
@@ -131,7 +138,7 @@ class AgentInterpretationAlpha(Interpretation):
         if return_heat_maps: return heat_maps
 
     def plot_episode(self, episode):
-        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
 
         episode_counter = 0
         # For each episode
@@ -203,7 +210,7 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
         x, y = self.get_agent_accuracy_density(items, episode_num)
 
         fig = plt.figure(figsize=(8, 8))
@@ -213,7 +220,6 @@ class AgentInterpretationAlpha(Interpretation):
         ax.set_xlabel('Iterations')
         ax.plot(np.hstack([x, y]))
         plt.show()
-
 
     def get_q_density(self, items, episode_num=None):
         x = None
@@ -241,7 +247,7 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        items = self.ds.x.items  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
         x, y = self.get_q_density(items, episode_num)
 
         # Define the borders
@@ -278,8 +284,8 @@ class AgentInterpretationAlpha(Interpretation):
             plt.title(f'2D Gaussian Kernel Q Density Estimation for episode {episode_num}')
         plt.show()
 
-    def plot_rewards_over_iterations(self, cumulative=False):
-        items = self.ds.x.items
+    def plot_rewards_over_iterations(self, cumulative=False, return_rewards=False):
+        items = self._get_items()
         r_iter = [el.reward[0] if np.ndim(el.reward) == 0 else np.average(el.reward) for el in items]
         if cumulative: r_iter = np.cumsum(r_iter)
         fig = plt.figure(figsize=(8, 8))
@@ -289,9 +295,10 @@ class AgentInterpretationAlpha(Interpretation):
         ax.set_xlabel('Iterations')
         ax.plot(r_iter)
         plt.show()
+        if return_rewards: return r_iter
 
     def plot_rewards_over_episodes(self, cumulative=False, fig_size=(8, 8)):
-        items = self.ds.x.items
+        items = self._get_items()
         r_iter = [(el.reward[0] if np.ndim(el.reward) == 0 else np.average(el.reward), el.episode) for el in items]
         rewards, episodes = zip(*r_iter)
         if cumulative: rewards = np.cumsum(rewards)
@@ -307,7 +314,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def episode_video_frames(self, episode=None) -> Dict[str, np.array]:
         """ Returns numpy arrays representing purely episode frames. """
-        items = self.ds.x.items
+        items = self._get_items(False)
         if episode is None: episode_frames = {key: None for key in list(set([_.episode for _ in items]))}
         else: episode_frames = {episode: None}
 
@@ -350,7 +357,6 @@ class AgentInterpretationAlpha(Interpretation):
             raise IndexError(f'Your batch size {batch_size} > the memory\'s batch size {len(self.learn.model.memory)}')
         if key not in samples[0].obj.keys(): raise ValueError(f'Key {key} not in {samples[0].obj.keys()}')
         return [s.obj[key] for s in samples]
-
 
     def plot_memory_samples(self, batch_size=None, key='reward', fig_size=(8, 8)):
         values_of_interest = self.get_memory_samples(batch_size, key)
