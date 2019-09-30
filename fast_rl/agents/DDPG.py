@@ -1,5 +1,5 @@
 import torch
-from fastai.basic_train import LearnerCallback, Any, OptimWrapper
+from fastai.basic_train import LearnerCallback, Any, OptimWrapper, ifnone, F
 import numpy as np
 from fastai.metrics import RMSE
 from torch.nn import MSELoss
@@ -17,7 +17,7 @@ class BaseDDPGCallback(LearnerCallback):
         self.max_episodes = 0
         self.episode = 0
         self.iteration = 0
-        self.copy_over_frequency = 2
+        self.copy_over_frequency = 3
 
     def on_train_begin(self, n_epochs, **kwargs: Any):
         self.max_episodes = n_epochs
@@ -28,20 +28,26 @@ class BaseDDPGCallback(LearnerCallback):
 
     def on_loss_begin(self, **kwargs: Any):
         """Performs memory updates, exploration updates, and model optimization."""
-        self.learn.model.memory.update(item=self.learn.data.x.items[-1])
-        self.learn.model.exploration_strategy.update(self.episode, self.max_episodes, do_exploration=self.learn.model.training)
+        if self.learn.model.training:
+            self.learn.model.memory.update(item=self.learn.data.x.items[-1])
+        self.learn.model.exploration_strategy.update(self.episode, self.max_episodes,
+                                                     do_exploration=self.learn.model.training)
         post_optimize = self.learn.model.optimize()
-        self.learn.model.memory.refresh(post_optimize=post_optimize)
-        self.iteration += 1
-
-    def on_epoch_end(self, **kwargs: Any):
-        if self.episode % self.copy_over_frequency == 0:
+        if self.learn.model.training:
+            self.learn.model.memory.refresh(post_optimize=post_optimize)
+            # if self.iteration % self.copy_over_frequency == 0:
             self.learn.model.target_copy_over()
+            self.iteration += 1
+    #
+    # def on_epoch_end(self, **kwargs: Any):
+    #     if self.episode % self.copy_over_frequency == 0:
+    #         self.learn.model.target_copy_over()
 
 
 class DDPG(BaseAgent):
 
-    def __init__(self, data: MDPDataBunch, memory=ExperienceReplay(10000), tau=0.001, batch=64, discount=0.99, lr=0.005):
+    def __init__(self, data: MDPDataBunch, memory=None, tau=0.001, batch=64, discount=0.99,
+                 lr=0.005, exploration_strategy=None, env_was_discrete=False):
         """
         Implementation of a continuous control algorithm using an actor/critic architecture.
 
@@ -63,36 +69,40 @@ class DDPG(BaseAgent):
             lr: Rate that the opt will learn parameter gradients.
         """
         super().__init__(data)
+        self.env_was_discrete = env_was_discrete
         self.name = 'DDPG'
         self.lr = lr
         self.discount = discount
         self.batch = batch
         self.tao = tau
-        self.memory = memory
+        self.memory = ifnone(memory, ExperienceReplay(10000))
 
-        self.action_model = self.initialize_action_model([64, 64], data)
-        self.critic_model = self.initialize_critic_model([64, 64], data)
+        self.action_model = self.initialize_action_model([30, 30], data)
+        self.critic_model = self.initialize_critic_model([30, 30], data)
 
-        self.opt = OptimWrapper.create(Adam, lr=lr, layer_groups=self.action_model)
-        self.critic_optimizer = OptimWrapper.create(Adam, lr=lr, layer_groups=self.action_model)
+        self.opt = OptimWrapper.create(Adam, lr=lr, layer_groups=[self.action_model])
+        self.critic_optimizer = OptimWrapper.create(Adam, lr=lr, layer_groups=[self.critic_model])
 
-        self.t_action_model = self.initialize_action_model([64, 64], data)
-        self.t_critic_model = self.initialize_critic_model([64, 64], data)
+        self.t_action_model = self.initialize_action_model([30, 30], data)
+        self.t_critic_model = self.initialize_critic_model([30, 30], data)
 
         self.target_copy_over()
 
-        self.callbacks = [BaseDDPGCallback]
+        self.learner_callbacks = [BaseDDPGCallback]
 
-        self.loss_func = MSELoss()
+        self.loss_func = F.smooth_l1_loss# MSELoss()
         # TODO Move to Ornstein-Uhlenbeck process
-        self.exploration_strategy = GreedyEpsilon(decay=0.001, epsilon_end=0.1, epsilon_start=1, do_exploration=True)
+        self.exploration_strategy = ifnone(exploration_strategy, GreedyEpsilon(epsilon_start=1, epsilon_end=0.1,
+                                                                               decay=0.001,
+                                                                               do_exploration=self.training))
 
     def initialize_action_model(self, layers, data):
-        return create_nn_model(layers, *data.get_action_state_size(), True)
+        return create_nn_model(layers, *data.get_action_state_size(), True, use_embed=data.train_ds.embeddable)
 
     def initialize_critic_model(self, layers, data):
-        """ Instead of state -> action, we ware going state + action -> single expected reward. """
-        return create_nn_model(layers, 1, sum(data.get_action_state_size()), True)
+        """ Instead of state -> action, we are going state + action -> single expected reward. """
+        return create_nn_model(layers, (1, 0), (sum([_[0] for _ in data.get_action_state_size()]), 0), True,
+                               use_embed=data.train_ds.embeddable)
 
     def pick_action(self, x):
         if self.training: self.action_model.eval()
@@ -118,11 +128,12 @@ class DDPG(BaseAgent):
         if len(self.memory) > self.batch:
             # Perhaps have memory as another item list? Should investigate.
             sampled = self.memory.sample(self.batch)
-            with torch.no_grad():
-                r = torch.from_numpy(np.array([item.reward for item in sampled]).astype(float)).float()
-                s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
-                s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
-                a = torch.from_numpy(np.array([item.actions for item in sampled]).astype(float)).float()
+
+            r = torch.from_numpy(np.array([item.reward for item in sampled]).astype(float)).float()
+            s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
+            s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
+            a = torch.from_numpy(np.array([item.actions for item in sampled]).astype(float)).float()
+            if self.env_was_discrete: a = torch.from_numpy(np.array([item.raw_action for item in sampled]).astype(float)).float()
 
             with torch.no_grad():
                 y = r + self.discount * self.t_critic_model(torch.cat((s_prime, self.t_action_model(s_prime)), 1))
@@ -130,6 +141,8 @@ class DDPG(BaseAgent):
             y_hat = self.critic_model(torch.cat((s, a), 1))
 
             critic_loss = self.loss_func(y, y_hat)
+
+            print(f'{y[0][:15]}, {y_hat[0][:15]}')
 
             if self.training:
                 # Optimize critic network
@@ -141,7 +154,7 @@ class DDPG(BaseAgent):
 
             actor_loss = -self.critic_model(torch.cat((s, self.action_model(s)), 1)).mean()
 
-            self.loss = critic_loss
+            self.loss = critic_loss.cpu().detach()
 
             if self.training:
                 # Optimize actor network
@@ -150,6 +163,10 @@ class DDPG(BaseAgent):
                 for param in self.action_model.parameters():
                     param.grad.data.clamp_(-1, 1)
                 self.opt.step()
+
+            with torch.no_grad():
+                post_info = {'td_error': (y - y_hat).numpy()}
+                return post_info
 
     def forward(self, x):
         x = super(DDPG, self).forward(x)

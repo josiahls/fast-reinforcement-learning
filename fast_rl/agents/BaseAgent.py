@@ -45,10 +45,12 @@ class BaseAgent(nn.Module):
         with torch.no_grad():
             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
 
-            if isinstance(self.data.train_ds.env.action_space, Discrete): x = x.argmax().numpy().item()
-            elif isinstance(self.data.train_ds.env.action_space, Box): x = x.squeeze(0).numpy()
+            action, x, perturbed = self.exploration_strategy.perturb(x, x, self.data.train_ds.env.action_space)
 
-            return self.exploration_strategy.perturb(x, self.data.train_ds.env.action_space)
+            if isinstance(self.data.train_ds.env.action_space, Discrete) and not perturbed: action = x.argmax().numpy().item()
+            elif isinstance(self.data.train_ds.env.action_space, Box): action = x.squeeze(0).numpy()
+
+            return action, x
 
     def interpret_q(self, items):
         raise NotImplementedError
@@ -68,6 +70,7 @@ class ToLong(nn.Module):
 class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
+
 
 def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True, activation_fuction=None):
     """Generates an nn module.
@@ -89,9 +92,11 @@ def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use
         if i == 0 and use_embed:
             embedded, n_in = get_embedded(n_in[0], n_out, n_in[1], 5)
             layers += [ToLong(), embedded, Flatten()]
+        elif i == 0: n_in = n_in[0]
 
         layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)
     return nn.Sequential(*layers)
+
 
 def get_next_conv_shape(c_w, c_h, stride, kernel_size):
     h = floor((c_h - kernel_size - 2) / stride) + 1 # 3 convolutional layers given (3c, 640w, 640h)
@@ -131,7 +136,6 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
         conv_layers.append(torch.nn.Conv2d(input_tuple[2], 3, kernel_size=kernel_size, stride=stride))
         conv_layers.append(act)
     return layers + conv_layers, 3 * (h + 1) * (w + 1)
-
 
 
 def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, kernel_size=5, stride=3, n_conv_layers=3):

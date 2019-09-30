@@ -22,7 +22,7 @@ class ExplorationStrategy:
     def __init__(self, do_exploration: bool):
         self.do_exploration = do_exploration
 
-    def perturb(self, action, action_space):
+    def perturb(self, action, raw_action, action_space):
         """
         Base method just returns the action. Subclass, and change to return randomly / augmented actions.
 
@@ -30,6 +30,7 @@ class ExplorationStrategy:
         to completely bypass these actions.
 
         Args:
+            raw_action:
             action:
             action_space (gym.Space): The original gym space. Should contain information on the action type, and
             possible convenience methods for random action selection.
@@ -38,9 +39,10 @@ class ExplorationStrategy:
 
         """
         _ = action_space
-        return action
+        _ = raw_action
+        return action, raw_action
 
-    def update(self, do_exploration, **kwargs):
+    def update(self, episode, max_episodes, do_exploration, **kwargs):
         self.do_exploration = do_exploration
 
 
@@ -55,20 +57,21 @@ class GreedyEpsilon(ExplorationStrategy):
         self.epsilon = self.epsilon_start
         self.steps_done = 0
 
-    def perturb(self, action, action_space: gym.Space):
+    def perturb(self, action, raw_action, action_space: gym.Space):
         """
         TODO for now does random discrete selection. Move to continuous soon.
 
         Args:
+            raw_action:
             action:
             action_space:
 
         Returns:
         """
         if np.random.random() < self.epsilon:
-            return action_space.sample()
+            return action_space.sample(), raw_action, True
         else:
-            return action
+            return action, raw_action, False
 
     def update(self, current_episode, end_episode=0, **kwargs):
         super(GreedyEpsilon, self).update(**kwargs)
@@ -79,8 +82,8 @@ class GreedyEpsilon(ExplorationStrategy):
             self.steps_done += 1
 
 
-class OrnsteinUhlenbeck(GreedyEpsilon):
-    def __init__(self, epsilon_start, epsilon_end, decay, **kwargs):
+class OrnsteinUhlenbeck(ExplorationStrategy):
+    def __init__(self, size, mu=0., theta=0.15, sigma=0.2, **kwargs):
         """
 
         References:
@@ -93,7 +96,19 @@ class OrnsteinUhlenbeck(GreedyEpsilon):
             decay:
             **kwargs:
         """
-        super().__init__(epsilon_start, epsilon_end, decay, **kwargs)
+        super().__init__(**kwargs)
+        self.sigma = sigma
+        self.theta = theta
+        self.mu = mu
+        self.x = np.ones(size)
+
+    def perturb(self, action, raw_action, action_space):
+        if self.do_exploration:
+            dx = self.theta * (self.mu - self.x) + self.sigma * np.array([np.random.normal() for _ in range(len(self.x))])
+        else: dx = np.zeros(self.x.shape)
+
+        self.x += dx
+        return action, torch.from_numpy(self.x).float() + raw_action, False
 
 
 class Experience:
@@ -238,7 +253,7 @@ def validate(learn, dl, cb_handler: Optional[CallbackHandler] = None,
         if cb_handler: cb_handler.set_dl(dl)
         # TODO 1st change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
         for element in progress_bar(dl, parent=pbar):
-            learn.data.valid_ds.actions = learn.predict(element)
+            learn.data.valid_ds.actions, learn.data.valid_ds.raw_actions = learn.predict(element)
             if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.valid_ds.actions, train=False)
             val_loss = loss_batch(learn.model, cb_handler=cb_handler)
             if val_loss is None: continue
@@ -291,7 +306,7 @@ def fit(epochs: int, learn: BasicLearner, callbacks: Optional[CallbackList] = No
                 # TODO 2nd change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
                 for element in progress_bar(learn.data.train_dl, parent=pbar):
                     # TODO 3rd change: get the action for the given state. Move to on batch begin callback?
-                    learn.data.train_ds.actions = learn.predict(element)
+                    learn.data.train_ds.actions, learn.data.train_ds.raw_actions = learn.predict(element)
                     cb_handler.on_batch_begin(element, learn.data.train_ds.actions)
                     # TODO 4th change: loss_batch is way simpler... What is a batch to be defined as?
                     loss = loss_batch(learn.model, cb_handler)

@@ -19,4 +19,5 @@ class EpsilonMetric(LearnerCallback):
 
     def on_epoch_end(self, last_metrics, **kwargs):
         self.epsilon = self.learn.model.exploration_strategy.epsilon
+        if last_metrics and last_metrics[-1] is None: del last_metrics[-1]
         return add_metrics(last_metrics, [float(self.epsilon)])

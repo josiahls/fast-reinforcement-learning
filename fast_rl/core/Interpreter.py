@@ -37,11 +37,9 @@ class AgentInterpretationAlpha(Interpretation):
         plt.rcParams["figure.figsize"] = base_chart_size
         
     def _get_items(self, ignore=True):
-        episodes = list(self.ds.x.episodes_to_keep.keys())
-        if ignore or len(episodes) == 0: return self.ds.x.itmes
+        episodes = list(self.ds.x.info.keys())
+        if ignore or len(episodes) == 0: return self.ds.x.items
         return [item for item in self.ds.x.items if item.episode in episodes]
-
-
 
     @classmethod
     def from_learner(cls, learn: Learner, ds_type: DatasetType = DatasetType.Valid, activ: nn.Module = None):
@@ -78,7 +76,12 @@ class AgentInterpretationAlpha(Interpretation):
             for state in current_state_slice:
                 if action is not None:
                     heat_map[state] = self.learn.model(torch.from_numpy(np.array(state)).unsqueeze(0))[0].gather(0, action)
-                else: heat_map[state] = self.learn.model(torch.from_numpy(np.array(state)).unsqueeze(0))[0].max().numpy()
+                else:
+                    self.learn.model.eval()
+                    if self.learn.model.name == 'DDPG':
+                        heat_map[state] = self.learn.model.critic_model(torch.cat((torch.from_numpy(np.array(state)).unsqueeze(0).float(), self.learn.model.action_model(torch.from_numpy(np.array(state)).unsqueeze(0).float())), 1))
+                    else:
+                        heat_map[state] = self.learn.model(torch.from_numpy(np.array(state)).unsqueeze(0))[0].max().numpy()
         return heat_map
 
     def plot_heatmapped_episode(self, episode, fig_size=(13, 5), action_index=None, return_heat_maps=False):

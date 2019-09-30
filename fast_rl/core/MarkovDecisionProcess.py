@@ -136,7 +136,7 @@ class MDPMemoryManager(LearnerCallback):
             del episodes_keep[del_ep[0]]
             episode = del_ep[0]
         if episode != -1: self.ds.x.clean(episode)
-        self.ds.x.episodes_to_keep = episodes_keep
+        self.ds.x.info = episodes_keep
 
     def on_train_begin(self, n_epochs, **kwargs: Any):
         self.max_episodes = n_epochs if not self._persist else self.max_episodes
@@ -157,7 +157,7 @@ class MDPMemoryManager(LearnerCallback):
 
 class MDPDataset(Dataset):
     def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None, bs=8,
-                 x=None, memory_management_strategy='k_partitions_best', k=0, skip=False):
+                 x=None, memory_management_strategy='k_partitions_best', k=1, skip=False, embeddable=False):
         """
         Handles the running and loading of environments, as well as storing episode steps.
 
@@ -195,9 +195,13 @@ class MDPDataset(Dataset):
         self.env = env
         # MDP specific values
         self.actions = self.get_random_action(env.action_space)
+        self.raw_action = np.random.randn((env.action_space.n))
+
         self.is_done = True
         self.current_state = None
         self.current_image = None
+
+        self.embeddable = embeddable
 
         self.env_specific_handle()
         self.counter = -1
@@ -263,7 +267,7 @@ class MDPDataset(Dataset):
         items = MarkovDecisionProcessSlice(state=np.copy(current_state), state_prime=np.copy(result_state),
                                            alt_state=np.copy(alternate_state), action=np.copy(self.actions),
                                            reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
-                                           episode=copy(self.episode))
+                                           episode=copy(self.episode), raw_action=self.raw_action)
         self.current_state = copy(result_state)
         self.current_image = copy(result_image)
 
@@ -301,8 +305,10 @@ class MDPDataset(Dataset):
 class MDPDataBunch(DataBunch):
     def _get_sizes_and_possible_values(self, item):
         if isinstance(item, Discrete): return item.n, item.n
-        if isinstance(item, Box) and len(item.shape) > 1: return item.shape, np.prod(item.high)
-        if isinstance(item, Box) and len(item.shape) == 1: return item.shape[0], np.prod(item.high)
+        if isinstance(item, Box) and item.dtype == int:
+            return item.shape if len(item.shape) > 1 else item.shape[0], np.prod(item.high)
+        if isinstance(item, Box) and item.dtype == np.float32:
+            return item.shape if len(item.shape) > 1 else item.shape[0], np.inf
 
     # noinspection PyUnresolvedReferences
     def get_action_state_size(self):
@@ -317,7 +323,7 @@ class MDPDataBunch(DataBunch):
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
                  path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
-                 num_workers: int = 0,
+                 num_workers: int = 0, embed=False, memory_management_strategy='k_partitions_both',
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
                  collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
 
@@ -326,8 +332,11 @@ class MDPDataBunch(DataBunch):
             # valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
             env = gym.make(env_name)
             val_bs = bs if val_bs is None else val_bs
-            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs)
-            valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs) if add_valid else None
+            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, embeddable=embed,
+                                    memory_management_strategy=memory_management_strategy)
+            if add_valid: valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs, embeddable=embed,
+                                                  memory_management_strategy=memory_management_strategy)
+            else: valid_list = None
         except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
             if e.args[0].lower().__contains__('mujoco'): return None
@@ -481,17 +490,18 @@ class MarkovDecisionProcessList(ItemList):
 
 class MarkovDecisionProcessSlice(ItemBase):
     # noinspection PyMissingConstructor
-    def __init__(self, state, state_prime, alt_state, action, reward, done, episode,
+    def __init__(self, state, state_prime, alt_state, action, reward, done, episode, raw_action,
                  feed_type=FEED_TYPE_IMAGE):
         action = np.copy(action)
+        raw_action = np.copy(raw_action)
         if len(action.shape) == 0: action = np.array(action, ndmin=1)
         if isinstance(np.copy(action), int): action = np.array(action, ndmin=1)
         if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
-        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode = state, state_prime, alt_state, action, reward, done, episode
+        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode, self.raw_action = state, state_prime, alt_state, action, reward, done, episode, raw_action
         self.data, self.obj = alt_state if feed_type == FEED_TYPE_IMAGE else state, \
                               {'state': self.current_state, 'state_prime': self.result_state,
                                'alt_state': self.alternate_state, 'action': action, 'reward': reward, 'done': done,
-                               'episode': episode, 'feed_type': feed_type}
+                               'episode': episode, 'feed_type': feed_type, 'raw_action': raw_action}
 
     def clean(self):
         self.current_state = None
