@@ -42,7 +42,7 @@ class ExplorationStrategy:
         _ = raw_action
         return action, raw_action
 
-    def update(self, episode, max_episodes, do_exploration, **kwargs):
+    def update(self, max_episodes, do_exploration, **kwargs):
         self.do_exploration = do_exploration
 
 
@@ -73,7 +73,7 @@ class GreedyEpsilon(ExplorationStrategy):
         else:
             return action, raw_action, False
 
-    def update(self, current_episode, end_episode=0, **kwargs):
+    def update(self, episode, end_episode=0, **kwargs):
         super(GreedyEpsilon, self).update(**kwargs)
         if self.do_exploration:
             self.end_episode = end_episode
@@ -82,7 +82,7 @@ class GreedyEpsilon(ExplorationStrategy):
             self.steps_done += 1
 
 
-class OrnsteinUhlenbeck(ExplorationStrategy):
+class OrnsteinUhlenbeck(GreedyEpsilon):
     def __init__(self, size, mu=0., theta=0.15, sigma=0.2, **kwargs):
         """
 
@@ -108,11 +108,12 @@ class OrnsteinUhlenbeck(ExplorationStrategy):
         else: dx = np.zeros(self.x.shape)
 
         self.x += dx
-        return action, torch.from_numpy(self.x).float() + raw_action, False
+        return action, self.epsilon * torch.from_numpy(self.x).float() + raw_action, False
 
 
 class Experience:
-    def __init__(self, memory_size):
+    def __init__(self, memory_size, reduce_ram=False):
+        self.reduce_ram = reduce_ram
         self.max_size = memory_size
         self.callbacks = []
 
@@ -127,7 +128,7 @@ class Experience:
 
 
 class ExperienceReplay(Experience):
-    def __init__(self, memory_size):
+    def __init__(self, memory_size, **kwargs):
         """
         Basic store-er of state space transitions for training agents.
 
@@ -138,7 +139,7 @@ class ExperienceReplay(Experience):
         Args:
             memory_size (int): Max N samples to store
         """
-        super().__init__(memory_size)
+        super().__init__(memory_size, **kwargs)
         self.max_size = memory_size
         self.memory = deque(maxlen=memory_size)  # type: List[MarkovDecisionProcessSlice]
 
@@ -150,6 +151,7 @@ class ExperienceReplay(Experience):
         return random.sample(self.memory, batch)
 
     def update(self, item, **kwargs):
+        if self.reduce_ram: item.clean(True)
         self.memory.append(copy.deepcopy(item))
 
 
@@ -218,6 +220,7 @@ class PriorityExperienceReplay(Experience):
 
         """
         maximal_priority = self.alpha
+        if self.reduce_ram: item.clean(True)
         self.memory.add(np.abs(maximal_priority) + self.epsilon, item)
 
 

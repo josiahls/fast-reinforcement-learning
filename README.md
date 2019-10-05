@@ -173,6 +173,11 @@ could give discrete agents the ability to operate in a continuous domain via bin
     - [X] 0.5.0 DDPG added. let us move
     - [X] 0.5.0 The DDPG paper contains a visualization for Q learning might prove useful. Add to interpreter.
 
+| ![](res/ddpg_balancing.gif) |
+|:----:|
+| *Fig 7: DDPG trains stably now..* |
+
+
 Added q value interpretation per explanation by Lillicrap et al., 2016. Currently both models (DQN and DDPG) have 
 unstable q value approximations. Below is an example from DQN.
 ```python
@@ -184,22 +189,22 @@ a failing one will look globular or horizontal.
 
 | ![](res/dqn_q_estimate_1.jpg) |
 |:----:|
-| *Fig 7: Initial Q Value Estimate. Seems globular which is expected for an initial model.* |
+| *Fig 8: Initial Q Value Estimate. Seems globular which is expected for an initial model.* |
 
 | ![](res/dqn_q_estimate_2.jpg) |
 |:----:|
-| *Fig 8: Seems like the DQN is not learning...* |
+| *Fig 9: Seems like the DQN is not learning...* |
 
 | ![](res/dqn_q_estimate_3.jpg) |
 |:----:|
-| *Fig 9: Alarming later epoch results. It seems that the DQN converges to predicting a single Q value.* |
+| *Fig 10: Alarming later epoch results. It seems that the DQN converges to predicting a single Q value.* |
 
 - [X] 0.6.0 Single Global fit function like Fastai's. Think about the missing batch step. Noted some of the changes to 
 the existing the Fastai 
 
 | ![](res/fit_func_out.jpg) |
 |:----:|
-| *Fig 10: Resulting output of a typical fit function using ref code below.* |
+| *Fig 11: Resulting output of a typical fit function using ref code below.* |
 
 ```python
 from fast_rl.agents.DQN import DuelingDQN

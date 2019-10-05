@@ -1,7 +1,10 @@
+from copy import deepcopy
+
 import torch
 from fastai.basic_train import LearnerCallback, Any, OptimWrapper, ifnone, F
 import numpy as np
 from fastai.metrics import RMSE
+from torch import nn
 from torch.nn import MSELoss
 from torch.optim import Adam
 
@@ -30,7 +33,7 @@ class BaseDDPGCallback(LearnerCallback):
         """Performs memory updates, exploration updates, and model optimization."""
         if self.learn.model.training:
             self.learn.model.memory.update(item=self.learn.data.x.items[-1])
-        self.learn.model.exploration_strategy.update(self.episode, self.max_episodes,
+        self.learn.model.exploration_strategy.update(episode=self.episode, max_episodes=self.max_episodes,
                                                      do_exploration=self.learn.model.training)
         post_optimize = self.learn.model.optimize()
         if self.learn.model.training:
@@ -44,10 +47,31 @@ class BaseDDPGCallback(LearnerCallback):
     #         self.learn.model.target_copy_over()
 
 
+class Critic(nn.Module):
+    def __init__(self, layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
+                 activation_function=None):
+        super().__init__()
+        self.action_size = action_size[0]
+        self.state_size = state_size[0]
+
+        self.fc1 = nn.Linear(self.state_size, layer_list[0])
+        self.fc2 = nn.Linear(layer_list[0] + self.action_size, layer_list[1])
+        self.fc3 = nn.Linear(layer_list[1], 1)
+
+    def forward(self, x):
+        action, x = x[:, self.state_size:], x[:, :self.state_size]
+
+        x = nn.LeakyReLU()(self.fc1(x))
+        x = nn.LeakyReLU()(self.fc2(torch.cat((x, action), 1)))
+        x = nn.LeakyReLU()(self.fc3(x))
+
+        return x
+
+
 class DDPG(BaseAgent):
 
-    def __init__(self, data: MDPDataBunch, memory=None, tau=0.001, batch=64, discount=0.99,
-                 lr=0.005, exploration_strategy=None, env_was_discrete=False):
+    def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, batch=64, discount=0.99,
+                 lr=1e-3, actor_lr=1e-4, exploration_strategy=None, env_was_discrete=False):
         """
         Implementation of a continuous control algorithm using an actor/critic architecture.
 
@@ -74,42 +98,45 @@ class DDPG(BaseAgent):
         self.lr = lr
         self.discount = discount
         self.batch = batch
-        self.tao = tau
+        self.tau = 1
         self.memory = ifnone(memory, ExperienceReplay(10000))
 
-        self.action_model = self.initialize_action_model([30, 30], data)
-        self.critic_model = self.initialize_critic_model([30, 30], data)
+        self.action_model = self.initialize_action_model([400, 300], data)
+        self.critic_model = self.initialize_critic_model([400, 300], data)
 
-        self.opt = OptimWrapper.create(Adam, lr=lr, layer_groups=[self.action_model])
+        self.opt = OptimWrapper.create(Adam, lr=actor_lr, layer_groups=[self.action_model])
         self.critic_optimizer = OptimWrapper.create(Adam, lr=lr, layer_groups=[self.critic_model])
 
-        self.t_action_model = self.initialize_action_model([30, 30], data)
-        self.t_critic_model = self.initialize_critic_model([30, 30], data)
+        self.t_action_model = deepcopy(self.action_model)
+        self.t_critic_model = deepcopy(self.critic_model)
 
         self.target_copy_over()
+        self.tau = tau
 
         self.learner_callbacks = [BaseDDPGCallback]
 
-        self.loss_func = F.smooth_l1_loss# MSELoss()
-        # TODO Move to Ornstein-Uhlenbeck process
+        self.loss_func = MSELoss()
+
         self.exploration_strategy = ifnone(exploration_strategy, GreedyEpsilon(epsilon_start=1, epsilon_end=0.1,
                                                                                decay=0.001,
                                                                                do_exploration=self.training))
 
     def initialize_action_model(self, layers, data):
-        return create_nn_model(layers, *data.get_action_state_size(), True, use_embed=data.train_ds.embeddable)
+        return create_nn_model(layers, *data.get_action_state_size(), False, use_embed=data.train_ds.embeddable,
+                               final_activation_function=nn.Tanh)
 
     def initialize_critic_model(self, layers, data):
         """ Instead of state -> action, we are going state + action -> single expected reward. """
-        return create_nn_model(layers, (1, 0), (sum([_[0] for _ in data.get_action_state_size()]), 0), True,
-                               use_embed=data.train_ds.embeddable)
+        return Critic(layers, *data.get_action_state_size())
 
     def pick_action(self, x):
         if self.training: self.action_model.eval()
         with torch.no_grad():
-            action = super(DDPG, self).pick_action(x)
+            action, x = super(DDPG, self).pick_action(x)
         if self.training: self.action_model.train()
-        return action
+
+        if not self.env_was_discrete: action = np.clip(action, -1, 1)
+        return action, np.clip(x, -1, 1)
 
     def optimize(self):
         """
@@ -140,16 +167,12 @@ class DDPG(BaseAgent):
 
             y_hat = self.critic_model(torch.cat((s, a), 1))
 
-            critic_loss = self.loss_func(y, y_hat)
-
-            print(f'{y[0][:15]}, {y_hat[0][:15]}')
+            critic_loss = self.loss_func(y_hat, y)
 
             if self.training:
                 # Optimize critic network
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
-                for param in self.critic_model.parameters():
-                    param.grad.data.clamp_(-1, 1)
                 self.critic_optimizer.step()
 
             actor_loss = -self.critic_model(torch.cat((s, self.action_model(s)), 1)).mean()
@@ -160,8 +183,6 @@ class DDPG(BaseAgent):
                 # Optimize actor network
                 self.opt.zero_grad()
                 actor_loss.backward()
-                for param in self.action_model.parameters():
-                    param.grad.data.clamp_(-1, 1)
                 self.opt.step()
 
             with torch.no_grad():
@@ -174,8 +195,8 @@ class DDPG(BaseAgent):
 
     def target_copy_over(self):
         """ Soft target updates the actor and critic models.."""
-        self.soft_target_copy_over(self.t_action_model, self.action_model, self.tao)
-        self.soft_target_copy_over(self.t_critic_model, self.critic_model, self.tao)
+        self.soft_target_copy_over(self.t_action_model, self.action_model, self.tau)
+        self.soft_target_copy_over(self.t_critic_model, self.critic_model, self.tau)
 
     def soft_target_copy_over(self, t_m, f_m, tau):
         for target_param, local_param in zip(t_m.parameters(), f_m.parameters()):

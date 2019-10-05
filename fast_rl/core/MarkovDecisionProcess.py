@@ -195,7 +195,7 @@ class MDPDataset(Dataset):
         self.env = env
         # MDP specific values
         self.actions = self.get_random_action(env.action_space)
-        self.raw_action = np.random.randn((env.action_space.n))
+        self.raw_action = np.random.randn((env.action_space.shape[0])) if isinstance(env.action_space, Box) else np.random.randn((env.action_space.n))
 
         self.is_done = True
         self.current_state = None
@@ -503,10 +503,12 @@ class MarkovDecisionProcessSlice(ItemBase):
                                'alt_state': self.alternate_state, 'action': action, 'reward': reward, 'done': done,
                                'episode': episode, 'feed_type': feed_type, 'raw_action': raw_action}
 
-    def clean(self):
-        self.current_state = None
-        self.result_state = None
-        self.alternate_state = None
+    def clean(self, only_alt=False):
+        if not only_alt:
+            self.current_state, self.result_state = None, None
+            self.obj['state'], self.obj['state_prime'] = None, None
+
+        self.alternate_state, self.obj['alt_state'] = None, None
 
     def __str__(self):
         formatted = (

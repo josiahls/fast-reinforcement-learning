@@ -46,6 +46,7 @@ class BaseAgent(nn.Module):
             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
 
             action, x, perturbed = self.exploration_strategy.perturb(x, x, self.data.train_ds.env.action_space)
+            x = np.clip(x, -1.0, 1.0)
 
             if isinstance(self.data.train_ds.env.action_space, Discrete) and not perturbed: action = x.argmax().numpy().item()
             elif isinstance(self.data.train_ds.env.action_space, Box): action = x.squeeze(0).numpy()
@@ -72,7 +73,8 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True, activation_fuction=None):
+def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
+                    activation_function=None, final_activation_function=None):
     """Generates an nn module.
 
     Notes:
@@ -81,7 +83,7 @@ def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use
     Returns:
 
     """
-    act = nn.LeakyReLU if activation_fuction is None else activation_fuction
+    act = nn.LeakyReLU if activation_function is None else activation_function
     action_size = action_size[0]  # For now the dimension of the action does not make a difference.
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
@@ -93,8 +95,11 @@ def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use
             embedded, n_in = get_embedded(n_in[0], n_out, n_in[1], 5)
             layers += [ToLong(), embedded, Flatten()]
         elif i == 0: n_in = n_in[0]
+        if i == 0 and use_bn: layers += [nn.BatchNorm1d(n_in)]
 
         layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)
+
+    if final_activation_function is not None: layers += [final_activation_function()]
     return nn.Sequential(*layers)
 
 
