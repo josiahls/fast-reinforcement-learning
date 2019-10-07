@@ -18,5 +18,7 @@ steps:
   displayName: 'Run a multi-line script'
 
 - script:
+    pip install pytest
+    pip install pytest-xdist
     pytest -n 8 tests
   displayName: 'Test with pytest'
