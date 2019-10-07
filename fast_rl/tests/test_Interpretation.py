@@ -24,7 +24,7 @@ def test_interpretation_plot_sequence():
     model = DQN(data)
     learn = AgentLearner(data, model)
 
-    epochs = 20
+    epochs = 5
 
     callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
     [c.on_train_begin(learn=learn, n_epochs=epochs) for c in callbacks]
@@ -70,7 +70,7 @@ def test_inerpretation_plot_model_accuracy_fixeddqn():
     model = FixedTargetDQN(data, batch_size=64, max_episodes=100, copy_over_frequency=4)
     learn = AgentLearner(data, model)
 
-    learn.fit(10)
+    learn.fit(5)
     interp = AgentInterpretationAlpha(learn)
     interp.plot_agent_accuracy_density()
 

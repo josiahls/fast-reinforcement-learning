@@ -28,7 +28,7 @@ def test_stripped_fit():
     model = DQN(data)
     learn = AgentLearner(data, model)
 
-    epochs = 10
+    epochs = 5
 
     callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
     [c.on_train_begin(learn=learn, n_epochs=epochs) for c in callbacks]
@@ -65,7 +65,7 @@ def test_fit_function_dqn():
                            memory=ExperienceReplay(10000), discount=0.99)
     learn = AgentLearner(data, model)
 
-    learn.fit(100)
+    learn.fit(5)
     interp = AgentInterpretationAlpha(learn, base_chart_size=(20, 10))
     interp.plot_heatmapped_episode(-1, return_heat_maps=False)
 

@@ -12,4 +12,4 @@ def test_epsilon():
     model = FixedTargetDQN(data, batch_size=64, max_episodes=100, copy_over_frequency=4)
     learn = AgentLearner(data, model)
 
-    learn.fit(20)
+    learn.fit(5)

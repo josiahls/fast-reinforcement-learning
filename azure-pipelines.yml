@@ -10,6 +10,31 @@ pool:
   vmImage: 'ubuntu-16.04'
 
 steps:
+
+- script: mkdir base_files
+  displayName: 'Make base_files'
+- script: cd base_files
+  displayName: 'cd base_files'
+- script: wget https://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-3.4-win64-static.zip
+  displayName: 'Get ffmpeg File'
+- script: cd ../
+  displayName: 'cd away'
+
+# First, we Zip up the files required in the Batch Account
+# For this instance, those are the ffmpeg files
+- task: ArchiveFiles@2
+  displayName: 'Archive applications'
+  inputs:
+    rootFolderOrFile: base_files
+    includeRootFolder: false
+    archiveFile: '$(Build.ArtifactStagingDirectory)/package/$(Build.BuildId).zip'
+# Publish that zip file, so that we can use it as part
+# of our Release Pipeline later
+- task: PublishPipelineArtifact@0
+  inputs:
+    artifactName: 'base_files'
+    targetPath: '$(Build.ArtifactStagingDirectory)/package'
+
 - task: UsePythonVersion@0
   inputs:
     versionSpec: '3.7'

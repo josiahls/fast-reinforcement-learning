@@ -84,7 +84,7 @@ def test_individual_env():
 def test_individual_env_no_dl():
     """Just a nice place to do sanity testing on new / untested envs."""
     env = gym.make('maze-random-10x10-plus-v0')
-    for episode in range(100):
+    for episode in range(5):
         done = False
         env.reset()
         while not done:

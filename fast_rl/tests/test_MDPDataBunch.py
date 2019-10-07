@@ -50,7 +50,7 @@ def test_MDPDataset_MemoryManagement():
                            memory=ExperienceReplay(10000), discount=0.99)
     learn = AgentLearner(data, model, mem_strategy='k_top_best')
 
-    learn.fit(10)
+    learn.fit(5)
 
 
 def test_MarkovDecisionProcessDataBunch_init_no_valid():
