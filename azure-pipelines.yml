@@ -17,6 +17,9 @@ steps:
 - script: pip install Bottleneck pytest pytest-xdist
   displayName: 'Install sensitive packages'
 
+- script: sh ./build/azure_pipeline_helper.sh
+  displayName: 'Complex Installs'
+
 - script: python setup.py install
   displayName: 'Run a multi-line script'
 
