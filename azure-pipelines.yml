@@ -11,8 +11,7 @@ pool:
 
 steps:
 
-- bash: "apt update && apt install -y ffmpeg"
-  runAsRoot: true
+- bash: "sudo apt update && apt-get install -y ffmpeg"
 
 - task: UsePythonVersion@0
   inputs:
