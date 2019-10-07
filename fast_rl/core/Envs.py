@@ -23,7 +23,8 @@ class Envs:
             'Defender': 'Defender (%s) seems to load for an extremely long time. Skipping for now. Determine cause.',
             'Fetch': 'Fetch (%s) envs are not ready yet.',
             'InvertedPendulumMuJoCoEnv': 'Mujoco Inverted Pendulum (%s) has a bug.',
-            'AtlasPyBulletEnv': 'AtlasPyBulletEnv (%s) seems to load very slowly. Skipping for now.'
+            'AtlasPyBulletEnv': 'AtlasPyBulletEnv (%s) seems to load very slowly. Skipping for now.',
+            'MazeEnv': 'Having a maze view issue.',
         }
         envs = np.array(envs)[list(map(partial(Envs._error_out, ban_list=banned_envs), envs))]
 

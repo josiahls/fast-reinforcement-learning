@@ -11,7 +11,8 @@ pool:
 
 steps:
 
-- bash: "sudo apt-get install -y ffmpeg"
+- bash: "sudo apt-get install -y ffmpeg xvfb"
+  displayName: 'Install ffmpeg and xvfb'
 
 - task: UsePythonVersion@0
   inputs:
@@ -26,5 +27,5 @@ steps:
 - script: python setup.py install
   displayName: 'Run a multi-line script'
 
-- script: pytest -n 8 fast_rl/tests
+- script: xvfb-run -s "-screen 0 1400x900x24" pytest -n 8 fast_rl/tests
   displayName: 'Test with pytest'
