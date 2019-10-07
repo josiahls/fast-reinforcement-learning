@@ -14,14 +14,11 @@ steps:
   inputs:
     versionSpec: '3.7'
 
-- script: pip install Bottleneck
+- script: pip install Bottleneck pytest pytest-xdist
   displayName: 'Install sensitive packages'
 
 - script: python setup.py install
   displayName: 'Run a multi-line script'
 
-- script:
-    pip install pytest
-    pip install pytest-xdist
-    pytest -n 8 tests
+- script: pytest -n 8 fast_rl/tests
   displayName: 'Test with pytest'
