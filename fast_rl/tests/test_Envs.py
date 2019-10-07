@@ -5,7 +5,7 @@ from fast_rl.core.Envs import Envs
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
 
-@pytest.mark.parametrize("env", Envs.get_all_latest_envs())
+@pytest.mark.parametrize("env", sorted(Envs.get_all_latest_envs()))
 def test_envs_all(env):
     msg = 'the datasets in the dataloader seem to be different from the data bunches datasets...'
 
