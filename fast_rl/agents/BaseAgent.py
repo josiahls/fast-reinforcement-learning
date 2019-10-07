@@ -49,7 +49,8 @@ class BaseAgent(nn.Module):
             x = np.clip(x, -1.0, 1.0)
 
             if isinstance(self.data.train_ds.env.action_space, Discrete) and not perturbed: action = x.argmax().numpy().item()
-            elif isinstance(self.data.train_ds.env.action_space, Box): action = x.squeeze(0).numpy()
+            elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).numpy()
+            else: action = x.numpy()
 
             return action, x
 
@@ -68,9 +69,16 @@ class ToLong(nn.Module):
         return x.long()
 
 
+class SwapImageChannel(nn.Module):
+    def forward(self, x):
+        return x.transpose(1, 3)
+
+
 class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
+
+
 
 
 def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
@@ -135,7 +143,7 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
     :return:
     """
     h, w = input_tuple[0], input_tuple[1]
-    conv_layers = []
+    conv_layers = [SwapImageChannel()]
     for i in range(n_conv_layers):
         h, w = get_next_conv_shape(h, w, stride, kernel_size)
         conv_layers.append(torch.nn.Conv2d(input_tuple[2], 3, kernel_size=kernel_size, stride=stride))
@@ -143,7 +151,8 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
     return layers + conv_layers, 3 * (h + 1) * (w + 1)
 
 
-def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, kernel_size=5, stride=3, n_conv_layers=3):
+def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, kernel_size=5, stride=3, n_conv_layers=3,
+                     activation_function=None, final_activation_function=None):
     """Generates an nn module.
 
     Notes:
@@ -152,10 +161,11 @@ def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, ke
     Returns:
 
     """
+    act = nn.LeakyReLU if activation_function is None else activation_function
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
     sizes = [state_size] + layer_list + [action_size]
-    actns = [nn.ReLU() for _ in range(n_conv_layers + len(sizes) - 2)] + [None]
+    actns = [act() for _ in range(n_conv_layers + len(sizes) - 2)] + [None]
     layers = []
     for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):
         if type(n_in) == tuple:
@@ -163,4 +173,5 @@ def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, ke
             layers += [Flatten()]
 
         layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)
+    if final_activation_function is not None: layers += [final_activation_function()]
     return nn.Sequential(*layers)

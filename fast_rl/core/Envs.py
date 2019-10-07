@@ -39,4 +39,4 @@ class Envs:
     def get_all_latest_envs(key=None, exclude_key=None):
         all_envs = Envs.get_all_envs(key, exclude_key)
         roots = list(set(map(lambda x: str(x).split('-v')[0], all_envs)))
-        return [sorted([env for env in all_envs if env.__contains__(root)])[-1] for root in roots]
+        return list(set([sorted([env for env in all_envs if env.__contains__(root)])[-1] for root in roots]))

@@ -7,13 +7,18 @@ trigger:
 - master
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: 'ubuntu-16.04'
 
 steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.7'
+
+- script: python setup.py install
+  displayName: 'Run a multi-line script'
 
 - script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+    pip install pytest
+    pip install pytest-cov
+    pytest -n 8 tests
+  displayName: 'Test with pytest'

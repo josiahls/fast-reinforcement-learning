@@ -8,7 +8,8 @@ from torch import nn
 from torch.nn import MSELoss
 from torch.optim import Adam
 
-from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model
+from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, get_next_conv_shape, get_conv, \
+    Flatten
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay
@@ -47,7 +48,7 @@ class BaseDDPGCallback(LearnerCallback):
     #         self.learn.model.target_copy_over()
 
 
-class Critic(nn.Module):
+class NNCritic(nn.Module):
     def __init__(self, layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
                  activation_function=None):
         super().__init__()
@@ -59,11 +60,35 @@ class Critic(nn.Module):
         self.fc3 = nn.Linear(layer_list[1], 1)
 
     def forward(self, x):
-        action, x = x[:, self.state_size:], x[:, :self.state_size]
+        x, action = x
 
         x = nn.LeakyReLU()(self.fc1(x))
         x = nn.LeakyReLU()(self.fc2(torch.cat((x, action), 1)))
         x = nn.LeakyReLU()(self.fc3(x))
+
+        return x
+
+
+class CNNCritic(nn.Module):
+    def __init__(self, layer_list: list, action_size, state_size, activation_function=None):
+        super().__init__()
+        self.action_size = action_size[0]
+        self.state_size = state_size[0]
+
+        layers = []
+        layers, input_size = get_conv(self.state_size, nn.LeakyReLU(), 8, 2, 3, layers)
+        layers += [Flatten()]
+        self.conv_layers = nn.Sequential(*layers)
+
+        self.fc1 = nn.Linear(input_size + self.action_size, 200)
+        self.fc2 = nn.Linear(200, 1)
+
+    def forward(self, x):
+        x, action = x
+
+        x = nn.LeakyReLU()(self.conv_layers(x))
+        x = nn.LeakyReLU()(self.fc1(torch.cat((x, action), 1)))
+        x = nn.LeakyReLU()(self.fc2(x))
 
         return x
 
@@ -78,7 +103,7 @@ class DDPG(BaseAgent):
         Notes:
             Uses 4 networks, 2 actors, 2 critics.
             All models use batch norm for feature invariance.
-            Critic simply predicts Q while the Actor proposes the actions to take given a state s.
+            NNCritic simply predicts Q while the Actor proposes the actions to take given a state s.
 
         References:
             [1] Lillicrap, Timothy P., et al. "Continuous control with deep reinforcement learning."
@@ -122,12 +147,23 @@ class DDPG(BaseAgent):
                                                                                do_exploration=self.training))
 
     def initialize_action_model(self, layers, data):
-        return create_nn_model(layers, *data.get_action_state_size(), False, use_embed=data.train_ds.embeddable,
-                               final_activation_function=nn.Tanh)
+        actions, state = data.get_action_state_size()
+        if type(state[0]) is tuple and len(state[0]) == 3:
+            actions, state = actions[0], state[0]
+            # If the shape has 3 dimensions, we will try using cnn's instead.
+            return create_cnn_model([200, 200], actions, state, False, kernel_size=8,
+                                    final_activation_function=nn.Tanh)
+        else:
+            return create_nn_model(layers, *data.get_action_state_size(), False, use_embed=data.train_ds.embeddable,
+                                   final_activation_function=nn.Tanh)
 
     def initialize_critic_model(self, layers, data):
         """ Instead of state -> action, we are going state + action -> single expected reward. """
-        return Critic(layers, *data.get_action_state_size())
+        actions, state = data.get_action_state_size()
+        if type(state[0]) is tuple and len(state[0]) == 3:
+            return CNNCritic(layers, *data.get_action_state_size())
+        else:
+            return NNCritic(layers, *data.get_action_state_size())
 
     def pick_action(self, x):
         if self.training: self.action_model.eval()
@@ -163,9 +199,9 @@ class DDPG(BaseAgent):
             if self.env_was_discrete: a = torch.from_numpy(np.array([item.raw_action for item in sampled]).astype(float)).float()
 
             with torch.no_grad():
-                y = r + self.discount * self.t_critic_model(torch.cat((s_prime, self.t_action_model(s_prime)), 1))
+                y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))
 
-            y_hat = self.critic_model(torch.cat((s, a), 1))
+            y_hat = self.critic_model((s, a))
 
             critic_loss = self.loss_func(y_hat, y)
 
@@ -175,7 +211,7 @@ class DDPG(BaseAgent):
                 critic_loss.backward()
                 self.critic_optimizer.step()
 
-            actor_loss = -self.critic_model(torch.cat((s, self.action_model(s)), 1)).mean()
+            actor_loss = -self.critic_model((s, self.action_model(s))).mean()
 
             self.loss = critic_loss.cpu().detach()
 

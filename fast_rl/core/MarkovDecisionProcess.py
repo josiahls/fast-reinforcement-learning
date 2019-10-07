@@ -189,13 +189,16 @@ class MDPDataset(Dataset):
         self.mem_strat = memory_management_strategy
         self.bs = bs
         # noinspection PyUnresolvedReferences,PyProtectedMember
+        env._max_episode_steps = env.spec.max_episode_steps if not hasattr(env, '_max_episode_steps') else env._max_episode_steps
         self.max_steps = env._max_episode_steps if max_steps is None else max_steps
         self.render = render
         self.feed_type = feed_type
         self.env = env
         # MDP specific values
         self.actions = self.get_random_action(env.action_space)
-        self.raw_action = np.random.randn((env.action_space.shape[0])) if isinstance(env.action_space, Box) else np.random.randn((env.action_space.n))
+        if isinstance(env.action_space, Box): self.raw_action = np.random.randn((env.action_space.shape[0]))
+        elif isinstance(env.action_space, Discrete): self.raw_action = np.random.randn((env.action_space.n))
+        else: self.raw_action = self.get_random_action(env.action_space)
 
         self.is_done = True
         self.current_state = None
@@ -253,10 +256,12 @@ class MDPDataset(Dataset):
         # First Phase: decide on episode reset. Collect current state and image representations.
         if self.is_done or self.counter >= self.max_steps - 3:
             self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
+            if type(self.current_state) is not list and type(self.current_state) is not np.ndarray: self.current_state = [self.current_state]
             # Specifically for the stupid blackjack-v0 env >:(
             self.current_image = self._get_image()
 
         result_state, reward, self.is_done, info = self.env.step(self.actions)
+        if type(result_state) is not list and type(result_state) is not np.ndarray: result_state = [result_state]
         result_image = self._get_image()
         self.counter += 1
 
@@ -304,8 +309,9 @@ class MDPDataset(Dataset):
 
 class MDPDataBunch(DataBunch):
     def _get_sizes_and_possible_values(self, item):
-        if isinstance(item, Discrete): return item.n, item.n
-        if isinstance(item, Box) and item.dtype == int:
+        if isinstance(item, Discrete) and len(item.shape) != 0: return item.n, item.n
+        if isinstance(item, Discrete) and len(item.shape) == 0: return 1, item.n
+        if isinstance(item, Box) and (item.dtype == int or item.dtype == np.uint8):
             return item.shape if len(item.shape) > 1 else item.shape[0], np.prod(item.high)
         if isinstance(item, Box) and item.dtype == np.float32:
             return item.shape if len(item.shape) > 1 else item.shape[0], np.inf
@@ -326,6 +332,38 @@ class MDPDataBunch(DataBunch):
                  num_workers: int = 0, embed=False, memory_management_strategy='k_partitions_both',
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
                  collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
+        """
+
+
+        Args:
+            env_name:
+            max_steps:
+            render:
+            test_ds:
+            path:
+            bs:
+            feed_type:
+            val_bs:
+            num_workers:
+            embed:
+            memory_management_strategy: has a few settings. This is for inference on the existing data.
+                - (k_partitions_best) keep partition best episodes
+                - (k_partitions_both) keep partition worst best episodes
+                - (k_top_best)        keep high fidelity k top episodes
+                - (k_top_worst)       keep k top worst
+                - (k_top_both)        keep k top worst and best
+                - (non)               keep non, only load into memory (always keep first)
+                - (all):              keep all steps will be kept (most memory inefficient)
+            dl_tfms:
+            device:
+            collate_fn:
+            no_check:
+            add_valid:
+            **dl_kwargs:
+
+        Returns:
+
+        """
 
         try:
             # train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
