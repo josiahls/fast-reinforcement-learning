@@ -17,8 +17,6 @@ steps:
 - script: python setup.py install
   displayName: 'Run a multi-line script'
 
-- script: |
-    pip install pytest
-    pip install pytest-cov
+- script:
     pytest -n 8 tests
   displayName: 'Test with pytest'
