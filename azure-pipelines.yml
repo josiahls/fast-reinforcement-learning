@@ -14,6 +14,9 @@ steps:
   inputs:
     versionSpec: '3.7'
 
+- script: pip install Bottleneck
+  displayName: 'Install sensitive packages'
+
 - script: python setup.py install
   displayName: 'Run a multi-line script'
 
