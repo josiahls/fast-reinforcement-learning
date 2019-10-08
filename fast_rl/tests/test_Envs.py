@@ -24,6 +24,7 @@ def test_envs_all(env):
     a_s, s_s = mdp_databunch.get_action_state_size()
     assert a_s is not None
     assert s_s is not None
+    a_s, s_s = a_s[0], s_s[0]
     a_s.sample()
     s_s.sample()
 
