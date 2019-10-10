@@ -28,6 +28,8 @@ class BaseDDPGCallback(LearnerCallback):
 
     def on_epoch_begin(self, epoch, **kwargs: Any):
         self.episode = epoch
+        # if self.learn.model.training and self.iteration != 0:
+        #     self.learn.model.memory.update(item=self.learn.data.x.items[-1])
         self.iteration = 0
 
     def on_loss_begin(self, **kwargs: Any):
@@ -148,13 +150,13 @@ class DDPG(BaseAgent):
     def initialize_action_model(self, layers, data):
         actions, state = data.get_action_state_size()
         if type(state[0]) is tuple and len(state[0]) == 3:
-            actions, state = actions[0], state[0]
+            # actions, state = actions[0], state[0]
             # If the shape has 3 dimensions, we will try using cnn's instead.
             return create_cnn_model([200, 200], actions, state, False, kernel_size=8,
-                                    final_activation_function=nn.Tanh)
+                                    final_activation_function=nn.Tanh, action_val_to_dim=False)
         else:
             return create_nn_model(layers, *data.get_action_state_size(), False, use_embed=data.train_ds.embeddable,
-                                   final_activation_function=nn.Tanh)
+                                   final_activation_function=nn.Tanh, action_val_to_dim=False)
 
     def initialize_critic_model(self, layers, data):
         """ Instead of state -> action, we are going state + action -> single expected reward. """

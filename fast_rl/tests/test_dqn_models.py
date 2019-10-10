@@ -12,11 +12,11 @@ from fast_rl.agents.DQN import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, Doubl
 from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
-from fast_rl.core.agent_core import GreedyEpsilon
+from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay
 
 
 def test_basic_dqn_model_maze():
-    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=200)
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=100)
     model = DQN(data)
     learn = AgentLearner(data, model)
 
@@ -25,11 +25,19 @@ def test_basic_dqn_model_maze():
 
 def test_fixed_target_dqn_model_maze():
     print('\n')
-    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=100, add_valid=False)
     model = FixedTargetDQN(data)
     learn = AgentLearner(data, model)
 
     learn.fit(5)
+
+def test_fixed_target_dqn_model_cartpole():
+    print('\n')
+    data = MDPDataBunch.from_env('CartPole-v1', render='human', max_steps=1000, add_valid=False)
+    model = FixedTargetDQN(data, memory=ExperienceReplay(memory_size=100000, reduce_ram=True))
+    learn = AgentLearner(data, model)
+
+    learn.fit(450)
 
 
 def test_fixed_target_dqn_no_explore_model_maze():

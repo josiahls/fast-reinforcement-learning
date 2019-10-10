@@ -19,7 +19,7 @@ from fast_rl.core.data_structures import SumTree
 
 
 class ExplorationStrategy:
-    def __init__(self, do_exploration: bool):
+    def __init__(self, do_exploration: bool=True):
         self.do_exploration = do_exploration
 
     def perturb(self, action,  action_space):
@@ -61,7 +61,6 @@ class GreedyEpsilon(ExplorationStrategy):
         TODO for now does random discrete selection. Move to continuous soon.
 
         Args:
-            raw_action:
             action:
             action_space:
 
@@ -107,7 +106,7 @@ class OrnsteinUhlenbeck(GreedyEpsilon):
         else: dx = np.zeros(self.x.shape)
 
         self.x += dx
-        return self.epsilon * torch.from_numpy(self.x).float() + action
+        return self.epsilon * self.x + action
 
 
 class Experience:
@@ -255,7 +254,7 @@ def validate(learn, dl, cb_handler: Optional[CallbackHandler] = None,
         if cb_handler: cb_handler.set_dl(dl)
         # TODO 1st change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
         for element in progress_bar(dl, parent=pbar):
-            learn.data.valid_ds.actions, learn.data.valid_ds.raw_actions = learn.predict(element)
+            learn.data.valid_ds.actions = learn.predict(element)
             if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.valid_ds.actions, train=False)
             val_loss = loss_batch(learn.model, cb_handler=cb_handler)
             if val_loss is None: continue

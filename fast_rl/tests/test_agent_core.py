@@ -58,14 +58,3 @@ def test_fit_function_ddpg():
     learn.fit(5)
 
 
-def test_fit_function_dqn():
-    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000, add_valid=False,
-                                 feed_type=FEED_TYPE_STATE)
-    model = FixedTargetDQN(data, batch_size=128, max_episodes=10000, lr=0.001, copy_over_frequency=3,
-                           memory=ExperienceReplay(10000), discount=0.99)
-    learn = AgentLearner(data, model)
-
-    learn.fit(5)
-    interp = AgentInterpretationAlpha(learn, base_chart_size=(20, 10))
-    interp.plot_heatmapped_episode(-1, return_heat_maps=False)
-
