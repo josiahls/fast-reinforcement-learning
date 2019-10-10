@@ -45,14 +45,12 @@ class BaseAgent(nn.Module):
         with torch.no_grad():
             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
 
-            action, x, perturbed = self.exploration_strategy.perturb(x, x, self.data.train_ds.env.action_space)
-            x = np.clip(x, -1.0, 1.0)
+            action = self.exploration_strategy.perturb(x, self.data.train_ds.env.action_space)
 
-            if isinstance(self.data.train_ds.env.action_space, Discrete) and not perturbed: action = x.argmax().numpy().item()
+            if isinstance(self.data.train_ds.env.action_space, Discrete): action = x.argmax().numpy().item()
             elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).numpy()
-            else: action = x.numpy()
 
-            return action, x
+            return action
 
     def interpret_q(self, items):
         raise NotImplementedError
@@ -81,7 +79,7 @@ class Flatten(nn.Module):
 
 
 
-def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
+def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=False,
                     activation_function=None, final_activation_function=None):
     """Generates an nn module.
 

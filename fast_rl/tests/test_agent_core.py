@@ -30,7 +30,7 @@ def test_stripped_fit():
 
     epochs = 5
 
-    callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
+    callbacks = learn.model.learner_callbacks  # type: Collection[LearnerCallback]
     [c.on_train_begin(learn=learn, n_epochs=epochs) for c in callbacks]
     for epoch in range(epochs):
         [c.on_epoch_begin(epoch=epoch) for c in callbacks]

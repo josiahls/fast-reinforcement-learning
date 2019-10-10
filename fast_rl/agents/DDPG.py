@@ -96,7 +96,7 @@ class CNNCritic(nn.Module):
 class DDPG(BaseAgent):
 
     def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, batch=64, discount=0.99,
-                 lr=1e-3, actor_lr=1e-4, exploration_strategy=None, env_was_discrete=False):
+                 lr=1e-3, actor_lr=1e-4, exploration_strategy=None):
         """
         Implementation of a continuous control algorithm using an actor/critic architecture.
 
@@ -118,7 +118,6 @@ class DDPG(BaseAgent):
             lr: Rate that the opt will learn parameter gradients.
         """
         super().__init__(data)
-        self.env_was_discrete = env_was_discrete
         self.name = 'DDPG'
         self.lr = lr
         self.discount = discount
@@ -168,11 +167,9 @@ class DDPG(BaseAgent):
     def pick_action(self, x):
         if self.training: self.action_model.eval()
         with torch.no_grad():
-            action, x = super(DDPG, self).pick_action(x)
+            action = super(DDPG, self).pick_action(x)
         if self.training: self.action_model.train()
-
-        if not self.env_was_discrete: action = np.clip(action, -1, 1)
-        return action, np.clip(x, -1, 1)
+        return np.clip(action, -1, 1)
 
     def optimize(self):
         """
@@ -196,7 +193,6 @@ class DDPG(BaseAgent):
             s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
             s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
             a = torch.from_numpy(np.array([item.actions for item in sampled]).astype(float)).float()
-            if self.env_was_discrete: a = torch.from_numpy(np.array([item.raw_action for item in sampled]).astype(float)).float()
 
             with torch.no_grad():
                 y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))

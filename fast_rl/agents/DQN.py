@@ -1,14 +1,12 @@
 from copy import deepcopy
 from functools import partial
 
+import numpy as np
 import torch
 from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
-from torch.nn import MSELoss
-import numpy as np
 
 from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model
-from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, FEED_TYPE_IMAGE
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
@@ -39,7 +37,7 @@ class BaseDQNCallback(LearnerCallback):
         if self.iteration % self.skip_step == 0 or self.learn.data.x.items[-1].done:
             if self.learn.model.training:
                 self.learn.model.memory.update(item=self.learn.data.x.items[-1])
-            self.learn.model.exploration_strategy.update(self.episode, self.max_episodes,
+            self.learn.model.exploration_strategy.update(self.episode, max_episodes=self.max_episodes,
                                                          do_exploration=self.learn.model.training)
             if self.n_skipped % self.copy_over_frequency == 0:
                 post_optimize = self.learn.model.optimize()
@@ -102,7 +100,7 @@ class DQN(BaseAgent):
 
     def initialize_action_model(self, layers, data):
         if self.data.train_ds.feed_type == FEED_TYPE_IMAGE: return create_cnn_model(layers, *data.get_action_state_size())
-        else: return create_nn_model(layers, *data.get_action_state_size())
+        else: return create_nn_model(layers, *data.get_action_state_size(), use_embed=True)
 
     def forward(self, x):
         x = super(DQN, self).forward(x)
@@ -293,8 +291,8 @@ class DuelingDQNModule(nn.Module):
     def __init__(self, a_s, stream_input_size):
         super().__init__()
 
-        self.val = create_nn_model([stream_input_size], 1, stream_input_size)
-        self.adv = create_nn_model([stream_input_size], a_s[0], stream_input_size)
+        self.val = create_nn_model([stream_input_size], (1, 0), (stream_input_size, 0))
+        self.adv = create_nn_model([stream_input_size], a_s[0], (stream_input_size, 0))
 
     def forward(self, x):
         """Splits the base neural net output into 2 streams to evaluate the advantage and values of the state space and

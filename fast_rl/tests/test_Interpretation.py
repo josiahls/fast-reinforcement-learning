@@ -26,7 +26,7 @@ def test_interpretation_plot_sequence():
 
     epochs = 5
 
-    callbacks = learn.model.callbacks  # type: Collection[LearnerCallback]
+    callbacks = learn.model.learner_callbacks  # type: Collection[LearnerCallback]
     [c.on_train_begin(learn=learn, n_epochs=epochs) for c in callbacks]
     for epoch in range(epochs):
         [c.on_epoch_begin(epoch=epoch) for c in callbacks]
@@ -55,14 +55,14 @@ def test_interpretation_plot_q_dqn_returns():
 
 
 def test_interpretation_plot_q_ddpg_returns():
-    data = MDPDataBunch.from_env('Pendulum-v0', render='human')
+    data = MDPDataBunch.from_env('Pendulum-v0', render='human', max_steps=100)
     # data = MDPDataBunch.from_env('MountainCarContinuous-v0', render='human')
     model = DDPG(data, batch=8)
     learn = AgentLearner(data, model)
 
     learn.fit(5)
     interp = AgentInterpretationAlpha(learn)
-    interp.plot_heatmapped_episode(2)
+    interp.plot_q_density(-1)
 
 
 def test_inerpretation_plot_model_accuracy_fixeddqn():

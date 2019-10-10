@@ -22,7 +22,7 @@ class ExplorationStrategy:
     def __init__(self, do_exploration: bool):
         self.do_exploration = do_exploration
 
-    def perturb(self, action, raw_action, action_space):
+    def perturb(self, action,  action_space):
         """
         Base method just returns the action. Subclass, and change to return randomly / augmented actions.
 
@@ -39,8 +39,7 @@ class ExplorationStrategy:
 
         """
         _ = action_space
-        _ = raw_action
-        return action, raw_action
+        return action
 
     def update(self, max_episodes, do_exploration, **kwargs):
         self.do_exploration = do_exploration
@@ -57,7 +56,7 @@ class GreedyEpsilon(ExplorationStrategy):
         self.epsilon = self.epsilon_start
         self.steps_done = 0
 
-    def perturb(self, action, raw_action, action_space: gym.Space):
+    def perturb(self, action, action_space: gym.Space):
         """
         TODO for now does random discrete selection. Move to continuous soon.
 
@@ -69,9 +68,9 @@ class GreedyEpsilon(ExplorationStrategy):
         Returns:
         """
         if np.random.random() < self.epsilon:
-            return action_space.sample(), raw_action, True
+            return action_space.sample()
         else:
-            return action, raw_action, False
+            return action
 
     def update(self, episode, end_episode=0, **kwargs):
         super(GreedyEpsilon, self).update(**kwargs)
@@ -102,13 +101,13 @@ class OrnsteinUhlenbeck(GreedyEpsilon):
         self.mu = mu
         self.x = np.ones(size)
 
-    def perturb(self, action, raw_action, action_space):
+    def perturb(self, action, action_space):
         if self.do_exploration:
             dx = self.theta * (self.mu - self.x) + self.sigma * np.array([np.random.normal() for _ in range(len(self.x))])
         else: dx = np.zeros(self.x.shape)
 
         self.x += dx
-        return action, self.epsilon * torch.from_numpy(self.x).float() + raw_action, False
+        return self.epsilon * torch.from_numpy(self.x).float() + action
 
 
 class Experience:
@@ -309,7 +308,7 @@ def fit(epochs: int, learn: BasicLearner, callbacks: Optional[CallbackList] = No
                 # TODO 2nd change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
                 for element in progress_bar(learn.data.train_dl, parent=pbar):
                     # TODO 3rd change: get the action for the given state. Move to on batch begin callback?
-                    learn.data.train_ds.actions, learn.data.train_ds.raw_actions = learn.predict(element)
+                    learn.data.train_ds.actions = learn.predict(element)
                     cb_handler.on_batch_begin(element, learn.data.train_ds.actions)
                     # TODO 4th change: loss_batch is way simpler... What is a batch to be defined as?
                     loss = loss_batch(learn.model, cb_handler)
