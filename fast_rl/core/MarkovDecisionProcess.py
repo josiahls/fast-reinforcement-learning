@@ -268,6 +268,9 @@ class MDPDataset(Dataset):
             self.current_image = self._get_image()
 
         result_state, reward, self.is_done, info = self.env.step(self.actions)
+        if self.is_done and self.counter == -1:
+            self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
+
         if type(result_state) is not list and type(result_state) is not np.ndarray: result_state = [result_state]
         result_image = self._get_image()
         self.counter += 1
