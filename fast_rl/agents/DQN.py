@@ -83,7 +83,7 @@ class DQNActionNN(nn.Module):
                 module_layers.append(nn.Linear(layers[i-1], size))
             module_layers.append(activation())
 
-        module_layers.append(nn.Linear(layers[-1], action[0]))
+        module_layers.append(nn.Linear(layers[-1], action[1]))
         self.model = nn.Sequential(*module_layers)
 
     def forward(self, x, **kwargs: Any):
@@ -152,7 +152,7 @@ class DQN(BaseAgent):
         
         Returns:
         """
-        if len(self.memory) == self.memory.max_size:
+        if len(self.memory) > self.batch_size:
             # Perhaps have memory as another itemlist? Should investigate.
             sampled = self.memory.sample(self.batch_size)
             with torch.no_grad():
@@ -165,7 +165,7 @@ class DQN(BaseAgent):
             masking = torch.sub(1.0, d).unsqueeze(0)
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
-            y_hat = self.action_model(s).gather(0, a)
+            y_hat = self.action_model(s).gather(1, a)
             y = self.discount * self.action_model(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
 
             loss = self.loss_func(y, y_hat)
@@ -194,7 +194,7 @@ class DQN(BaseAgent):
 
 
 class FixedTargetDQN(DQN):
-    def __init__(self, data: MDPDataBunch, copy_over_frequency=3, tau=0.01, memory=None, **kwargs):
+    def __init__(self, data: MDPDataBunch, memory=None, tau=0.01, copy_over_frequency=3,  **kwargs):
         """Trains an Agent using the Q Learning method on a 2 neural nets.
 
         Notes:
@@ -246,7 +246,7 @@ class FixedTargetDQN(DQN):
 
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
-            y_hat = self.action_model(s).gather(0, a)
+            y_hat = self.action_model(s).gather(1, a)
 
             masking = torch.sub(1.0, d).unsqueeze(1)
             y = self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
@@ -268,7 +268,7 @@ class FixedTargetDQN(DQN):
 
 
 class DoubleDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunch, memory=None, **kwargs):
+    def __init__(self, data: MDPDataBunch, memory=None, copy_over_frequency=3, **kwargs):
         """
         Double DQN training.
 
@@ -279,7 +279,7 @@ class DoubleDQN(FixedTargetDQN):
         Args:
             data: Used for size input / output information.
         """
-        super().__init__(data, memory, **kwargs)
+        super().__init__(data=data, memory=memory, copy_over_frequency=copy_over_frequency, **kwargs)
         self.name = 'DDQN'
 
     def optimize(self):
@@ -294,7 +294,7 @@ class DoubleDQN(FixedTargetDQN):
 
         Returns:
         """
-        if len(self.memory) == self.memory.max_size:
+        if len(self.memory) > self.batch_size:
             # Perhaps have memory as another itemlist? Should investigate.
             sampled = self.memory.sample(self.batch_size)
             with torch.no_grad():
@@ -312,12 +312,13 @@ class DoubleDQN(FixedTargetDQN):
             loss = self.loss_func(y, y_hat)
             self.loss = loss
 
-            self.opt.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.action_model.parameters(), self.gradient_clipping_norm)
-            for param in self.action_model.parameters():
-                param.grad.data.clamp_(-1, 1)
-            self.opt.step()
+            if self.training:
+                self.opt.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.action_model.parameters(), self.gradient_clipping_norm)
+                for param in self.action_model.parameters():
+                    param.grad.data.clamp_(-1, 1)
+                self.opt.step()
 
             with torch.no_grad():
                 post_info = {'td_error': (y - y_hat).numpy()}
@@ -328,7 +329,7 @@ class DuelingDQNModule(nn.Module):
     def __init__(self, a_s, stream_input_size):
         super().__init__()
 
-        self.val = create_nn_model([stream_input_size], (1, 0), (stream_input_size, 0))
+        self.val = create_nn_model([stream_input_size], (0, 1), (stream_input_size, 0))
         self.adv = create_nn_model([stream_input_size], a_s[0], (stream_input_size, 0))
 
     def forward(self, x):
@@ -348,7 +349,7 @@ class DuelingDQNModule(nn.Module):
         val = self.val(x)
         adv = self.adv(x)
 
-        x = val.expand_as(adv) + (adv - adv.mean())
+        x = val.expand_as(adv) + (adv - adv.mean()).squeeze(0)
         return x
 
 

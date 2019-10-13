@@ -164,7 +164,7 @@ def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, ke
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
     action_size = action_size[0] if not action_val_to_dim else action_size[1]
-    sizes = [state_size] + layer_list + [action_size]
+    sizes = [state_size[0]] + layer_list + [action_size]
     actns = [act() for _ in range(n_conv_layers + len(sizes) - 2)] + [None]
     layers = []
     for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):

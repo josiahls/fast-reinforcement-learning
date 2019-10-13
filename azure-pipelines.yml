@@ -27,5 +27,9 @@ steps:
 - script: python setup.py install
   displayName: 'Run a multi-line script'
 
-- script: xvfb-run -s "-screen 0 1400x900x24" pytest -n 8 fast_rl/tests
+- script: |
+    pip install pytest
+    pip install pytest-cov
+    pip install pytest-xdist
+    xvfb-run -s "-screen 0 1400x900x24" pytest -n 8 fast_rl/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
   displayName: 'Test with pytest'
