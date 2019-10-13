@@ -18,18 +18,32 @@ steps:
   inputs:
     versionSpec: '3.6'
 
-- script: pip install Bottleneck pytest pytest-xdist
-  displayName: 'Install sensitive packages'
-
 - script: sh ./build/azure_pipeline_helper.sh
   displayName: 'Complex Installs'
 
-- script: python setup.py install
-  displayName: 'Run a multi-line script'
+- script: |
+    pip install Bottleneck
+    python setup.py install
+    pip install pytest
+    pip install pytest-cov
+    pip install pytest-xdist
+  displayName: 'Install Python Packages'
 
 - script: |
     pip install pytest
     pip install pytest-cov
     pip install pytest-xdist
-    xvfb-run -s "-screen 0 1400x900x24" pytest -n 8 fast_rl/tests --doctest-modules --junitxml=junit/test-results.xml --cov=tests --cov-report=xml --cov-report=html
+    xvfb-run -s "-screen 0 1400x900x24" pytest -n 8 fast_rl/tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
   displayName: 'Test with pytest'
+
+- task: PublishTestResults@2
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFiles: '**/test-*.xml'
+    testRunTitle: 'Publish test results for Python $(python.version)'
+
+- task: PublishCodeCoverageResults@1
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+    reportDirectory: '$(System.DefaultWorkingDirectory)/**/htmlcov'
