@@ -10,7 +10,7 @@ from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 
 
-ENV_NAMES = Envs.get_all_latest_envs('pybullet')
+ENV_NAMES = Envs.get_all_latest_envs(exclude_key='pybullet')
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
