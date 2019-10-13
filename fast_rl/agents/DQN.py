@@ -49,8 +49,7 @@ class BaseDQNCallback(LearnerCallback):
 
 class FixedTargetDQNCallback(LearnerCallback):
     def __init__(self, learn, copy_over_frequency=3):
-        """
-        Handles updating the target model in a fixed target DQN.
+        """Handles updating the target model in a fixed target DQN.
 
         Args:
             learn: Basic Learner.
@@ -140,8 +139,7 @@ class DQN(BaseAgent):
         return self.action_model(x)
 
     def optimize(self):
-        """
-        Uses ER to optimize the Q-net (without fixed targets).
+        """Uses ER to optimize the Q-net (without fixed targets).
         
         Uses the equation:
 
@@ -150,7 +148,7 @@ class DQN(BaseAgent):
                 \;|\; s, a \Big]
 
         
-        Returns:
+        Returns (dict): Optimization information
         """
         if len(self.memory) > self.batch_size:
             # Perhaps have memory as another itemlist? Should investigate.
@@ -221,8 +219,7 @@ class FixedTargetDQN(DQN):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
     def optimize(self):
-        """
-        Uses ER to optimize the Q-net.
+        """Uses ER to optimize the Q-net.
 
         Uses the equation:
 
@@ -231,7 +228,7 @@ class FixedTargetDQN(DQN):
                 \;|\; s, a \Big]
 
 
-        Returns:
+        Returns (dict): Optimization information
         """
         if len(self.memory) > self.batch_size:
             # Perhaps have memory as another item list? Should investigate.
@@ -283,8 +280,7 @@ class DoubleDQN(FixedTargetDQN):
         self.name = 'DDQN'
 
     def optimize(self):
-        """
-        Uses ER to optimize the Q-net.
+        """Uses ER to optimize the Q-net.
 
         Uses the equation:
 
@@ -292,7 +288,7 @@ class DoubleDQN(FixedTargetDQN):
                 Q^{*}(s, a) = \mathbb{E}_{s'∼ \Big\epsilon} \Big[r + \lambda \displaystyle\max_{}(Q^{*}(s' , \
                 argmax_{a'}(Q(s', \Theta)), \Theta^{-})) \;|\; s, a \Big]
 
-        Returns:
+        Returns (dict): Optimization information
         """
         if len(self.memory) > self.batch_size:
             # Perhaps have memory as another itemlist? Should investigate.
@@ -344,7 +340,6 @@ class DuelingDQNModule(nn.Module):
             x:
 
         Returns:
-
         """
         val = self.val(x)
         adv = self.adv(x)

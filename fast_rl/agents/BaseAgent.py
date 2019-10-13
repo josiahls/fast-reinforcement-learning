@@ -133,13 +133,13 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
                     \times (\text{kernel\_size}[1] - 1) - 1}{\text{stride}[1]} + 1\right\rfloor
 
 
-    :param input_tuple:
-    :param act:
-    :param kernel_size:
-    :param stride:
-    :param n_conv_layers:
-    :param layers:
-    :return:
+    Args:
+        input_tuple:
+        act:
+        kernel_size:
+        stride:
+        n_conv_layers:
+        layers:
     """
     h, w = input_tuple[0], input_tuple[1]
     conv_layers = [SwapImageChannel()]
