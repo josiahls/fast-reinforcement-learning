@@ -70,34 +70,6 @@ known environments. Prior to 1.0.0, new changes might break previous code versio
 working at their best. Post 1.0.0 will be more formal feature development with CI, unit testing, etc. 
 
 **Critical**
-- [X] 0.0.0 MDPDataBunch: Finished to the point of being useful. Please reference: `tests/test_Envs`
-Example:
-```python
-from fast_rl.core.Envs import Envs
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
-
-# At present will try to load OpenAI, box2d, pybullet, atari, maze.
-# note "get_all_latest_envs" has a key inclusion and exclusion so if you don't have some of these envs installed, 
-# you can avoid this here. Certain envs just flat out do not work / are unusual. You are welcome to see how to get them
-# working.
-for env in Envs.get_all_latest_envs():
-    max_steps = 50  # Limit the number of per episode iterations for now.
-    print(f'Testing {env}')
-    mdp_databunch = MDPDataBunch.from_env(env, max_steps=max_steps, num_workers=0)
-    if mdp_databunch is None:
-        print(f'Env {env} is probably Mujoco... Add imports if you want and try on your own. Don\'t like '
-              f'proprietary engines like this. If you have any issues, feel free to make a PR!')
-    else:
-        epochs = 1 # N episodes to run
-        for epoch in range(epochs):
-            for state in mdp_databunch.train_dl:
-                # Instead of random action, you would have your agent here
-                mdp_databunch.train_ds.actions = mdp_databunch.train_ds.get_random_action()
-    
-            for state in mdp_databunch.valid_dl:
-                # Instead of random action, you would have your agent here and have exploration to 0
-                mdp_databunch.valid_ds.actions = mdp_databunch.valid_ds.get_random_action()
-```
 - [X] 0.1.0 DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. We use Learner callbacks for 
 handling the different fit behaviors. 
 
