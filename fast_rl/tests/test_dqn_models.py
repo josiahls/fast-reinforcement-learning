@@ -69,7 +69,6 @@ def test_dueling_dqn_model_maze():
     model = DuelingDQN(data, batch_size=8)
     learn = AgentLearner(data, model)
     learn.fit(5)
-    del learn
 
 
 def test_double_dueling_dqn_model_maze():
