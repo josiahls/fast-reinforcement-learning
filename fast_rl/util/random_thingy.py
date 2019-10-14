@@ -9,14 +9,14 @@ from fastai.basic_data import DatasetType
 from fast_rl.agents.DDPG import DDPG
 from fast_rl.agents.DQN import FixedTargetDQN
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
 from fast_rl.core.agent_core import GreedyEpsilon, OrnsteinUhlenbeck, ExperienceReplay
 from fast_rl.core.metrics import EpsilonMetric
 
-data = MDPDataBunch.from_env('CartPole-v1', render='human', add_valid=False)
-# data = MDPDataBunch.from_env('Pendulum-v0', render='human', add_valid=False)
-# data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000, add_valid=False)
+data = MDPDataBunchAlpha.from_env('CartPole-v1', render='human', add_valid=False)
+# data = MDPDataBunchAlpha.from_env('Pendulum-v0', render='human', add_valid=False)
+# data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human', max_steps=1000, add_valid=False)
 
 model = FixedTargetDQN(data, batch_size=64, memory=ExperienceReplay(memory_size=40000, reduce_ram=True),
                        exploration_strategy=GreedyEpsilon(decay=0.001, epsilon_start=1, epsilon_end=0.01))

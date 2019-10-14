@@ -11,7 +11,7 @@ from torch.optim import Adam
 from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, get_next_conv_shape, get_conv, \
     Flatten
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay
 
 
@@ -97,10 +97,10 @@ class CNNCritic(nn.Module):
 
 class DDPG(BaseAgent):
 
-    def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, batch=64, discount=0.99,
+    def __init__(self, data: MDPDataBunchAlpha, memory=None, tau=1e-3, batch=64, discount=0.99,
                  lr=1e-3, actor_lr=1e-4, exploration_strategy=None):
         """
-        Implementation of a continuous control algorithm using an actor/critic architecture.
+        Implementation of a discrete control algorithm using an actor/critic architecture.
 
         Notes:
             Uses 4 networks, 2 actors, 2 critics.

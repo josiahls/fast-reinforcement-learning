@@ -3,7 +3,7 @@ from functools import partial
 from fastai.basic_train import Recorder, defaults, Learner, listify, ifnone
 
 from fast_rl.agents.BaseAgent import BaseAgent
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, MDPMemoryManager
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, MDPMemoryManagerAlpha
 from fast_rl.core.agent_core import fit
 from fast_rl.core.metrics import EpsilonMetric
 
@@ -11,7 +11,7 @@ from fast_rl.core.metrics import EpsilonMetric
 class AgentLearner(object):
     silent: bool = None
 
-    def __init__(self, data: MDPDataBunch, model: BaseAgent, mem_strategy='k_partitions_both', k=1,
+    def __init__(self, data: MDPDataBunchAlpha, model: BaseAgent, mem_strategy='k_partitions_both', k=1,
                  metrics=None):
         """
         Will very soon subclass the fastai learner class. For now we need to understand the important functional
@@ -27,7 +27,7 @@ class AgentLearner(object):
         self.recorder = Recorder(learn=self, add_time=self.add_time, silent=self.silent)
         self.recorder.no_val = self.data.empty_val
         self.callbacks = ifnone(metrics, [])
-        self.callbacks += [partial(MDPMemoryManager, mem_strategy=mem_strategy, k=k)]
+        self.callbacks += [partial(MDPMemoryManagerAlpha, mem_strategy=mem_strategy, k=k)]
         self.callbacks = [self.recorder] + [f(self) for f in self.callbacks] + [f(learn=self) for f in self.model.learner_callbacks]
 
     def predict(self, element):

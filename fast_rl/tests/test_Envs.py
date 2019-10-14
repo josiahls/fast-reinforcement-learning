@@ -2,7 +2,7 @@ import gym
 import numpy as np
 import pytest
 from fast_rl.core.Envs import Envs
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
 
 
@@ -14,7 +14,7 @@ def test_individual_env():
 
     env = 'CarRacing-v0'
     print(f'Testing {env}')
-    mdp_databunch = MDPDataBunch.from_env(env, max_steps=max_steps, num_workers=0)
+    mdp_databunch = MDPDataBunchAlpha.from_env(env, max_steps=max_steps, num_workers=0)
     epochs = 1
 
     assert max_steps == len(mdp_databunch.train_dl)

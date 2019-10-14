@@ -14,7 +14,7 @@ from fastai.basic_train import BasicLearner, CallbackList, OptMetrics, master_ba
 from fastai.callback import CallbackHandler
 from fastprogress import progress_bar
 
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice
+from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha
 from fast_rl.core.data_structures import SumTree
 
 
@@ -58,7 +58,7 @@ class GreedyEpsilon(ExplorationStrategy):
 
     def perturb(self, action, action_space: gym.Space):
         """
-        TODO for now does random discrete selection. Move to continuous soon.
+        TODO for now does random discrete selection. Move to discrete soon.
 
         Args:
             action:
@@ -139,7 +139,7 @@ class ExperienceReplay(Experience):
         """
         super().__init__(memory_size, **kwargs)
         self.max_size = memory_size
-        self.memory = deque(maxlen=memory_size)  # type: List[MarkovDecisionProcessSlice]
+        self.memory = deque(maxlen=memory_size)  # type: List[MarkovDecisionProcessSliceAlpha]
 
     def __len__(self):
         return len(self.memory)

@@ -8,7 +8,7 @@ from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
 
 from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, ToLong, get_embedded, Flatten
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, FEED_TYPE_IMAGE
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_IMAGE
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
 
@@ -90,7 +90,7 @@ class DQNActionNN(nn.Module):
 
 
 class DQN(BaseAgent):
-    def __init__(self, data: MDPDataBunch, memory=None, batch_size=32, lr=0.01, discount=0.95, grad_clip=5,
+    def __init__(self, data: MDPDataBunchAlpha, memory=None, batch_size=32, lr=0.01, discount=0.95, grad_clip=5,
                  max_episodes=None, exploration_strategy=None, use_embeddings=False):
         """Trains an Agent using the Q Learning method on a neural net.
 
@@ -139,7 +139,7 @@ class DQN(BaseAgent):
         return self.action_model(x)
 
     def optimize(self):
-        """Uses ER to optimize the Q-net (without fixed targets).
+        r"""Uses ER to optimize the Q-net (without fixed targets).
         
         Uses the equation:
 
@@ -149,6 +149,7 @@ class DQN(BaseAgent):
 
         
         Returns (dict): Optimization information
+
         """
         if len(self.memory) > self.batch_size:
             # Perhaps have memory as another itemlist? Should investigate.
@@ -192,7 +193,7 @@ class DQN(BaseAgent):
 
 
 class FixedTargetDQN(DQN):
-    def __init__(self, data: MDPDataBunch, memory=None, tau=0.01, copy_over_frequency=3,  **kwargs):
+    def __init__(self, data: MDPDataBunchAlpha, memory=None, tau=0.01, copy_over_frequency=3, **kwargs):
         """Trains an Agent using the Q Learning method on a 2 neural nets.
 
         Notes:
@@ -219,7 +220,7 @@ class FixedTargetDQN(DQN):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
     def optimize(self):
-        """Uses ER to optimize the Q-net.
+        r"""Uses ER to optimize the Q-net.
 
         Uses the equation:
 
@@ -265,7 +266,7 @@ class FixedTargetDQN(DQN):
 
 
 class DoubleDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunch, memory=None, copy_over_frequency=3, **kwargs):
+    def __init__(self, data: MDPDataBunchAlpha, memory=None, copy_over_frequency=3, **kwargs):
         """
         Double DQN training.
 
@@ -280,7 +281,7 @@ class DoubleDQN(FixedTargetDQN):
         self.name = 'DDQN'
 
     def optimize(self):
-        """Uses ER to optimize the Q-net.
+        r"""Uses ER to optimize the Q-net.
 
         Uses the equation:
 
@@ -329,7 +330,7 @@ class DuelingDQNModule(nn.Module):
         self.adv = create_nn_model([stream_input_size], a_s[0], (stream_input_size, 0))
 
     def forward(self, x):
-        """Splits the base neural net output into 2 streams to evaluate the advantage and values of the state space and
+        r"""Splits the base neural net output into 2 streams to evaluate the advantage and values of the state space and
         corresponding actions.
 
         .. math::
@@ -349,7 +350,7 @@ class DuelingDQNModule(nn.Module):
 
 
 class DuelingDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunch, memory=None, **kwargs):
+    def __init__(self, data: MDPDataBunchAlpha, memory=None, **kwargs):
         """Replaces the basic action model with a DuelingDQNModule which splits the basic model into 2 streams.
 
 
@@ -372,7 +373,7 @@ class DuelingDQN(FixedTargetDQN):
 
 
 class DoubleDuelingDQN(DoubleDQN, DuelingDQN):
-    def __init__(self, data: MDPDataBunch, memory=None, **kwargs):
+    def __init__(self, data: MDPDataBunchAlpha, memory=None, **kwargs):
         """
         Combines both Dueling DQN and DDQN.
 

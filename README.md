@@ -74,9 +74,9 @@ Testable code:
 ```python
 from fast_rl.agents.DQN import DQN
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
-data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
+data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
 learn = AgentLearner(data, model)
 learn.fit(450)
@@ -100,9 +100,9 @@ Usage example:
 from fast_rl.agents.DQN import DQN
 from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
-data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
+data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
 learn = AgentLearner(data, model)
 learn.fit(10)
@@ -184,10 +184,10 @@ the existing the Fastai
 ```python
 from fast_rl.agents.DQN import DuelingDQN
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
 
-data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
+data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
 model = DuelingDQN(data)
 # model = DQN(data)
 learn = AgentLearner(data, model)

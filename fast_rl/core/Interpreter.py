@@ -17,7 +17,7 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 from torch import nn
 
 from fast_rl.core import Learner
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, FEED_TYPE_IMAGE
+from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, FEED_TYPE_IMAGE
 
 
 class AgentInterpretationAlpha(Interpretation):
@@ -55,11 +55,11 @@ class AgentInterpretationAlpha(Interpretation):
     def top_losses(self, k: int = None, largest=True):
         raise NotImplementedError
 
-    def reward_heatmap(self, episode_slices: List[MarkovDecisionProcessSlice], action=None):
+    def reward_heatmap(self, episode_slices: List[MarkovDecisionProcessSliceAlpha], action=None):
         """
         Takes a state_space and uses the agent to heat map rewards over the space.
 
-        We first need to determine if the state space is discrete or continuous.
+        We first need to determine if the state space is discrete or discrete.
 
         Args:
             state_space:
@@ -141,7 +141,7 @@ class AgentInterpretationAlpha(Interpretation):
         if return_heat_maps: return heat_maps
 
     def plot_episode(self, episode):
-        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSliceAlpha]
 
         episode_counter = 0
         # For each episode
@@ -213,7 +213,7 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSliceAlpha]
         x, y = self.get_agent_accuracy_density(items, episode_num)
 
         fig = plt.figure(figsize=(8, 8))
@@ -250,7 +250,7 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSliceAlpha]
         x, y = self.get_q_density(items, episode_num)
 
         # Define the borders

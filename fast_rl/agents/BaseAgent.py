@@ -11,7 +11,7 @@ from traitlets import List
 import numpy as np
 from typing import Collection
 
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 from fast_rl.core.agent_core import ExplorationStrategy
 
 
@@ -21,7 +21,7 @@ class BaseAgent(nn.Module):
     own learner_callbacks. This is due to the often strange and beautiful methods created for training RL agents.
 
     """
-    def __init__(self, data: MDPDataBunch):
+    def __init__(self, data: MDPDataBunchAlpha):
         super().__init__()
         self.data = data
         self.name = ''
@@ -117,7 +117,7 @@ def get_next_conv_shape(c_w, c_h, stride, kernel_size):
 
 
 def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
-    """
+    r"""
     Useful guideline for convolutional net shape change:
 
     Shape:

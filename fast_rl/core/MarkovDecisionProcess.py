@@ -1,8 +1,9 @@
 from numbers import Integral
 
 import gym
+from dataclasses import asdict
 from fastai.basic_train import LearnerCallback
-from gym.spaces import Discrete, Box
+from gym.spaces import Discrete, Box, MultiDiscrete
 
 try:
     # noinspection PyUnresolvedReferences
@@ -34,7 +35,120 @@ FEED_TYPE_IMAGE = 0
 FEED_TYPE_STATE = 1
 
 
-class MDPMemoryManager(LearnerCallback):
+@dataclass
+class Bounds(object):
+    r"""
+    Handles bounds for 1 dimensional spaces.
+
+    between(gym.Space): A convenience variable for determining the min and max bounds
+    discrete(bool): Whether the Bounds are discrete or not. Important for N possible values calc.
+    min(list): Correlated min for a given dimension
+    max(list): Correlated max for a given dimension
+    """
+    between: Any = None
+    discrete: bool = False
+    min: list = None
+    max: list = None
+
+    @property
+    def n_possible_values(self):
+        if not self.discrete: return np.inf
+        else: return np.prod(np.subtract(self.max, self.min))
+
+    def __post_init__(self):
+        self.min, self.max = ifnone(self.min, []), ifnone(self.max, [])
+        # If a tuple has been passed, break it into correlated min max variables.
+        if self.between is not None:
+            for b in (self.between if isinstance(self.between, gym.spaces.Tuple) else listify(self.between)):
+                if isinstance(b, (int, np.int64, np.int, float, np.float)):
+                    self.min, self.max = self.min + [0], self.max + [b]
+                    self.discrete = isinstance(b, (int, np.int, np.int64))
+                elif isinstance(b, Discrete): self.min, self.max, self.discrete = self.min + [0], self.max + [b.n], True
+                elif isinstance(b, MultiDiscrete):
+                    self.min, self.max, self.discrete = self.min + [0] * sum(b.nvec.shape), self.max + b.nvec, True
+                elif isinstance(b, Box):
+                    self.min, self.max = self.min + [b.low], self.max + [b.high]
+                    self.discrete = any([b.dtype in (int, np.int, np.int64)])
+                else: raise ValueError(f'Tuple not understood {self.between}')
+
+        if len(self.min) != len(self.max):
+            raise ValueError(f'Min Max do not match min {len(self.min)} max {len(self.max)}')
+        if len(self.min) == 0: raise ValueError(f'Min and Max are 0')
+
+
+@dataclass
+class Action(object):
+    """
+    Handles actions, action space, and value verification.
+
+    An important difference between taken_action and raw_action is that the raw action is the immediate
+    raw output from the model before any argmax processing.
+
+    taken_action(np.array):
+        Expected to always to be numpy arrays with shape (-1, 1). This is the action that was / is to be input
+        into the env `step` function.
+
+    raw_action(np.array):
+        Expected to always to be numpy arrays with shape (-1, 1). This is the raw model output such as neural net final
+        layer output.
+
+    action_space(gym.Space):
+        Used for estimating the max number of values. This is important for embeddings.
+
+    bounds (tuple):
+        Maximum and minimum values for each action dimension.
+    """
+    taken_action: np.array
+    raw_action: np.array
+    action_space: gym.Space
+    n_possible_values: int = 0
+    bounds: Bounds = None
+
+    def __post_init__(self):
+        # Fix shapes
+        self.taken_action = array(listify(self.taken_action)).reshape(1, -1)
+        self.raw_action = array(listify(self.raw_action)).reshape(1, -1)
+        # Determine bounds
+        self.bounds = Bounds(self.action_space)
+        self.n_possible_values = self.bounds.n_possible_values
+
+
+@dataclass
+class State(object):
+    state: np.array
+    state_prime: np.array
+    alt_state: np.array
+    alt_state_prime: np.array
+    mode: int = FEED_TYPE_STATE
+    observation_space: gym.Space
+    bounds: Bounds
+    n_possible_values: int = 0
+
+    def _fix_field(self, input_field: np.ndarray):
+        if len(input_field.shape) == 1: return input_field.reshape(1, -1)
+        elif input_field.shape[0] != 1 and self.mode == FEED_TYPE_STATE: return input_field.reshape(1, -1)
+        elif input_field.shape[0] != 1 and len(input_field.shape) == 3 and self.mode == FEED_TYPE_IMAGE:
+            return np.expand_dims(input_field, 0)
+        elif input_field.shape[0] != 1 and len(input_field.shape) == 3 and self.mode == FEED_TYPE_IMAGE:
+            return input_field
+        raise ValueError(f'Input has shape {input_field} for mode {self.mode}. This is unexpected.')
+
+    def __post_init__(self):
+        if self.mode not in [FEED_TYPE_IMAGE, FEED_TYPE_STATE]:
+            ValueError(f'Mode invalid {self.mode} not valid feed type')
+
+        if self.mode == FEED_TYPE_IMAGE:
+            self.observation_space = gym.spaces.Box(0, 255, self.alt_state.shape, dtype=np.int64)
+
+        # Determine bounds
+        self.bounds = Bounds(self.observation_space)
+        self.n_possible_values = self.bounds.n_possible_values
+        # Fix Shapes
+        self.state, self.state_prime = self._fix_field(self.state), self._fix_field(self.state_prime)
+        self.alt_state, self.alt_state_prime = self._fix_field(self.alt_state), self._fix_field(self.alt_state_prime)
+
+
+class MDPMemoryManagerAlpha(LearnerCallback):
     def __init__(self, learn, mem_strategy, k, max_episodes=None, episode=0, iteration=0):
         """
         Handles different ways of memory management:
@@ -73,9 +187,14 @@ class MDPMemoryManager(LearnerCallback):
         self._lower = 0
         self._upper = 0
 
-    def _comp_less(self, key, d, episode): return d[key] < self.data.x.info[episode]
-    def _comp_greater(self, key, d, episode): return d[key] > self.data.x.info[episode]
-    def _dict_access(self, key, dictionary): return {key: dictionary[key]}
+    def _comp_less(self, key, d, episode):
+        return d[key] < self.data.x.info[episode]
+
+    def _comp_greater(self, key, d, episode):
+        return d[key] > self.data.x.info[episode]
+
+    def _dict_access(self, key, dictionary):
+        return {key: dictionary[key]}
 
     def _k_top_best(self, episode, episodes_keep):
         best = dict(filter(partial(self._comp_greater, d=episodes_keep, episode=episode), episodes_keep))
@@ -162,7 +281,7 @@ class MDPMemoryManager(LearnerCallback):
             self.manage_memory(self._valid_episodes_keep, self.episode)
 
 
-class MDPDataset(Dataset):
+class MDPDatasetAlpha(Dataset):
     def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None, bs=8,
                  x=None, memory_management_strategy='k_partitions_best', k=1, skip=False, embeddable=False):
         """
@@ -196,16 +315,20 @@ class MDPDataset(Dataset):
         self.mem_strat = memory_management_strategy
         self.bs = bs
         # noinspection PyUnresolvedReferences,PyProtectedMember
-        env._max_episode_steps = env.spec.max_episode_steps if not hasattr(env, '_max_episode_steps') else env._max_episode_steps
+        env._max_episode_steps = env.spec.max_episode_steps if not hasattr(env,
+                                                                           '_max_episode_steps') else env._max_episode_steps
         self.max_steps = env._max_episode_steps if max_steps is None else max_steps
         self.render = render
         self.feed_type = feed_type
         self.env = env
         # MDP specific values
         self.actions = self.get_random_action(env.action_space)
-        if isinstance(env.action_space, Box): self.raw_action = np.random.randn((env.action_space.shape[0]))
-        elif isinstance(env.action_space, Discrete): self.raw_action = np.random.randn((env.action_space.n))
-        else: self.raw_action = self.get_random_action(env.action_space)
+        if isinstance(env.action_space, Box):
+            self.raw_action = np.random.randn((env.action_space.shape[0]))
+        elif isinstance(env.action_space, Discrete):
+            self.raw_action = np.random.randn((env.action_space.n))
+        else:
+            self.raw_action = self.get_random_action(env.action_space)
 
         self.is_done = True
         self.current_state = None
@@ -216,7 +339,7 @@ class MDPDataset(Dataset):
         self.env_specific_handle()
         self.counter = -1
         self.episode = 0
-        self.x = MarkovDecisionProcessList() if x is None else x  # self.new(0)
+        self.x = MarkovDecisionProcessListAlpha() if x is None else x  # self.new(0)
         self.item = None
         self.episodes_to_keep = {}
 
@@ -263,7 +386,8 @@ class MDPDataset(Dataset):
         # First Phase: decide on episode reset. Collect current state and image representations.
         if self.is_done or self.counter >= self.max_steps - 3:
             self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
-            if type(self.current_state) is not list and type(self.current_state) is not np.ndarray: self.current_state = [self.current_state]
+            if type(self.current_state) is not list and type(
+                self.current_state) is not np.ndarray: self.current_state = [self.current_state]
             # Specifically for the stupid blackjack-v0 env >:(
             self.current_image = self._get_image()
 
@@ -276,23 +400,25 @@ class MDPDataset(Dataset):
         self.counter += 1
 
         # Second Phase: Generate MDP slice
-        result_state = result_image.transpose(2, 0, 1) if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
-        current_state = self.current_image.transpose(2, 0, 1) if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
+        result_state = result_image.transpose(2, 0,
+                                              1) if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
+        current_state = self.current_image.transpose(2, 0,
+                                                     1) if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
         alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
-        items = MarkovDecisionProcessSlice(state=np.copy(current_state), state_prime=np.copy(result_state),
-                                           alt_state=np.copy(alternate_state), action=np.copy(self.actions),
-                                           reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
-                                           episode=copy(self.episode), raw_action=self.raw_action)
+        items = MarkovDecisionProcessSliceAlpha(state=np.copy(current_state), state_prime=np.copy(result_state),
+                                                alt_state=np.copy(alternate_state), action=np.copy(self.actions),
+                                                reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
+                                                episode=copy(self.episode), raw_action=self.raw_action)
         self.current_state = copy(result_state)
         self.current_image = copy(result_image)
 
-        list_item = MarkovDecisionProcessList([items])
+        list_item = MarkovDecisionProcessListAlpha([items])
         return list_item
 
     def __len__(self):
         return self.max_steps
 
-    def __getitem__(self, _) -> 'MDPDataset':
+    def __getitem__(self, _) -> 'MDPDatasetAlpha':
         item = self.new(_)
         if (self.x and self.is_done and self.counter != -1) or \
                 (self.counter >= self.max_steps - 2):
@@ -317,7 +443,7 @@ class MDPDataset(Dataset):
         pickle.dump(self.x, open(root_path / (name + ".pickle"), "wb"), pickle.HIGHEST_PROTOCOL)
 
 
-class MDPDataBunch(DataBunch):
+class MDPDataBunchAlpha(DataBunch):
     def _get_sizes_and_possible_values(self, item):
         if isinstance(item, Discrete) and len(item.shape) != 0: return item.n, item.n
         if isinstance(item, Discrete) and len(item.shape) == 0: return 1, item.n
@@ -376,15 +502,17 @@ class MDPDataBunch(DataBunch):
         """
 
         try:
-            # train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
-            # valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
+            # train_list = MDPDatasetAlpha(gym.make(env_name), max_steps=max_steps, render=render)
+            # valid_list = MDPDatasetAlpha(gym.make(env_name), max_steps=max_steps, render=render)
             env = gym.make(env_name)
             val_bs = bs if val_bs is None else val_bs
-            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, embeddable=embed,
-                                    memory_management_strategy=memory_management_strategy)
-            if add_valid: valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs, embeddable=embed,
-                                                  memory_management_strategy=memory_management_strategy)
-            else: valid_list = None
+            train_list = MDPDatasetAlpha(env, max_steps=max_steps, render=render, bs=bs, embeddable=embed,
+                                         memory_management_strategy=memory_management_strategy)
+            if add_valid:
+                valid_list = MDPDatasetAlpha(env, max_steps=max_steps, render=render, bs=val_bs, embeddable=embed,
+                                             memory_management_strategy=memory_management_strategy)
+            else:
+                valid_list = None
         except error.DependencyNotInstalled as e:
             print('Mujoco is not installed. Returning None')
             if e.args[0].lower().__contains__('mujoco'): return None
@@ -412,11 +540,11 @@ class MDPDataBunch(DataBunch):
             env = gym.make(env_name)
             val_bs = bs if val_bs is None else val_bs
             train_ls = pickle.load(open(path / 'train.pickle', 'rb'))
-            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=train_ls)
+            train_list = MDPDatasetAlpha(env, max_steps=max_steps, render=render, bs=bs, x=train_ls)
 
             if add_valid:
                 valid_ls = pickle.load(open(path / 'valid.pickle', 'rb'))
-                valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs, x=valid_ls)
+                valid_list = MDPDatasetAlpha(env, max_steps=max_steps, render=render, bs=val_bs, x=valid_ls)
             else:
                 valid_list = None
 
@@ -441,7 +569,7 @@ class MDPDataBunch(DataBunch):
                                   ' Suggested to use to_pickle and from_pickle due to easier numpy conversion.')
 
     @classmethod
-    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None,
+    def create(cls, train_ds: MDPDatasetAlpha, valid_ds: MDPDatasetAlpha = None,
                test_ds: Optional[Dataset] = None, path: PathOrStr = '.', bs: int = 1,
                feed_type=FEED_TYPE_STATE,
                val_bs: int = None, num_workers: int = defaults.cpus, dl_tfms: Optional[Collection[Callable]] = None,
@@ -479,8 +607,8 @@ class MDPDataBunch(DataBunch):
         return [o for o in (train_ds, valid_ds, fix_ds, test_ds) if o is not None]
 
 
-class MarkovDecisionProcessList(ItemList):
-    _bunch = MDPDataBunch
+class MarkovDecisionProcessListAlpha(ItemList):
+    _bunch = MDPDataBunchAlpha
 
     def __init__(self, items=np.array([]), feed_type=FEED_TYPE_IMAGE, **kwargs):
         """
@@ -490,7 +618,7 @@ class MarkovDecisionProcessList(ItemList):
         Notes:
             Two important fields for you to be aware of: `items` and `x`.
             `x` is just the values being used for directly being feed into the model.
-            `items` contains an ndarray of MarkovDecisionProcessSlice instances. These contain the the primary values
+            `items` contains an ndarray of MarkovDecisionProcessSliceAlpha instances. These contain the the primary values
             in x, but also the other important properties of a MDP.
 
         Args:
@@ -498,7 +626,7 @@ class MarkovDecisionProcessList(ItemList):
             feed_type:
             **kwargs:
         """
-        super(MarkovDecisionProcessList, self).__init__(items, **kwargs)
+        super(MarkovDecisionProcessListAlpha, self).__init__(items, **kwargs)
         self.feed_type = feed_type
         self.copy_new.append('feed_type')
         self.ignore_empty = True
@@ -511,8 +639,10 @@ class MarkovDecisionProcessList(ItemList):
     def add(self, items: 'ItemList'):
         # Update the episode related composition information
         for item in items.items:
-            if item.episode in self.info: self.info[item.episode] = float(np.sum(self.info[item.episode] + item.reward))
-            else: self.info[item.episode] = float(item.reward)
+            if item.episode in self.info:
+                self.info[item.episode] = float(np.sum(self.info[item.episode] + item.reward))
+            else:
+                self.info[item.episode] = float(item.reward)
 
         super().add(items)
 
@@ -527,16 +657,16 @@ class MarkovDecisionProcessList(ItemList):
 
     def reconstruct(self, t: Tensor, x: Tensor = None):
         if self.feed_type == FEED_TYPE_IMAGE:
-            return MarkovDecisionProcessSlice(state=Image(t), state_prime=Image(x[0]),
-                                              alt_state=Floats(x[1]), action=Floats(x[1]),
-                                              reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
+            return MarkovDecisionProcessSliceAlpha(state=Image(t), state_prime=Image(x[0]),
+                                                   alt_state=Floats(x[1]), action=Floats(x[1]),
+                                                   reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
         else:
-            return MarkovDecisionProcessSlice(state=Floats(t), state_prime=Floats(x[0]),
-                                              alt_state=Image(x[1]), action=Floats(x[1]),
-                                              reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
+            return MarkovDecisionProcessSliceAlpha(state=Floats(t), state_prime=Floats(x[0]),
+                                                   alt_state=Image(x[1]), action=Floats(x[1]),
+                                                   reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
 
 
-class MarkovDecisionProcessSlice(ItemBase):
+class MarkovDecisionProcessSliceAlpha(ItemBase):
     # noinspection PyMissingConstructor
     def __init__(self, state, state_prime, alt_state, action, reward, done, episode, raw_action,
                  feed_type=FEED_TYPE_IMAGE):
