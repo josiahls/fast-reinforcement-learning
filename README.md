@@ -221,8 +221,8 @@ learn.fit(5)
 ```
 
 
-- [ ] **Working On** 0.7.0 Full test suite using multi-processing. Connect to CI.
-- [ ] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. 
+- [X] 0.7.0 Full test suite using multi-processing. Connect to CI.
+- [ ] **Working On** 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. 
 - [ ] 0.9.0 Notebook demonstrations of basic model usage
 - [ ] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
