@@ -28,6 +28,8 @@ class BaseDDPGCallback(LearnerCallback):
 
     def on_epoch_begin(self, epoch, **kwargs: Any):
         self.episode = epoch
+        # if self.learn.model.training and self.iteration != 0:
+        #     self.learn.model.memory.update(item=self.learn.data.x.items[-1])
         self.iteration = 0
 
     def on_loss_begin(self, **kwargs: Any):
@@ -96,7 +98,7 @@ class CNNCritic(nn.Module):
 class DDPG(BaseAgent):
 
     def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, batch=64, discount=0.99,
-                 lr=1e-3, actor_lr=1e-4, exploration_strategy=None, env_was_discrete=False):
+                 lr=1e-3, actor_lr=1e-4, exploration_strategy=None):
         """
         Implementation of a continuous control algorithm using an actor/critic architecture.
 
@@ -118,7 +120,6 @@ class DDPG(BaseAgent):
             lr: Rate that the opt will learn parameter gradients.
         """
         super().__init__(data)
-        self.env_was_discrete = env_was_discrete
         self.name = 'DDPG'
         self.lr = lr
         self.discount = discount
@@ -149,13 +150,13 @@ class DDPG(BaseAgent):
     def initialize_action_model(self, layers, data):
         actions, state = data.get_action_state_size()
         if type(state[0]) is tuple and len(state[0]) == 3:
-            actions, state = actions[0], state[0]
+            # actions, state = actions[0], state[0]
             # If the shape has 3 dimensions, we will try using cnn's instead.
             return create_cnn_model([200, 200], actions, state, False, kernel_size=8,
-                                    final_activation_function=nn.Tanh)
+                                    final_activation_function=nn.Tanh, action_val_to_dim=False)
         else:
             return create_nn_model(layers, *data.get_action_state_size(), False, use_embed=data.train_ds.embeddable,
-                                   final_activation_function=nn.Tanh)
+                                   final_activation_function=nn.Tanh, action_val_to_dim=False)
 
     def initialize_critic_model(self, layers, data):
         """ Instead of state -> action, we are going state + action -> single expected reward. """
@@ -168,11 +169,9 @@ class DDPG(BaseAgent):
     def pick_action(self, x):
         if self.training: self.action_model.eval()
         with torch.no_grad():
-            action, x = super(DDPG, self).pick_action(x)
+            action = super(DDPG, self).pick_action(x)
         if self.training: self.action_model.train()
-
-        if not self.env_was_discrete: action = np.clip(action, -1, 1)
-        return action, np.clip(x, -1, 1)
+        return np.clip(action, -1, 1)
 
     def optimize(self):
         """
@@ -196,7 +195,6 @@ class DDPG(BaseAgent):
             s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
             s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
             a = torch.from_numpy(np.array([item.actions for item in sampled]).astype(float)).float()
-            if self.env_was_discrete: a = torch.from_numpy(np.array([item.raw_action for item in sampled]).astype(float)).float()
 
             with torch.no_grad():
                 y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))

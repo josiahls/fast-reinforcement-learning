@@ -10,12 +10,12 @@ from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 
 
-ENV_NAMES = Envs.get_all_latest_envs()
+ENV_NAMES = Envs.get_all_latest_envs(exclude_key='pybullet')
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
 def test_all_ddpg(env):
-    data = MDPDataBunch.from_env(env, render='rgb_array', memory_management_strategy='non', add_valid=False,
+    data = MDPDataBunch.from_env(env, render='human', add_valid=False,
                                  max_steps=50)
     if data is None:
         print(f'Env {env} is probably Mujoco... Add imports if you want and try on your own. Don\'t like '

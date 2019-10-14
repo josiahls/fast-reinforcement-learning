@@ -45,14 +45,12 @@ class BaseAgent(nn.Module):
         with torch.no_grad():
             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
 
-            action, x, perturbed = self.exploration_strategy.perturb(x, x, self.data.train_ds.env.action_space)
-            x = np.clip(x, -1.0, 1.0)
-
-            if isinstance(self.data.train_ds.env.action_space, Discrete) and not perturbed: action = x.argmax().numpy().item()
+            if isinstance(self.data.train_ds.env.action_space, Discrete): action = x.argmax().numpy().item()
             elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).numpy()
-            else: action = x.numpy()
 
-            return action, x
+            action = self.exploration_strategy.perturb(action, self.data.train_ds.env.action_space)
+
+            return action
 
     def interpret_q(self, items):
         raise NotImplementedError
@@ -81,8 +79,8 @@ class Flatten(nn.Module):
 
 
 
-def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
-                    activation_function=None, final_activation_function=None):
+def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=False,
+                    activation_function=None, final_activation_function=None, action_val_to_dim=True):
     """Generates an nn module.
 
     Notes:
@@ -92,7 +90,8 @@ def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use
 
     """
     act = nn.LeakyReLU if activation_function is None else activation_function
-    action_size = action_size[0]  # For now the dimension of the action does not make a difference.
+    # For now the dimension of the action does not make a difference.
+    action_size = action_size[0] if not action_val_to_dim else action_size[1]
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
     sizes = [state_size] + layer_list + [action_size]
@@ -134,13 +133,13 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
                     \times (\text{kernel\_size}[1] - 1) - 1}{\text{stride}[1]} + 1\right\rfloor
 
 
-    :param input_tuple:
-    :param act:
-    :param kernel_size:
-    :param stride:
-    :param n_conv_layers:
-    :param layers:
-    :return:
+    Args:
+        input_tuple:
+        act:
+        kernel_size:
+        stride:
+        n_conv_layers:
+        layers:
     """
     h, w = input_tuple[0], input_tuple[1]
     conv_layers = [SwapImageChannel()]
@@ -152,7 +151,7 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
 
 
 def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, kernel_size=5, stride=3, n_conv_layers=3,
-                     activation_function=None, final_activation_function=None):
+                     activation_function=None, final_activation_function=None, action_val_to_dim=True):
     """Generates an nn module.
 
     Notes:
@@ -164,7 +163,8 @@ def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, ke
     act = nn.LeakyReLU if activation_function is None else activation_function
     # For now keep drop out as 0, test including dropout later
     ps = [0] * len(layer_list)
-    sizes = [state_size] + layer_list + [action_size]
+    action_size = action_size[0] if not action_val_to_dim else action_size[1]
+    sizes = [state_size[0]] + layer_list + [action_size]
     actns = [act() for _ in range(n_conv_layers + len(sizes) - 2)] + [None]
     layers = []
     for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):

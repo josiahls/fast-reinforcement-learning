@@ -61,6 +61,7 @@ class MDPMemoryManager(LearnerCallback):
         self.ds = None
         self.max_episodes = max_episodes
         self.episode = episode
+        self.last_episode = episode
         self.iteration = iteration
         self._persist = max_episodes is not None
 
@@ -113,30 +114,36 @@ class MDPMemoryManager(LearnerCallback):
     def on_loss_begin(self, **kwargs: Any):
         self.iteration += 1
 
-    def manage_memory(self, episodes_keep):
-        # We operate of the second to most recent episode so the agent still has an opportunity to use the full episode
-        episode = self.episode - 1
+    def manage_memory(self, episodes_keep, episode):
         if episode not in self.ds.x.info: return
-        if len(episodes_keep) <= self.k:
-            episodes_keep[episode] = self.ds.x.info[episode]
-            return
+        episodes_keep[episode] = self.ds.x.info[episode]
+        if len(episodes_keep) < self.k: return
+        # We operate of the second to most recent episode so the agent still has an opportunity to use the full episode
+        episode = episode - 1
+        if episode not in self.ds.x.info: return
 
-        # If the episodes to keep is full, then we have to decide which ones to remove
-        if self.mem_strategy == 'k_top_best': del_ep = self._k_top_best(episode, episodes_keep)
-        if self.mem_strategy == 'k_top_worst': del_ep = self._k_top_worst(episode, episodes_keep)
-        if self.mem_strategy == 'k_top_both': del_ep = self._k_top_both(episode, episodes_keep)
-        if self.mem_strategy == 'k_partitions_best': del_ep = self._k_partitions_best(episode, episodes_keep)
-        if self.mem_strategy == 'k_partitions_worst': del_ep = self.k_partitions_worst(episode, episodes_keep)
-        if self.mem_strategy == 'k_partitions_both': del_ep = self._k_partitions_both(episode, episodes_keep)
-        if self.mem_strategy == 'all': del_ep = [-1]
+        try:
+            # If the episodes to keep is full, then we have to decide which ones to remove
+            if self.mem_strategy == 'k_top_best': del_ep = self._k_top_best(episode, episodes_keep)
+            if self.mem_strategy == 'k_top_worst': del_ep = self._k_top_worst(episode, episodes_keep)
+            if self.mem_strategy == 'k_top_both': del_ep = self._k_top_both(episode, episodes_keep)
+            if self.mem_strategy == 'k_partitions_best': del_ep = self._k_partitions_best(episode, episodes_keep)
+            if self.mem_strategy == 'k_partitions_worst': del_ep = self.k_partitions_worst(episode, episodes_keep)
+            if self.mem_strategy == 'k_partitions_both': del_ep = self._k_partitions_both(episode, episodes_keep)
+            if self.mem_strategy == 'all': del_ep = [-1]
 
-        # If there are episodes to delete, then set them as the main episode to delete
-        if len(del_ep) != 0:
-            episodes_keep[episode] = self.ds.x.info[episode]
-            del episodes_keep[del_ep[0]]
-            episode = del_ep[0]
-        if episode != -1: self.ds.x.clean(episode)
-        self.ds.x.info = episodes_keep
+            # If there are episodes to delete, then set them as the main episode to delete
+            if len(del_ep) != 0:
+                # episodes_keep[episode] = self.ds.x.info[episode]
+                del episodes_keep[del_ep[0]]
+                episode = del_ep[0]
+                self.ds.x.clean(episode)
+            self.ds.x.info = episodes_keep
+
+        except KeyError as e:
+            pass
+        except TypeError as e:
+            pass
 
     def on_train_begin(self, n_epochs, **kwargs: Any):
         self.max_episodes = n_epochs if not self._persist else self.max_episodes
@@ -149,10 +156,10 @@ class MDPMemoryManager(LearnerCallback):
     def on_epoch_end(self, **kwargs: Any) -> None:
         if self.learn.data.train_ds is not None:
             self.ds = self.learn.data.train_ds
-            self.manage_memory(self._train_episodes_keep)
+            self.manage_memory(self._train_episodes_keep, self.episode)
         if self.learn.data.valid_dl is not None:
             self.ds = self.learn.data.valid_ds
-            self.manage_memory(self._valid_episodes_keep)
+            self.manage_memory(self._valid_episodes_keep, self.episode)
 
 
 class MDPDataset(Dataset):
@@ -261,6 +268,9 @@ class MDPDataset(Dataset):
             self.current_image = self._get_image()
 
         result_state, reward, self.is_done, info = self.env.step(self.actions)
+        if self.is_done and self.counter == -1:
+            self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
+
         if type(result_state) is not list and type(result_state) is not np.ndarray: result_state = [result_state]
         result_image = self._get_image()
         self.counter += 1
@@ -501,8 +511,8 @@ class MarkovDecisionProcessList(ItemList):
     def add(self, items: 'ItemList'):
         # Update the episode related composition information
         for item in items.items:
-            if item.episode in self.info: self.info[item.episode] = np.sum(self.info[item.episode] + item.reward)
-            else: self.info[item.episode] = item.reward
+            if item.episode in self.info: self.info[item.episode] = float(np.sum(self.info[item.episode] + item.reward))
+            else: self.info[item.episode] = float(item.reward)
 
         super().add(items)
 
