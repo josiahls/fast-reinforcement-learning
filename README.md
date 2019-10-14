@@ -70,9 +70,6 @@ known environments. Prior to 1.0.0, new changes might break previous code versio
 working at their best. Post 1.0.0 will be more formal feature development with CI, unit testing, etc. 
 
 **Critical**
-- [X] 0.1.0 DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. We use Learner callbacks for 
-handling the different fit behaviors. 
-
 Testable code:
 ```python
 from fast_rl.agents.DQN import DQN
