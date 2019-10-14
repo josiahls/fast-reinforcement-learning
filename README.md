@@ -220,6 +220,7 @@ learn = AgentLearner(data, model)
 learn.fit(5)
 ```
 
+reset commit
 
 - [ ] **Working On** 0.7.0 Full test suite using multi-processing. Connect to CI.
 - [ ] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. 
