@@ -229,8 +229,8 @@ learn.fit(5)
 reset commit
 
 - [X] 0.7.0 Full test suite using multi-processing. Connect to CI.
-- [ ] **Working On**  0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. 
-- [ ] 0.9.0 Notebook demonstrations of basic model usage
+- [ ] **Working On**  0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. Also, massive refactoring will be needed.
+- [ ] 0.9.0 Notebook demonstrations of basic model usage.
 - [ ] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
 - [ ] 1.2.0 Add PyBullet Fetch Environments
