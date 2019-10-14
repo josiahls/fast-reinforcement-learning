@@ -47,10 +47,10 @@ def test_MarkovDecisionProcessDataBunch_init():
 def test_MDPDataset_MemoryManagement():
     data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=100, add_valid=False)
     model = FixedTargetDQN(data, batch_size=128, max_episodes=10000, lr=0.001, copy_over_frequency=3,
-                           memory=ExperienceReplay(10000), discount=0.99)
+                           memory=ExperienceReplay(10000), discount=0.99, use_embeddings=True)
     learn = AgentLearner(data, model, mem_strategy='k_top_best')
 
-    learn.fit(10)
+    learn.fit(5)
 
 
 def test_MarkovDecisionProcessDataBunch_init_no_valid():
