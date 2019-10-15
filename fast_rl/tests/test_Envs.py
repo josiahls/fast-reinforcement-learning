@@ -23,14 +23,14 @@ def test_individual_env():
     for epoch in range(epochs):
         for _ in mdp_databunch.train_dl:
             mdp_databunch.train_ds.actions = mdp_databunch.train_ds.get_random_action()
-            # print(f'state {element.shape} action {mdp_databunch.train_dl.dl.dataset.actions}')
+            # print(f's {element.shape} action {mdp_databunch.train_dl.dl.dataset.actions}')
             assert np.sum(
                 np.equal(mdp_databunch.train_dl.dl.dataset.actions, mdp_databunch.train_ds.actions)) == np.size(
                 mdp_databunch.train_ds.actions), msg
 
         for _ in mdp_databunch.valid_dl:
             mdp_databunch.valid_ds.actions = mdp_databunch.valid_ds.get_random_action()
-            # print(f'state {element.shape} action {mdp_databunch.valid_dl.dl.dataset.actions}')
+            # print(f's {element.shape} action {mdp_databunch.valid_dl.dl.dataset.actions}')
             assert np.sum(
                 np.equal(mdp_databunch.train_dl.dl.dataset.actions, mdp_databunch.train_ds.actions)) == np.size(
                 mdp_databunch.train_ds.actions), msg

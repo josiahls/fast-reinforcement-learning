@@ -128,7 +128,7 @@ class Experience:
 class ExperienceReplay(Experience):
     def __init__(self, memory_size, **kwargs):
         """
-        Basic store-er of state space transitions for training agents.
+        Basic store-er of s space transitions for training agents.
 
         References:
             [1] Mnih, Volodymyr, et al. "Playing atari with deep reinforcement learning."
@@ -306,7 +306,7 @@ def fit(epochs: int, learn: BasicLearner, callbacks: Optional[CallbackList] = No
             while loss is None:
                 # TODO 2nd change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
                 for element in progress_bar(learn.data.train_dl, parent=pbar):
-                    # TODO 3rd change: get the action for the given state. Move to on batch begin callback?
+                    # TODO 3rd change: get the action for the given s. Move to on batch begin callback?
                     learn.data.train_ds.actions = learn.predict(element)
                     cb_handler.on_batch_begin(element, learn.data.train_ds.actions)
                     # TODO 4th change: loss_batch is way simpler... What is a batch to be defined as?

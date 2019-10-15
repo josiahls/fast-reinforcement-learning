@@ -1,9 +1,8 @@
-from numbers import Integral
-
 import gym
-from dataclasses import asdict
 from fastai.basic_train import LearnerCallback
 from gym.spaces import Discrete, Box, MultiDiscrete
+
+from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 
 try:
     # noinspection PyUnresolvedReferences
@@ -19,9 +18,9 @@ except ModuleNotFoundError as e:
 
 from fastai.core import *
 # noinspection PyProtectedMember
-from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader, PreProcessors
+from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader
 from fastai.imports import torch
-from fastai.vision import Image
+from fastai.vision import Image, ImageDataBunch
 from gym import error
 from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
 from gym.envs.toy_text import discrete
@@ -78,50 +77,68 @@ class Bounds(object):
 
 @dataclass
 class Action(object):
-    """
+    r"""
     Handles actions, action space, and value verification.
 
     An important difference between taken_action and raw_action is that the raw action is the immediate
     raw output from the model before any argmax processing.
 
-    taken_action(np.array):
-        Expected to always to be numpy arrays with shape (-1, 1). This is the action that was / is to be input
-        into the env `step` function.
+    taken_action(np.array): Expected to always to be numpy arrays with shape (-1, 1). This is the action that
+    is to be input into the env `step` function.
 
-    raw_action(np.array):
-        Expected to always to be numpy arrays with shape (-1, 1). This is the raw model output such as neural net final
-        layer output.
+    raw_action(np.array): Expected to always to be numpy arrays with shape (-1, 1). This is the raw model
+    output such as neural net final layer output. Can be None.
 
-    action_space(gym.Space):
-        Used for estimating the max number of values. This is important for embeddings.
+    action_space(gym.Space): Used for estimating the max number of values. This is important for embeddings.
 
-    bounds (tuple):
-        Maximum and minimum values for each action dimension.
+    bounds(tuple): Maximum and minimum values for each action dimension.
+
+    n_possible_values(int): An integer or inf value indicating the total number of possible actions there are.
     """
     taken_action: np.array
-    raw_action: np.array
     action_space: gym.Space
-    n_possible_values: int = 0
+    raw_action: np.array = None
     bounds: Bounds = None
+    n_possible_values: int = 0
 
     def __post_init__(self):
-        # Fix shapes
-        self.taken_action = array(listify(self.taken_action)).reshape(1, -1)
-        self.raw_action = array(listify(self.raw_action)).reshape(1, -1)
         # Determine bounds
         self.bounds = Bounds(self.action_space)
         self.n_possible_values = self.bounds.n_possible_values
 
+        # Fix shapes
+        self.taken_action = array(listify(self.taken_action)).reshape(1, -1)
+        if self.raw_action: self.raw_action = array(listify(self.raw_action)).reshape(1, -1)
+
 
 @dataclass
 class State(object):
-    state: np.array
-    state_prime: np.array
-    alt_state: np.array
-    alt_state_prime: np.array
-    mode: int = FEED_TYPE_STATE
+    r"""
+    Handles states, both their main and alternate formats.
+
+    s(np.array): State space acquired from `env.reset` `s_prime` or `env.render`.
+
+    s_prime(np.array): State space acquired from `env.step` or `env.render`.
+
+    alt_s(np.array): Alternate State space acquired from `env.reset` `s_prime` or `env.render`. Should be an image.
+
+    alt_s_prime(np.array): Alternate State space acquired from `env.step` or `env.render`. Should be an image.
+
+    mode(int): Should be either FEED_TYPE_IMAGE or FEED_TYPE_STATE
+
+    observation_space(gym.Space): Used for estimating the max number of values. This is important for embeddings.
+
+    bounds(Bounds): Maximum and minimum values for each state dimension.
+
+    n_possible_values(int): An integer or inf value indicating the total number of possible actions there are.
+    """
+    s: np.array
+    s_prime: np.array
+    alt_s: np.array
+    alt_s_prime: np.array
     observation_space: gym.Space
-    bounds: Bounds
+    bounds: Bounds = None
+    mode: int = FEED_TYPE_STATE
     n_possible_values: int = 0
 
     def _fix_field(self, input_field: np.ndarray):
@@ -138,14 +155,136 @@ class State(object):
             ValueError(f'Mode invalid {self.mode} not valid feed type')
 
         if self.mode == FEED_TYPE_IMAGE:
-            self.observation_space = gym.spaces.Box(0, 255, self.alt_state.shape, dtype=np.int64)
+            self.observation_space = gym.spaces.Box(0, 255, self.alt_s.shape, dtype=np.int64)
+        # The the FEED_TYPE is an image, then we want to swap the mains and alts.
+        if self.mode == FEED_TYPE_IMAGE and len(self.alt_s.shape) == 3:
+            self.s, self.s_prime, self.alt_s, self.alt_s_prime = self.alt_s, self.alt_s_prime, self.s, self.s_prime
 
         # Determine bounds
         self.bounds = Bounds(self.observation_space)
         self.n_possible_values = self.bounds.n_possible_values
         # Fix Shapes
-        self.state, self.state_prime = self._fix_field(self.state), self._fix_field(self.state_prime)
-        self.alt_state, self.alt_state_prime = self._fix_field(self.alt_state), self._fix_field(self.alt_state_prime)
+        self.s, self.s_prime = self._fix_field(self.s), self._fix_field(self.s_prime)
+        self.alt_s, self.alt_s_prime = self._fix_field(self.alt_s), self._fix_field(self.alt_s_prime)
+
+
+@dataclass
+class MDPStep(object):
+    r"""
+
+    action(Action)
+
+    state(State)
+
+    done(bool)
+
+    reward(float)
+
+    episode(int)
+
+    step(int)
+
+    """
+    action: Action
+    state: State
+    done: bool
+    reward: float
+    episode: int
+    step: int
+
+    def __post_init__(self):
+        self.action = deepcopy(self.action)
+        self.state = deepcopy(self.state)
+
+
+class MDPDataset(Dataset):
+    def __init__(self, env: gym.Env, memory_manager, bs, render, feed_type=FEED_TYPE_STATE,  max_steps=None):
+        r"""
+        Handles env execution and ItemList building.
+
+        Args:
+            env: OpenAI environment to execute.
+            memory_manager: Handles how the list size will be reduced sch as removing image data.
+            bs: Size of a single batch for models and the dataset to use.
+        """
+
+        self.env = env
+        self.memory_manager = memory_manager
+        self.render = render
+        self.feed_type = feed_type
+        self.bs = bs
+        self._max_steps = max_steps
+        self.action = Action(taken_action=self.env.action_space.sample(), action_space=self.env.action_space)
+        self.state = None
+        # Tracking fields
+        self.episode = 0
+        self.counter = 0
+
+        # FastAI fields
+        self.x = MarkovDecisionProcessListAlpha()
+        self.item: Union[MDPStep, None] = None
+
+    @property
+    def max_steps(self):
+        if self._max_steps is not None: return self._max_steps
+        if hasattr(self.env, '_max_episode_steps'): return getattr(self.env, '_max_episode_steps')
+        if self.env.spec.max_episode_steps is not None: return self.env.spec.max_episode_steps
+        raise MaxEpisodeStepsMissingError(f'Env {self.env.spec.id} does not have max episode steps.')
+
+    @property
+    def image(self):
+        r""" Needed because of blackjack-v0 env >:( """
+        try:
+            current_image = self.env.render('rgb_array')
+            if self.render == 'human': self.env.render(self.render)
+        except NotImplementedError:
+            print(f'{b_colors.WARNING} {self.env.unwrapped.spec} Not returning Image {b_colors.ENDC}')
+            current_image = None
+        return current_image
+
+    def __del__(self):
+        self.env.close()
+
+    def __len__(self):
+        return self.max_steps
+
+    def stage_1_env_reset(self) -> Tuple[np.array, np.array]:
+        r"""
+        Handles environment resetting and dataset batch termination.
+
+        We are interested in the entire dataset ending when an item is done.
+
+        Returns: The state space and the image after a reset.
+
+        """
+        if self.counter != 0 and self.item.done:
+            self.counter = 0
+            raise StopIteration
+        if self.item is None or self.item.done: return self.env.reset(), self.image
+
+    def stage_2_env_step(self) -> Tuple(np.array, float, bool, None, np.array):
+        r"""
+        Handles taking a step in the environment.
+
+        We want to cancel the env early if we are at our max step amount.
+
+        Returns: The state, reward, whether the episode is done, and the image.
+        """
+        s_prime, reward, done, _ = self.env.step(self.action.taken_action)
+        if len(self) - 1 == self.counter: done = True
+        return s_prime, reward, done, _, self.image
+
+    def new(self, _):
+        s, alt_s = self.stage_1_env_reset()
+        s_prime, reward, done, _, alt_s_prime = self.stage_2_env_step()
+        # If both the current item and the done are both true, then we need to retry the env
+        if self.item.done and done: return self.new()
+
+        self.state = State(s, s_prime, alt_s, alt_s_prime, self.feed_type, self.env.observation_space)
+        self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
+        self.counter += 1
+
+        return MarkovDecisionProcessListAlpha([self.item])
 
 
 class MDPMemoryManagerAlpha(LearnerCallback):
@@ -354,9 +493,7 @@ class MDPDatasetAlpha(Dataset):
         self.env.close()
 
     def env_specific_handle(self):
-        if isinstance(self.env, TimeLimit) and isinstance(self.env.unwrapped, AlgorithmicEnv):
-            self.render = 'ansi' if self.render == 'rgb_array' else self.render
-        if isinstance(self.env, TimeLimit) and isinstance(self.env.unwrapped, discrete.DiscreteEnv):
+        if isinstance(self.env, TimeLimit) and isinstance(self.env.unwrapped, (AlgorithmicEnv, discrete.DiscreteEnv)):
             self.render = 'ansi' if self.render == 'rgb_array' else self.render
 
     def get_random_action(self, action_space=None):
@@ -383,7 +520,7 @@ class MDPDatasetAlpha(Dataset):
         Returns:
 
         """
-        # First Phase: decide on episode reset. Collect current state and image representations.
+        # First Phase: decide on episode reset. Collect current s and image representations.
         if self.is_done or self.counter >= self.max_steps - 3:
             self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
             if type(self.current_state) is not list and type(
@@ -565,7 +702,7 @@ class MDPDataBunchAlpha(DataBunch):
                  num_workers: int = 0,
                  dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
                  collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
-        raise NotImplementedError('Not implemented for now. Saving state data into a csv seems extremely clunky.'
+        raise NotImplementedError('Not implemented for now. Saving s data into a csv seems extremely clunky.'
                                   ' Suggested to use to_pickle and from_pickle due to easier numpy conversion.')
 
     @classmethod
@@ -677,21 +814,21 @@ class MarkovDecisionProcessSliceAlpha(ItemBase):
         if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
         self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode, self.raw_action = state, state_prime, alt_state, action, reward, done, episode, raw_action
         self.data, self.obj = alt_state if feed_type == FEED_TYPE_IMAGE else state, \
-                              {'state': self.current_state, 'state_prime': self.result_state,
-                               'alt_state': self.alternate_state, 'action': action, 'reward': reward, 'done': done,
+                              {'s': self.current_state, 's_prime': self.result_state,
+                               'alt_s': self.alternate_state, 'action': action, 'reward': reward, 'done': done,
                                'episode': episode, 'feed_type': feed_type, 'raw_action': raw_action}
 
     def clean(self, only_alt=False):
         if not only_alt:
             self.current_state, self.result_state = None, None
-            self.obj['state'], self.obj['state_prime'] = None, None
+            self.obj['s'], self.obj['s_prime'] = None, None
 
-        self.alternate_state, self.obj['alt_state'] = None, None
+        self.alternate_state, self.obj['alt_s'] = None, None
 
     def __str__(self):
         formatted = (
-            map(lambda y: f'{y}:{self.obj[y].shape}', filter(lambda y: y.__contains__('state'), self.obj.keys())),
-            map(lambda y: f'{y}:{self.obj[y]}', filter(lambda y: not y.__contains__('state'), self.obj.keys()))
+            map(lambda y: f'{y}:{self.obj[y].shape}', filter(lambda y: y.__contains__('s'), self.obj.keys())),
+            map(lambda y: f'{y}:{self.obj[y]}', filter(lambda y: not y.__contains__('s'), self.obj.keys()))
         )
 
         return ', '.join(list(formatted[0]) + list(formatted[1]))

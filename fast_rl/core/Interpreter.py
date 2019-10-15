@@ -59,7 +59,7 @@ class AgentInterpretationAlpha(Interpretation):
         """
         Takes a state_space and uses the agent to heat map rewards over the space.
 
-        We first need to determine if the state space is discrete or discrete.
+        We first need to determine if the s space is discrete or discrete.
 
         Args:
             state_space:
@@ -86,7 +86,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def plot_heatmapped_episode(self, episode, fig_size=(13, 5), action_index=None, return_heat_maps=False):
         """
-        Generates plots of heatmapped state spaces for analyzing reward distribution.
+        Generates plots of heatmapped s spaces for analyzing reward distribution.
 
         Currently only makes sense for grid based envs. Will be expecting gym_maze environments that are discrete.
 
@@ -94,9 +94,9 @@ class AgentInterpretationAlpha(Interpretation):
 
         """
         if not str(self.ds.env.spec).__contains__('maze'):
-            raise NotImplementedError('Currently only supports gym_maze envs that have discrete state spaces')
+            raise NotImplementedError('Currently only supports gym_maze envs that have discrete s spaces')
         if not isinstance(self.ds.state_size, Box):
-            raise NotImplementedError('Currently only supports Box based state spaces with 2 dimensions')
+            raise NotImplementedError('Currently only supports Box based s spaces with 2 dimensions')
 
         items = self._get_items()
         heat_maps = []

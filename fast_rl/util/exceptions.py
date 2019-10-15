@@ -1,0 +1,4 @@
+
+
+class MaxEpisodeStepsMissingError(Exception):
+    pass

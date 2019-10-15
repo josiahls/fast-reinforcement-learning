@@ -105,7 +105,7 @@ class DDPG(BaseAgent):
         Notes:
             Uses 4 networks, 2 actors, 2 critics.
             All models use batch norm for feature invariance.
-            NNCritic simply predicts Q while the Actor proposes the actions to take given a state s.
+            NNCritic simply predicts Q while the Actor proposes the actions to take given a s s.
 
         References:
             [1] Lillicrap, Timothy P., et al. "Continuous control with deep reinforcement learning."
@@ -150,7 +150,7 @@ class DDPG(BaseAgent):
     def initialize_action_model(self, layers, data):
         actions, state = data.get_action_state_size()
         if type(state[0]) is tuple and len(state[0]) == 3:
-            # actions, state = actions[0], state[0]
+            # actions, s = actions[0], s[0]
             # If the shape has 3 dimensions, we will try using cnn's instead.
             return create_cnn_model([200, 200], actions, state, False, kernel_size=8,
                                     final_activation_function=nn.Tanh, action_val_to_dim=False)
@@ -159,7 +159,7 @@ class DDPG(BaseAgent):
                                    final_activation_function=nn.Tanh, action_val_to_dim=False)
 
     def initialize_critic_model(self, layers, data):
-        """ Instead of state -> action, we are going state + action -> single expected reward. """
+        """ Instead of s -> action, we are going s + action -> single expected reward. """
         actions, state = data.get_action_state_size()
         if type(state[0]) is tuple and len(state[0]) == 3:
             return CNNCritic(layers, *data.get_action_state_size())

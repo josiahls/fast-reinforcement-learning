@@ -105,7 +105,7 @@ class DQN(BaseAgent):
             data: Used for size input / output information.
         """
         super().__init__(data)
-        # TODO add recommend cnn based on state size?
+        # TODO add recommend cnn based on s size?
         self.name = 'DQN'
         self.use_embeddings = use_embeddings
         self.batch_size = batch_size
@@ -330,7 +330,7 @@ class DuelingDQNModule(nn.Module):
         self.adv = create_nn_model([stream_input_size], a_s[0], (stream_input_size, 0))
 
     def forward(self, x):
-        r"""Splits the base neural net output into 2 streams to evaluate the advantage and values of the state space and
+        r"""Splits the base neural net output into 2 streams to evaluate the advantage and values of the s space and
         corresponding actions.
 
         .. math::
