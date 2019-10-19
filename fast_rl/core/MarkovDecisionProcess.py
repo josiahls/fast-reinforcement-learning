@@ -49,6 +49,9 @@ class Bounds(object):
     min: list = None
     max: list = None
 
+    def __len__(self):
+        return len(self.min)
+
     @property
     def n_possible_values(self):
         if not self.discrete: return np.inf
@@ -110,6 +113,15 @@ class Action(object):
         self.taken_action = array(listify(self.taken_action)).reshape(1, -1)
         if self.raw_action: self.raw_action = array(listify(self.raw_action)).reshape(1, -1)
 
+    def get_single_action(self):
+        return self.taken_action[0] if len(self.bounds) != 1 else self.taken_action[0][0]
+
+    def set_single_action(self, action: np.array):
+        if np.isscalar(action): self.taken_action = np.array([action]).reshape(1, -1)
+        elif len(action.shape) == 1: self.taken_action = action.reshape(1, -1)
+        elif len(action.shape) == 3 and action.shape[0] == 1: self.taken_action = action[0]
+        self.taken_action = self.taken_action.astype(int) if self.bounds.discrete else self.taken_action.astype(float)
+
 
 @dataclass
 class State(object):
@@ -147,6 +159,8 @@ class State(object):
         elif input_field.shape[0] != 1 and len(input_field.shape) == 3 and self.mode == FEED_TYPE_IMAGE:
             return np.expand_dims(input_field, 0)
         elif input_field.shape[0] != 1 and len(input_field.shape) == 3 and self.mode == FEED_TYPE_IMAGE:
+            return input_field
+        elif input_field.shape[0] == 1 and len(input_field.shape) != 3 and self.mode != FEED_TYPE_IMAGE:
             return input_field
         raise ValueError(f'Input has shape {input_field} for mode {self.mode}. This is unexpected.')
 
@@ -196,9 +210,16 @@ class MDPStep(object):
         self.action = deepcopy(self.action)
         self.state = deepcopy(self.state)
 
+    @property
+    def data(self): return self.state.s_prime[0]
+    @property
+    def obj(self): return self.__annotations__
+
+
+
 
 class MDPDataset(Dataset):
-    def __init__(self, env: gym.Env, memory_manager, bs, render, feed_type=FEED_TYPE_STATE,  max_steps=None):
+    def __init__(self, env: gym.Env, memory_manager, bs, render='rgb_array', feed_type=FEED_TYPE_STATE,  max_steps=None):
         r"""
         Handles env execution and ItemList building.
 
@@ -207,7 +228,6 @@ class MDPDataset(Dataset):
             memory_manager: Handles how the list size will be reduced sch as removing image data.
             bs: Size of a single batch for models and the dataset to use.
         """
-
         self.env = env
         self.memory_manager = memory_manager
         self.render = render
@@ -229,7 +249,10 @@ class MDPDataset(Dataset):
         if self._max_steps is not None: return self._max_steps
         if hasattr(self.env, '_max_episode_steps'): return getattr(self.env, '_max_episode_steps')
         if self.env.spec.max_episode_steps is not None: return self.env.spec.max_episode_steps
-        raise MaxEpisodeStepsMissingError(f'Env {self.env.spec.id} does not have max episode steps.')
+
+        msg = f'Env {self.env.spec.id} does not have max episode steps. '
+        msg += ' Either pass the max steps as a param, or catch this exception then pass a default max step param.'
+        raise MaxEpisodeStepsMissingError(msg)
 
     @property
     def image(self):
@@ -248,7 +271,7 @@ class MDPDataset(Dataset):
     def __len__(self):
         return self.max_steps
 
-    def stage_1_env_reset(self) -> Tuple[np.array, np.array]:
+    def stage_1_env_reset(self):
         r"""
         Handles environment resetting and dataset batch termination.
 
@@ -261,8 +284,9 @@ class MDPDataset(Dataset):
             self.counter = 0
             raise StopIteration
         if self.item is None or self.item.done: return self.env.reset(), self.image
+        return self.state.s_prime, self.state.alt_s_prime
 
-    def stage_2_env_step(self) -> Tuple(np.array, float, bool, None, np.array):
+    def stage_2_env_step(self) -> Tuple[np.array, float, bool, None, np.array]:
         r"""
         Handles taking a step in the environment.
 
@@ -270,7 +294,7 @@ class MDPDataset(Dataset):
 
         Returns: The state, reward, whether the episode is done, and the image.
         """
-        s_prime, reward, done, _ = self.env.step(self.action.taken_action)
+        s_prime, reward, done, _ = self.env.step(self.action.get_single_action())
         if len(self) - 1 == self.counter: done = True
         return s_prime, reward, done, _, self.image
 
@@ -278,13 +302,23 @@ class MDPDataset(Dataset):
         s, alt_s = self.stage_1_env_reset()
         s_prime, reward, done, _, alt_s_prime = self.stage_2_env_step()
         # If both the current item and the done are both true, then we need to retry the env
-        if self.item.done and done: return self.new()
+        if self.item is not None and self.item.done and done: return self.new()
 
         self.state = State(s, s_prime, alt_s, alt_s_prime, self.feed_type, self.env.observation_space)
         self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
         self.counter += 1
 
         return MarkovDecisionProcessListAlpha([self.item])
+
+    def __getitem__(self, _):
+        item = self.new(_)
+        self.x.add(item)
+        return self.x[-1]
+
+
+
+
+
 
 
 class MDPMemoryManagerAlpha(LearnerCallback):

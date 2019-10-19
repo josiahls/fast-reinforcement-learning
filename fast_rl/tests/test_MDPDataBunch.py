@@ -18,6 +18,17 @@ from fast_rl.util.misc import list_in_str
 ENV_NAMES = Envs.get_all_latest_envs()
 
 
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_mdp_dataset_iter(env):
+    dataset = MDPDataset(gym.make(env), memory_manager=None, bs=8, render='rgb_array')
+
+    for epoch in range(5):
+        for el in dataset:
+            dataset.action.set_single_action(dataset.env.action_space.sample())
+
+    print('hello')
+
+
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
 def test_mdpdataset_init(env):
     try:
