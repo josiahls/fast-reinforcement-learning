@@ -1,17 +1,14 @@
 from math import floor
+from typing import Collection
 
-import gym
+import numpy as np
 import torch
-from fastai.basic_train import LearnerCallback, Any
-from fastai.callback import Callback
+from fastai.basic_train import LearnerCallback
 from fastai.layers import bn_drop_lin
 from gym.spaces import Discrete, Box
 from torch import nn
-from traitlets import List
-import numpy as np
-from typing import Collection
 
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, MDPDataBunch
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.agent_core import ExplorationStrategy
 
 

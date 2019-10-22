@@ -1,21 +1,17 @@
 import gym
+import numpy as np
 import pytest
 import torch
-from fastai.basic_data import DataBunch
-from fastai.basic_train import Learner, ItemLists, fit
-from fastai.vision import ImageDataBunch
-import numpy as np
+from fastai.basic_train import ItemLists
 from gym import error
 from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
 from gym.envs.toy_text import discrete
 from gym.wrappers import TimeLimit
 
-from fast_rl.agents.DQN import FixedTargetDQN, DQN
+from fast_rl.agents.DQN import DQN
 from fast_rl.core.Envs import Envs
-from fast_rl.core.Learner import AgentLearnerAlpha
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, MarkovDecisionProcessListAlpha, \
-    MDPDataBunchAlpha, MDPDatasetAlpha, Action, Bounds, State, MDPDataset, MDPDataBunch
-from fast_rl.core.agent_core import ExperienceReplay
+from fast_rl.core.MarkovDecisionProcess import Action, Bounds, State, MDPDataset, MDPDataBunch
+from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 from fast_rl.util.misc import list_in_str
 
@@ -32,12 +28,12 @@ def validate_item_list(item_list: ItemLists):
 
 
 @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-def test_mdp_callback(env):
+def test_mdp_clean_callback(env):
     data = MDPDataBunch.from_env(env, render='rgb_array')
     model = DQN(data)
-    learner = AgentLearnerAlpha(data, model)
-    fit(5, learner, learner.callbacks, learner.metrics)
-
+    learner = AgentLearner(data, model)
+    learner.fit(15)
+    del learner
 
 
 @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
@@ -49,6 +45,7 @@ def test_mdp_databunch(env):
                                           action_space=data.train_ds.action.action_space)
 
     validate_item_list(data.train_ds.x)
+    del data
 
 
 @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
@@ -65,6 +62,7 @@ def test_mdp_dataset_iter(env):
             i - 1].done, f'The dataset has duplicate "done\'s" that are consecutive.'
         assert item.state.s is not None, f'The item: {item}\'s state is None'
         assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
+    del dataset
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
@@ -91,6 +89,7 @@ def test_mdpdataset_init(env):
 
     if env in envs_to_test:
         assert envs_to_test[env] == max_steps, f'Env {env} is the wrong step amount'
+    del data
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
@@ -106,7 +105,7 @@ def test_bound_init(env):
             assert bound.n_possible_values == np.inf, f'Env {env} is continuous, should have inf values.'
         if env.lower().__contains__('deterministic'):
             assert bound.n_possible_values != np.inf, f'Env {env} is deterministic, should have discrete values.'
-
+    init_env.close()
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
 def test_action_init(env):
@@ -129,6 +128,7 @@ def test_action_init(env):
     if list_in_str(env, ['carracing', 'pendulum']):
         assert any([action.taken_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
         assert any([action.raw_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
+    init_env.close()
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
@@ -143,6 +143,7 @@ def test_state_init(env):
     state = init_env.reset()
     state_prime, reward, done, info = init_env.step(taken_action)
     State(state, state_prime, init_env.observation_space)
+    init_env.close()
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))

@@ -1,15 +1,15 @@
 import copy
 from copy import deepcopy
 from functools import partial
+from typing import Tuple
 
 import numpy as np
 import torch
 from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
-from typing import Tuple
 
-from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, ToLong, get_embedded, Flatten
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_IMAGE, MDPDataBunch, MDPDataset, State, \
+from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, ToLong, get_embedded, Flatten
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, MDPDataset, State, \
     Action
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
@@ -128,10 +128,7 @@ class DQN(BaseAgent):
             m.bias.data.fill_(0.01)
 
     def initialize_action_model(self, layers, data: MDPDataset):
-        # if self.data.train_ds.feed_type == FEED_TYPE_IMAGE: model = create_cnn_model(layers, *data.get_action_state_size(), action_val_to_dim=True)
-        # else: model = create_nn_model(layers, *data.get_action_state_size(), use_embed=False, action_val_to_dim=True)
         model = DQNActionNN(layers, data.action, data.state, embed=self.use_embeddings)  # type: nn.Module
-
         model.apply(self.init_weights)
         return model
 
@@ -144,11 +141,11 @@ class DQN(BaseAgent):
         # Perhaps have memory as another itemlist? Should investigate.
         sampled = self.memory.sample(self.batch_size)
         with torch.no_grad():
-            r = torch.cat([item.reward for item in sampled]).float()
-            s_prime = torch.cat([item.s_prime for item in sampled]).float()
-            s = torch.cat([item.s for item in sampled]).float()
-            a = torch.cat([item.a for item in sampled]).long()
-            d = torch.cat([item.done for item in sampled]).float()
+            r = torch.cat([item.reward.float() for item in sampled])
+            s_prime = torch.cat([item.s_prime.float() for item in sampled])
+            s = torch.cat([item.s.float() for item in sampled])
+            a = torch.cat([item.a.long() for item in sampled])
+            d = torch.cat([item.done.float() for item in sampled])
 
         masking = torch.sub(1.0, d)
         return r, s_prime, s, a, d, masking
@@ -205,8 +202,8 @@ class DQN(BaseAgent):
 
 
 class FixedTargetDQN(DQN):
-    def __init__(self, data: MDPDataBunchAlpha, memory=None, tau=0.01, copy_over_frequency=3, **kwargs):
-        """Trains an Agent using the Q Learning method on a 2 neural nets.
+    def __init__(self, data: MDPDataBunch, memory=None, tau=0.01, copy_over_frequency=3, **kwargs):
+        r"""Trains an Agent using the Q Learning method on a 2 neural nets.
 
         Notes:
             Unlike the base DQN, this is a true reflection of ref [1]. We use 2 models instead of one to allow for
@@ -226,13 +223,13 @@ class FixedTargetDQN(DQN):
         self.learner_callbacks += [partial(FixedTargetDQNCallback, copy_over_frequency=copy_over_frequency)]
 
     def target_copy_over(self):
-        """ Updates the target network from calls in the FixedTargetDQNCallback callback."""
+        r""" Updates the target network from calls in the FixedTargetDQNCallback callback."""
         # self.target_net.load_state_dict(self.action_model.state_dict())
         for target_param, local_param in zip(self.target_net.parameters(), self.action_model.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
     def calc_y(self, s_prime, masking, r, y_hat):
-        """
+        r"""
         Uses the equation:
 
         .. math::
@@ -290,8 +287,8 @@ class FixedTargetDQN(DQN):
 
 
 class DoubleDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunchAlpha, memory=None, copy_over_frequency=3, **kwargs):
-        """
+    def __init__(self, data: MDPDataBunch, memory=None, copy_over_frequency=3, **kwargs):
+        r"""
         Double DQN training.
 
         References:
@@ -379,8 +376,8 @@ class DuelingDQNModule(nn.Module):
 
 
 class DuelingDQN(FixedTargetDQN):
-    def __init__(self, data: MDPDataBunchAlpha, memory=None, **kwargs):
-        """Replaces the basic action model with a DuelingDQNModule which splits the basic model into 2 streams.
+    def __init__(self, data: MDPDataBunch, memory=None, **kwargs):
+        r"""Replaces the basic action model with a DuelingDQNModule which splits the basic model into 2 streams.
 
 
         References:
@@ -402,8 +399,8 @@ class DuelingDQN(FixedTargetDQN):
 
 
 class DoubleDuelingDQN(DoubleDQN, DuelingDQN):
-    def __init__(self, data: MDPDataBunchAlpha, memory=None, **kwargs):
-        """
+    def __init__(self, data: MDPDataBunch, memory=None, **kwargs):
+        r"""
         Combines both Dueling DQN and DDQN.
 
         Args:

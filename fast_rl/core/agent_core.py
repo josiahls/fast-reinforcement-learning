@@ -13,8 +13,6 @@ from fastai.basic_train import *
 from fastai.basic_train import BasicLearner, CallbackList, OptMetrics, master_bar, is_listy, first_el, to_np
 from fastai.callback import CallbackHandler
 from fastprogress import progress_bar
-
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha
 from fast_rl.core.data_structures import SumTree
 
 
@@ -127,7 +125,7 @@ class Experience:
 
 class ExperienceReplay(Experience):
     def __init__(self, memory_size, **kwargs):
-        """
+        r"""
         Basic store-er of s space transitions for training agents.
 
         References:
@@ -149,7 +147,7 @@ class ExperienceReplay(Experience):
         return random.sample(self.memory, batch)
 
     def update(self, item, **kwargs):
-        if self.reduce_ram: item.clean(True)
+        if self.reduce_ram: item.clean()
         self.memory.append(copy.deepcopy(item))
 
 
@@ -218,7 +216,7 @@ class PriorityExperienceReplay(Experience):
 
         """
         maximal_priority = self.alpha
-        if self.reduce_ram: item.clean(True)
+        if self.reduce_ram: item.clean()
         self.memory.add(np.abs(maximal_priority) + self.epsilon, item)
 
 
