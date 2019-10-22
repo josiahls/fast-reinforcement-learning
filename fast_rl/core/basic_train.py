@@ -16,7 +16,29 @@ class WrapperLossFunc(object):
         return self.learn.model.loss
 
 
-class AgentLearner(object):
+class AgentLearner(Learner):
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self._loss_func = WrapperLossFunc(self)
+        self.loss_func = None
+        self.callback_fns += self.model.learner_callbacks + [MDPCallback]
+
+    def predict(self, element, **kwargs):
+        return self.model.pick_action(element)
+
+    def init_loss_func(self):
+        r"""
+         Initializes the loss function wrapper for logging loss.
+
+         Since most RL models have a period of warming up such as filling memory buffers, we cannot log any loss.
+         By default, the learner will have a `None` loss function, and so the fit function will not try to log that
+         loss.
+         """
+        self.loss_func = self._loss_func
+
+
+class AgentLearnerAlpha(object):
     silent: bool = None
 
     def __init__(self, data: MDPDataBunchAlpha, model: BaseAgent, metrics=None):

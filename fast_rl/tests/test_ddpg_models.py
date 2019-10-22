@@ -5,7 +5,7 @@ from fastai.basic_train import LearnerCallback
 
 from fast_rl.agents.DDPG import DDPG
 from fast_rl.core.Envs import Envs
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.Learner import AgentLearnerAlpha
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 
@@ -32,5 +32,5 @@ def test_all_ddpg(env):
     model = DDPG(data=data, batch=8, memory=ExperienceReplay(200, reduce_ram=True),
                  exploration_strategy=OrnsteinUhlenbeck(epsilon_start=1, epsilon_end=0.1, decay=0.0001, size=1,
                                                         do_exploration=True, end_episode=450))
-    learn = AgentLearner(data, model)
+    learn = AgentLearnerAlpha(data, model)
     learn.fit(5)

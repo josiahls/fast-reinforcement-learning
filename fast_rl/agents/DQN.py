@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
+from typing import Tuple
 
 from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, ToLong, get_embedded, Flatten
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_IMAGE, MDPDataBunch, MDPDataset, State, \
@@ -46,8 +47,6 @@ class BaseDQNCallback(LearnerCallback):
         self.iteration += 1
 
 
-
-
 class FixedTargetDQNCallback(LearnerCallback):
     def __init__(self, learn, copy_over_frequency=3):
         """Handles updating the target model in a fixed target DQN.
@@ -80,7 +79,7 @@ class DQNActionNN(nn.Module):
                 else:
                     module_layers.append(nn.Linear(state.s.shape[1], size))
             else:
-                module_layers.append(nn.Linear(layers[i-1], size))
+                module_layers.append(nn.Linear(layers[i - 1], size))
             module_layers.append(activation())
 
         module_layers.append(nn.Linear(layers[-1], action.n_possible_values))
@@ -140,6 +139,25 @@ class DQN(BaseAgent):
         x = super(DQN, self).forward(x)
         return self.action_model(x)
 
+    def sample_mask(self) -> Tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor]:
+        self.warming_up = False
+        # Perhaps have memory as another itemlist? Should investigate.
+        sampled = self.memory.sample(self.batch_size)
+        with torch.no_grad():
+            r = torch.cat([item.reward for item in sampled]).float()
+            s_prime = torch.cat([item.s_prime for item in sampled]).float()
+            s = torch.cat([item.s for item in sampled]).float()
+            a = torch.cat([item.a for item in sampled]).long()
+            d = torch.cat([item.done for item in sampled]).float()
+
+        masking = torch.sub(1.0, d)
+        return r, s_prime, s, a, d, masking
+
+    def calc_y_hat(self, s, a): return self.action_model(s).gather(1, a)
+
+    def calc_y(self, s_prime, masking, r, y_hat):
+        return self.discount * self.action_model(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
+
     def optimize(self):
         r"""Uses ER to optimize the Q-net (without fixed targets).
         
@@ -154,21 +172,12 @@ class DQN(BaseAgent):
 
         """
         if len(self.memory) > self.batch_size:
-            self.warming_up = False
-            # Perhaps have memory as another itemlist? Should investigate.
-            sampled = self.memory.sample(self.batch_size)
-            with torch.no_grad():
-                r = torch.cat([item.reward for item in sampled]).float()
-                s_prime = torch.cat([item.s_prime for item in sampled]).float()
-                s = torch.cat([item.s for item in sampled]).float()
-                a = torch.cat([item.a for item in sampled]).long()
-                d = torch.cat([item.done for item in sampled]).float()
+            r, s_prime, s, a, d, masking = self.sample_mask()
 
-            masking = torch.sub(1.0, d)
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
-            y_hat = self.action_model(s).gather(1, a)
-            y = self.discount * self.action_model(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
+            y_hat = self.calc_y_hat(s, a)
+            y = self.calc_y(s_prime, masking, r, y_hat)
 
             loss = self.loss_func(y, y_hat)
 
@@ -222,7 +231,18 @@ class FixedTargetDQN(DQN):
         for target_param, local_param in zip(self.target_net.parameters(), self.action_model.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
-    def optimize(self):
+    def calc_y(self, s_prime, masking, r, y_hat):
+        """
+        Uses the equation:
+
+        .. math::
+                Q^{*}(s, a) = \mathbb{E}_{s'∼ \Big\epsilon} \Big[r + \lambda \displaystyle\max_{a'}(Q^{*}(s' , a'))
+                \;|\; s, a \Big]
+
+        """
+        return self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
+
+    def optimize_dep(self):
         r"""Uses ER to optimize the Q-net.
 
         Uses the equation:
@@ -284,7 +304,11 @@ class DoubleDQN(FixedTargetDQN):
         super().__init__(data=data, memory=memory, copy_over_frequency=copy_over_frequency, **kwargs)
         self.name = 'DDQN'
 
-    def optimize(self):
+    def calc_y(self, s_prime, masking, r, y_hat):
+        return self.discount * self.target_net(s_prime).gather(1, self.action_model(s_prime).argmax(axis=1).unsqueeze(
+            1)) * masking + r.expand_as(y_hat)
+
+    def optimize_dep(self):
         r"""Uses ER to optimize the Q-net.
 
         Uses the equation:

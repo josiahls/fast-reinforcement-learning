@@ -190,6 +190,7 @@ class State(object):
             dtype = int if self.bounds.discrete else float
             input_field = torch.tensor(data=np.array(input_field).reshape(1, -1).astype(dtype))
         elif np.isscalar(input_field): input_field = torch.tensor(data=input_field)
+        elif type(input_field) is torch.tensor: input_field = input_field.clone()
         else: input_field = torch.tensor(data=input_field)
 
         if len(input_field.shape) <= 1:

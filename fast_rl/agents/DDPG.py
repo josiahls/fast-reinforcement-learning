@@ -10,7 +10,7 @@ from torch.optim import Adam
 
 from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, get_next_conv_shape, get_conv, \
     Flatten
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.Learner import AgentLearnerAlpha
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay
 

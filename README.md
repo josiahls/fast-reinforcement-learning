@@ -73,12 +73,12 @@ working at their best. Post 1.0.0 will be more formal feature development with C
 Testable code:
 ```python
 from fast_rl.agents.DQN import DQN
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.Learner import AgentLearnerAlpha
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
 data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
-learn = AgentLearner(data, model)
+learn = AgentLearnerAlpha(data, model)
 learn.fit(450)
 ``` 
 Result:
@@ -99,12 +99,12 @@ Usage example:
 ```python
 from fast_rl.agents.DQN import DQN
 from fast_rl.core.Interpreter import AgentInterpretationAlpha
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.Learner import AgentLearnerAlpha
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
 data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
-learn = AgentLearner(data, model)
+learn = AgentLearnerAlpha(data, model)
 learn.fit(10)
 interp = AgentInterpretationAlpha(learn)
 interp.plot_heatmapped_episode(5)
@@ -183,14 +183,14 @@ the existing the Fastai
 
 ```python
 from fast_rl.agents.DQN import DuelingDQN
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.Learner import AgentLearnerAlpha
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
 
 
 data = MDPDataBunchAlpha.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
 model = DuelingDQN(data)
 # model = DQN(data)
-learn = AgentLearner(data, model)
+learn = AgentLearnerAlpha(data, model)
 
 learn.fit(5)
 ```

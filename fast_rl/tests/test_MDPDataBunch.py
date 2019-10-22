@@ -12,7 +12,7 @@ from gym.wrappers import TimeLimit
 
 from fast_rl.agents.DQN import FixedTargetDQN, DQN
 from fast_rl.core.Envs import Envs
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.Learner import AgentLearnerAlpha
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, MarkovDecisionProcessListAlpha, \
     MDPDataBunchAlpha, MDPDatasetAlpha, Action, Bounds, State, MDPDataset, MDPDataBunch
 from fast_rl.core.agent_core import ExperienceReplay
@@ -35,7 +35,7 @@ def validate_item_list(item_list: ItemLists):
 def test_mdp_callback(env):
     data = MDPDataBunch.from_env(env, render='rgb_array')
     model = DQN(data)
-    learner = AgentLearner(data, model)
+    learner = AgentLearnerAlpha(data, model)
     fit(5, learner, learner.callbacks, learner.metrics)
 
 
