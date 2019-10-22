@@ -11,7 +11,7 @@ from traitlets import List
 import numpy as np
 from typing import Collection
 
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, MDPDataBunch
 from fast_rl.core.agent_core import ExplorationStrategy
 
 
@@ -21,7 +21,7 @@ class BaseAgent(nn.Module):
     own learner_callbacks. This is due to the often strange and beautiful methods created for training RL agents.
 
     """
-    def __init__(self, data: MDPDataBunchAlpha):
+    def __init__(self, data: MDPDataBunch):
         super().__init__()
         self.data = data
         self.name = ''
@@ -29,6 +29,7 @@ class BaseAgent(nn.Module):
         self.loss = None
         self.out = None
         self.opt = None
+        self.warming_up = False
         self.learner_callbacks = []  # type: Collection[LearnerCallback]
         # Root model that will be accessed for action decisions
         self.action_model = None  # type: nn.Module

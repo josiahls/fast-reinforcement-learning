@@ -1,3 +1,4 @@
+import pytest
 from fastai.basic_train import LearnerCallback, DatasetType
 from fastai.callback import Callback
 from fastai.tabular import tabular_learner
@@ -12,7 +13,7 @@ from fast_rl.agents.DDPG import DDPG
 from fast_rl.agents.DQN import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
 from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_STATE
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_STATE, MDPDataBunch
 from fast_rl.core.agent_core import PriorityExperienceReplay, ExperienceReplay
 
 
@@ -21,6 +22,14 @@ def test_priority_experience_replay():
     model = FixedTargetDQN(data, memory=PriorityExperienceReplay(1000))
     learn = AgentLearner(data, model)
     learn.fit(5)
+
+
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_databunch_dqn_fit(env):
+    data = MDPDataBunch.from_env(env)
+    model = DQN(data)
+    learner = AgentLearner()
+
 
 
 # def test_fit_function_ddpg():

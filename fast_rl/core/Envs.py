@@ -22,6 +22,7 @@ class Envs:
         banned_envs = {
             'Defender': 'Defender (%s) seems to load for an extremely long time. Skipping for now. Determine cause.',
             'Fetch': 'Fetch (%s) envs are not ready yet.',
+            'Blackjack-v0': 'Blackjack (%s) does not have a render function... Skipping',
             'InvertedPendulumMuJoCoEnv': 'Mujoco Inverted Pendulum (%s) has a bug.',
             # 'HopperMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
             # 'InvertedDoublePendulumMuJoCoEnv': '(%s) Does not pass azure pipeline tests',

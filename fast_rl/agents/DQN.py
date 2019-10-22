@@ -8,7 +8,8 @@ from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
 
 from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, ToLong, get_embedded, Flatten
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_IMAGE
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, FEED_TYPE_IMAGE, MDPDataBunch, MDPDataset, State, \
+    Action
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
 
@@ -67,22 +68,22 @@ class FixedTargetDQNCallback(LearnerCallback):
 
 
 class DQNActionNN(nn.Module):
-    def __init__(self, layers, action, state, activation=nn.ReLU, embed=False):
+    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU, embed=False):
         super().__init__()
 
         module_layers = []
         for i, size in enumerate(layers):
             if i == 0:
                 if embed:
-                    embedded, out = get_embedded(state[0], size, state[1], 5)
+                    embedded, out = get_embedded(state.s.shape[1], size, state.n_possible_values, 5)
                     module_layers += [ToLong(), embedded, Flatten(), nn.Linear(out, size)]
                 else:
-                    module_layers.append(nn.Linear(state[0], size))
+                    module_layers.append(nn.Linear(state.s.shape[1], size))
             else:
                 module_layers.append(nn.Linear(layers[i-1], size))
             module_layers.append(activation())
 
-        module_layers.append(nn.Linear(layers[-1], action[1]))
+        module_layers.append(nn.Linear(layers[-1], action.n_possible_values))
         self.model = nn.Sequential(*module_layers)
 
     def forward(self, x, **kwargs: Any):
@@ -90,7 +91,7 @@ class DQNActionNN(nn.Module):
 
 
 class DQN(BaseAgent):
-    def __init__(self, data: MDPDataBunchAlpha, memory=None, batch_size=32, lr=0.01, discount=0.95, grad_clip=5,
+    def __init__(self, data: MDPDataBunch, memory=None, lr=0.01, discount=0.95, grad_clip=5,
                  max_episodes=None, exploration_strategy=None, use_embeddings=False):
         """Trains an Agent using the Q Learning method on a neural net.
 
@@ -108,13 +109,14 @@ class DQN(BaseAgent):
         # TODO add recommend cnn based on s size?
         self.name = 'DQN'
         self.use_embeddings = use_embeddings
-        self.batch_size = batch_size
+        self.batch_size = data.train_ds.bs
         self.discount = discount
+        self.warming_up = True
         self.lr = lr
         self.gradient_clipping_norm = grad_clip
-        self.loss_func = F.mse_loss #F.smooth_l1_loss
+        self.loss_func = F.mse_loss
         self.memory = ifnone(memory, ExperienceReplay(10000))
-        self.action_model = self.initialize_action_model([24, 24], data)
+        self.action_model = self.initialize_action_model([24, 24], data.train_ds)
         self.opt = OptimWrapper.create(optim.Adam, lr=self.lr, layer_groups=[self.action_model])
         self.learner_callbacks += [partial(BaseDQNCallback, max_episodes=max_episodes)] + self.memory.callbacks
         self.exploration_strategy = ifnone(exploration_strategy, GreedyEpsilon(epsilon_start=1, epsilon_end=0.1,
@@ -126,10 +128,10 @@ class DQN(BaseAgent):
             torch.nn.init.xavier_uniform_(m.weight)
             m.bias.data.fill_(0.01)
 
-    def initialize_action_model(self, layers, data):
+    def initialize_action_model(self, layers, data: MDPDataset):
         # if self.data.train_ds.feed_type == FEED_TYPE_IMAGE: model = create_cnn_model(layers, *data.get_action_state_size(), action_val_to_dim=True)
         # else: model = create_nn_model(layers, *data.get_action_state_size(), use_embed=False, action_val_to_dim=True)
-        model = DQNActionNN(layers, *data.get_action_state_size(), embed=self.use_embeddings)  # type: nn.Module
+        model = DQNActionNN(layers, data.action, data.state, embed=self.use_embeddings)  # type: nn.Module
 
         model.apply(self.init_weights)
         return model
@@ -152,16 +154,17 @@ class DQN(BaseAgent):
 
         """
         if len(self.memory) > self.batch_size:
+            self.warming_up = False
             # Perhaps have memory as another itemlist? Should investigate.
             sampled = self.memory.sample(self.batch_size)
             with torch.no_grad():
-                r = torch.from_numpy(np.array([item.reward for item in sampled])).float()
-                s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
-                s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
-                a = torch.from_numpy(np.array([item.actions for item in sampled])).long()
-                d = torch.from_numpy(np.array([item.done for item in sampled])).float()
+                r = torch.cat([item.reward for item in sampled]).float()
+                s_prime = torch.cat([item.s_prime for item in sampled]).float()
+                s = torch.cat([item.s for item in sampled]).float()
+                a = torch.cat([item.a for item in sampled]).long()
+                d = torch.cat([item.done for item in sampled]).float()
 
-            masking = torch.sub(1.0, d).unsqueeze(0)
+            masking = torch.sub(1.0, d)
             # Traditional `maze-random-5x5-v0` with have a model output a Nx4 output.
             # since r is just Nx1, we spread the reward into the actions.
             y_hat = self.action_model(s).gather(1, a)
@@ -232,6 +235,7 @@ class FixedTargetDQN(DQN):
         Returns (dict): Optimization information
         """
         if len(self.memory) > self.batch_size:
+            self.warming_up = False
             # Perhaps have memory as another item list? Should investigate.
             sampled = self.memory.sample(self.batch_size)
 
@@ -292,6 +296,7 @@ class DoubleDQN(FixedTargetDQN):
         Returns (dict): Optimization information
         """
         if len(self.memory) > self.batch_size:
+            self.warming_up = False
             # Perhaps have memory as another itemlist? Should investigate.
             sampled = self.memory.sample(self.batch_size)
             with torch.no_grad():

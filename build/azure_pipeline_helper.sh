@@ -3,7 +3,7 @@
 # Install pybullet
 git clone https://github.com/benelot/pybullet-gym.git
 cd pybullet-gym
-pip install -e .
+pip install -ep .
 cd ../
 
 # Install gym_maze

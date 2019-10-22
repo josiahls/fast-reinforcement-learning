@@ -1,21 +1,54 @@
 import gym
 import pytest
+import torch
 from fastai.basic_data import DataBunch
-from fastai.basic_train import Learner, ItemLists
+from fastai.basic_train import Learner, ItemLists, fit
 from fastai.vision import ImageDataBunch
 import numpy as np
 from gym import error
+from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
+from gym.envs.toy_text import discrete
+from gym.wrappers import TimeLimit
 
-from fast_rl.agents.DQN import FixedTargetDQN
+from fast_rl.agents.DQN import FixedTargetDQN, DQN
 from fast_rl.core.Envs import Envs
 from fast_rl.core.Learner import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, MarkovDecisionProcessListAlpha, \
-    MDPDataBunchAlpha, MDPDatasetAlpha, Action, Bounds, State, MDPDataset
+    MDPDataBunchAlpha, MDPDatasetAlpha, Action, Bounds, State, MDPDataset, MDPDataBunch
 from fast_rl.core.agent_core import ExperienceReplay
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 from fast_rl.util.misc import list_in_str
 
 ENV_NAMES = Envs.get_all_latest_envs()
+
+
+def validate_item_list(item_list: ItemLists):
+    # Check items
+    for i, item in enumerate(item_list.items):
+        if item.done: assert not item_list.items[
+            i - 1].done, f'The dataset has duplicate "done\'s" that are consecutive.'
+        assert item.state.s is not None, f'The item: {item}\'s state is None'
+        assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
+
+
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_mdp_callback(env):
+    data = MDPDataBunch.from_env(env, render='rgb_array')
+    model = DQN(data)
+    learner = AgentLearner(data, model)
+    fit(5, learner, learner.callbacks, learner.metrics)
+
+
+
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_mdp_databunch(env):
+    data = MDPDataBunch.from_env(env, add_valid=False, render='rgb_array')
+    for i in range(5):
+        for _ in data.train_ds:
+            data.train_ds.action = Action(taken_action=data.train_ds.action.action_space.sample(),
+                                          action_space=data.train_ds.action.action_space)
+
+    validate_item_list(data.train_ds.x)
 
 
 @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
@@ -26,7 +59,12 @@ def test_mdp_dataset_iter(env):
         for el in dataset:
             dataset.action.set_single_action(dataset.env.action_space.sample())
 
-    print('hello')
+    # Check items
+    for i, item in enumerate(dataset.x.items):
+        if item.done: assert not dataset.x.items[
+            i - 1].done, f'The dataset has duplicate "done\'s" that are consecutive.'
+        assert item.state.s is not None, f'The item: {item}\'s state is None'
+        assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
@@ -83,14 +121,14 @@ def test_action_init(env):
     init_env.reset()
     _ = init_env.step(taken_action)
 
-    action = Action(taken_action, raw_action, init_env.action_space)
+    action = Action(taken_action=taken_action, raw_action=raw_action, action_space=init_env.action_space)
 
     if list_in_str(env, ['mountaincar-', 'cartpole', 'pong']):
-        assert any([action.taken_action.dtype in (int, np.int, np.int64)]), f'Action is wrong dtype {action}'
-        assert any([action.raw_action.dtype in (float, np.float)]), f'Action is wrong dtype {action}'
+        assert any([action.taken_action.dtype in (int, torch.int, torch.int64)]), f'Action is wrong dtype {action}'
+        assert any([action.raw_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
     if list_in_str(env, ['carracing', 'pendulum']):
-        assert any([action.taken_action.dtype in (float, np.float, np.float32)]), f'Action is wrong dtype {action}'
-        assert any([action.raw_action.dtype in (float, np.float, np.float32)]), f'Action is wrong dtype {action}'
+        assert any([action.taken_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
+        assert any([action.raw_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
 
 
 @pytest.mark.parametrize("env", sorted(ENV_NAMES))
@@ -105,6 +143,32 @@ def test_state_init(env):
     state = init_env.reset()
     state_prime, reward, done, info = init_env.step(taken_action)
     State(state, state_prime, init_env.observation_space)
+
+
+@pytest.mark.parametrize("env", sorted(ENV_NAMES))
+def test_state_str(env):
+    try:
+        init_env = gym.make(env)
+    except error.DependencyNotInstalled as e:
+        print(e)
+        return
+
+    render = 'rgb_array'
+    if isinstance(init_env, TimeLimit) and isinstance(init_env.unwrapped, (AlgorithmicEnv, discrete.DiscreteEnv)):
+        render = 'ansi' if render == 'rgb_array' else render
+
+    taken_action = init_env.action_space.sample()
+    state = init_env.reset()
+
+    try:
+        alt_s = init_env.render(render)
+    except NotImplementedError:
+        return
+
+    state_prime, reward, done, info = init_env.step(taken_action)
+    alt_s_prime = init_env.render(render)
+    State(state, state_prime, alt_s, alt_s_prime, init_env.observation_space).__str__()
+    init_env.close()
 
 
 @pytest.mark.parametrize("env", sorted(['CartPole-v0', 'maze-random-5x5-v0']))
@@ -126,6 +190,4 @@ def test_state_full_episode(env):
         state = state_prime
         if done:
             assert state_prime is not None, 'State prime is None, this should not have happened.'
-
-
-
+    init_env.close()
