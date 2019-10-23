@@ -1,19 +1,16 @@
 from copy import deepcopy
 
-import torch
-from fastai.basic_train import LearnerCallback, Any, OptimWrapper, ifnone, F
 import numpy as np
-from fastai.metrics import RMSE
+import torch
+from fastai.basic_train import LearnerCallback, Any, OptimWrapper, ifnone
 from torch import nn
 from torch.nn import MSELoss
 from torch.optim import Adam
 
-from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, get_next_conv_shape, get_conv, \
+from fast_rl.agents.BaseAgent import BaseAgent, get_conv, \
     Flatten
-from fast_rl.agents.DQN import get_action_dqn_cnn
-from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, Action, State
-from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay, OrnsteinUhlenbeck
+from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 
 
 def get_action_ddpg_cnn(layers, action: Action, state: State, activation=nn.ReLU, kernel_size=5, stride=2):

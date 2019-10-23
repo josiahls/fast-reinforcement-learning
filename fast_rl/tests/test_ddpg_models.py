@@ -12,8 +12,8 @@ from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 from fast_rl.core.basic_train import AgentLearner
 
 params_dqn = [DDPG]
-params_envs = ['Pendulum-v0', 'CarRacing-v0']
-params_state_format = [FEED_TYPE_STATE, FEED_TYPE_IMAGE]
+params_envs = ['Pendulum-v0']#, 'CarRacing-v0']
+params_state_format = [FEED_TYPE_IMAGE]
 
 
 @pytest.mark.parametrize(["env", "model", "s_format"], list(product(params_envs, params_dqn, params_state_format)))
