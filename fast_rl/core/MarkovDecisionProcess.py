@@ -126,11 +126,11 @@ class Action(object):
     def get_single_action(self):
         """ OpenAI envs do not like 1x1 arrays when they are expecting scalars, so we need to unwrap them. """
         a = self.taken_action.detach().numpy()[0]
-        if len(self.bounds) != 1: a = a[0]
+        if len(self.bounds) == 1: a = a[0]
         if self.bounds.discrete and len(self.bounds) == 1: return int(a)
         elif self.bounds.discrete and len(self.bounds) != 1: return a.astype(int)
-        elif not self.bounds.discrete and len(self.bounds) == 1: return float(a)
-        elif not self.bounds.discrete and len(self.bounds) != 1: return a.astype(float)
+        elif not self.bounds.discrete and len(self.bounds) == 1: return [float(a)]
+        elif not self.bounds.discrete and len(self.bounds) != 1: return a.reshape(-1,).astype(float)
         raise ValueError(f'This should not have crashed.')
 
     def set_single_action(self, action: np.array):
@@ -169,8 +169,8 @@ class State(object):
     alt_s: Union[torch.tensor, np.array]
     alt_s_prime: Union[torch.tensor, np.array]
     observation_space: gym.Space
-    bounds: Bounds = None
     mode: int = FEED_TYPE_STATE
+    bounds: Bounds = None
     n_possible_values: int = 0
 
     def __str__(self):
@@ -189,31 +189,28 @@ class State(object):
             dtype = int if self.bounds.discrete else float
             input_field = torch.tensor(data=np.array(input_field).reshape(1, -1).astype(dtype))
         elif np.isscalar(input_field): input_field = torch.tensor(data=input_field)
-        elif type(input_field) is torch.tensor: input_field = input_field.clone()
-        else: input_field = torch.tensor(data=input_field)
+        elif type(input_field) is torch.Tensor: input_field = input_field.clone().detach()
+        else: input_field = torch.from_numpy(input_field)
 
-        if len(input_field.shape) <= 1:
-            return input_field.reshape(1, -1)
-        elif input_field.shape[0] != 1 and self.mode == FEED_TYPE_STATE:
-            return input_field.reshape(1, -1)
-        elif input_field.shape[0] != 1 and len(input_field.shape) == 3 and self.mode == FEED_TYPE_IMAGE:
-            return input_field.unsqueeze(0)
-        elif input_field.shape[0] == 1 and len(input_field.shape) == 4 and self.mode == FEED_TYPE_IMAGE:
-            return input_field
-        elif input_field.shape[0] == 1 and len(input_field.shape) != 3 and self.mode != FEED_TYPE_IMAGE:
-            return input_field
+        # If a non-image state missing the batch dim
+        if len(input_field.shape) <= 1: return input_field.reshape(1, -1)
+        # If a non-image 2+d state missing the batch dim
+        elif input_field.shape[0] != 1 and len(input_field.shape) != 3: return input_field.reshape(1, -1)
+        # If an image state and missing the batch dim
+        elif input_field.shape[0] != 1 and len(input_field.shape) == 3: return input_field.unsqueeze(0)
+        # If an image with 4 dims (b, w, h, c), return safely
+        elif input_field.shape[0] == 1 and len(input_field.shape) == 4: return input_field
+        # If not an image, but has 2 dims (b, d), return safely
+        elif input_field.shape[0] == 1 and len(input_field.shape) == 2: return input_field
         raise ValueError(f'Input has shape {input_field} for mode {self.mode}. This is unexpected.')
 
     def __post_init__(self):
         if self.mode not in [FEED_TYPE_IMAGE, FEED_TYPE_STATE]:
             ValueError(f'Mode invalid {self.mode} not valid feed type')
-
-        if self.mode == FEED_TYPE_IMAGE:
+        # We want to swap the state variables if the alt is the image state
+        if self.mode == FEED_TYPE_IMAGE and len(self.alt_s.shape) > 2 and len(self.s.shape) != 3:
             self.observation_space = gym.spaces.Box(0, 255, self.alt_s.shape, dtype=np.int64)
-        # The the FEED_TYPE is an image, then we want to swap the mains and alts.
-        if self.mode == FEED_TYPE_IMAGE and len(self.alt_s.shape) == 3:
-            self.s, self.s_prime, self.alt_s, self.alt_s_prime = self.alt_s, self.alt_s_prime, self.s, self.s_prime
-
+            self.alt_s, self.alt_s_prime, self.s, self.s_prime = self.s, self.s_prime, self.alt_s, self.alt_s_prime
         # Determine bounds
         self.bounds = Bounds(self.observation_space)
         self.n_possible_values = self.bounds.n_possible_values
@@ -378,6 +375,7 @@ class MDPDataset(Dataset):
         self._max_steps = max_steps
         self.action = Action(taken_action=self.env.action_space.sample(), action_space=self.env.action_space)
         self.state = None
+        self.s_prime, self.alt_s_prime = None, None
         self.callback = [MDPCallback, memory_manager]
         # Tracking fields
         self.episode = -1
@@ -433,7 +431,7 @@ class MDPDataset(Dataset):
             self.counter = 0
             if not self.is_warming_up: raise StopIteration
         if self.item is None or self.item.d: return self.env.reset(), self.image
-        return self.state.s_prime, self.state.alt_s_prime
+        return self.s_prime, self.alt_s_prime
 
     def stage_2_env_step(self) -> Tuple[np.array, float, bool, None, np.array]:
         r"""
@@ -451,11 +449,11 @@ class MDPDataset(Dataset):
 
     def new(self, _):
         s, alt_s = self.stage_1_env_reset()
-        s_prime, reward, done, _, alt_s_prime = self.stage_2_env_step()
+        self.s_prime, reward, done, _, self.alt_s_prime = self.stage_2_env_step()
         # If both the current item and the done are both true, then we need to retry the env
         if self.item is not None and self.item.d and done: return self.new()
 
-        self.state = State(s, s_prime, alt_s, alt_s_prime, self.feed_type, self.env.observation_space)
+        self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
         self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
         self.counter += 1
 
@@ -491,15 +489,15 @@ class MDPDataBunch(DataBunch):
 
         env = gym.make(env_name)
         memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy)
-        train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, memory_manager=memory_manager)
+        train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
+                                memory_manager=memory_manager)
         if add_valid:
             valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps,
-                                    render=render, bs=bs, memory_manager=memory_manager)
+                                    render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
         path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
-        return cls.create(train_list, valid_list, num_workers=num_workers, bs=1,
-                          feed_type=feed_type, device=device, **dl_kwargs)
+        return cls.create(train_list, valid_list, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod
     def from_pickle(cls, env_name='CartPole-v1', bs: int = 1, feed_type=FEED_TYPE_STATE, render='rgb_array',
@@ -527,16 +525,13 @@ class MDPDataBunch(DataBunch):
                           val_bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1, feed_type=FEED_TYPE_STATE,
+    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1,
                num_workers: int = defaults.cpus, device: torch.device = None, **dl_kwargs) -> 'DataBunch':
         """Create a `DataBunch` from `train_ds`, `valid_ds` and maybe `test_ds` with a batch size of `bs`.
         Passes `**dl_kwargs` to `DataLoader()`
 
         Since this is a MarkovProcess, the batches need to be `bs=1` (for now...)
         """
-        train_ds.feed_type = feed_type
-        if valid_ds is not None: valid_ds.feed_type = feed_type
-
         datasets = cls._init_ds(train_ds, valid_ds, None)
         dls = [DataLoader(d, b, shuffle=s, drop_last=s, num_workers=num_workers, **dl_kwargs) for d, b, s in
                zip(datasets, (bs, bs, bs, bs), (False, False, False, False)) if d is not None]

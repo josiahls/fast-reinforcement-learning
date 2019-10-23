@@ -5,17 +5,12 @@ interp = AgentInterpretationAlpha(learn)
 interp.plot_heatmapped_episode(-1)
 
 """
-from fastai.basic_data import DatasetType
-from fast_rl.agents.DDPG import DDPG
-from fast_rl.agents.DQN import FixedTargetDQN, DQN
-from fast_rl.core.Learner import AgentLearnerAlpha, AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunchAlpha, MDPDataBunch
+from fast_rl.core.basic_train import AgentLearner
+from fast_rl.agents.DQN import FixedTargetDQN
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.agent_core import ExperienceReplay
 
-from fast_rl.core.agent_core import GreedyEpsilon, OrnsteinUhlenbeck, ExperienceReplay
-from fast_rl.core.metrics import EpsilonMetric
-
-data = MDPDataBunch.from_env('CartPole-v0')
-model = FixedTargetDQN(data)
-learner = AgentLearner(data=data, model=model)
-
-learner.fit(450)
+data = MDPDataBunch.from_env('Pong-v0', render='human', max_steps=100, add_valid=False)
+model = FixedTargetDQN(data, memory=ExperienceReplay(memory_size=100000, reduce_ram=True))
+learn = AgentLearner(data, model)
+learn.fit(450)

@@ -4,15 +4,12 @@ import random
 from collections import deque
 from functools import partial
 from math import ceil
-from typing import List, Optional
+from typing import List
 
 import gym
 import numpy as np
 import torch
 from fastai.basic_train import *
-from fastai.basic_train import BasicLearner, CallbackList, OptMetrics, master_bar, is_listy, first_el, to_np
-from fastai.callback import CallbackHandler
-from fastprogress import progress_bar
 from fast_rl.core.data_structures import SumTree
 
 
@@ -232,91 +229,3 @@ class HindsightExperienceReplay(Experience):
             memory_size:
         """
         super().__init__(memory_size)
-
-
-def loss_batch(model, cb_handler: Optional[CallbackHandler]):
-    """ TODO will be different. Is there anything extra needed from here? """
-    if model.out is not None: cb_handler.on_loss_begin(model.out)
-    if model.loss is None: return None
-    cb_handler.on_backward_begin(model.loss)
-    cb_handler.on_backward_end()
-    cb_handler.on_step_end()
-    return model.loss.detach().cpu()
-
-
-def validate(learn, dl, cb_handler: Optional[CallbackHandler] = None,
-             pbar=None, average=True, n_batch: Optional[int] = None):
-    learn.model.eval()
-    with torch.no_grad():
-        val_losses, nums = [], []
-        if cb_handler: cb_handler.set_dl(dl)
-        # TODO 1st change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
-        for element in progress_bar(dl, parent=pbar):
-            learn.data.valid_ds.actions = learn.predict(element)
-            if cb_handler: element = cb_handler.on_batch_begin(element, learn.data.valid_ds.actions, train=False)
-            val_loss = loss_batch(learn.model, cb_handler=cb_handler)
-            if val_loss is None: continue
-            val_losses.append(val_loss)
-            r = dl.actions if is_listy(dl.actions) else np.array([dl.actions])
-            nums.append(first_el(r).shape[0])
-            if cb_handler and cb_handler.on_batch_end(val_losses[-1]): break
-            if n_batch and (len(nums) >= n_batch): break
-        nums = np.array(nums, dtype=np.float32)
-        if average and val_losses: return (to_np(torch.stack(val_losses)) * nums).sum() / nums.sum()
-        else: return val_losses
-
-
-def fit(epochs: int, learn: BasicLearner, callbacks: Optional[CallbackList] = None, metrics: OptMetrics = None):
-    """
-    Takes a RL Learner and trains it on a given environment.
-
-    Important behavior notes:
-
-    - The original Fastai fit function outputs the loss for every epoch. Since many RL models need to fill a memory buffer before optimization, the fit function for epoch 0 will run multiple episodes until the memory is filled.
-    - **So when you see the agent running through episodes without output, please note that it is most likely filling the memory first before properly printing.**
-
-    Args:
-        epochs:
-        learn:
-        callbacks:
-        metrics:
-
-    Returns:
-
-    """
-    assert len(learn.data.train_dl) != 0, f"""Your training dataloader is empty, can't train a model. Use a smaller 
-        batch size (batch size={learn.data.train_dl.batch_size} for {len(learn.data.train_dl.dataset)} elements)."""
-    # Since CallbackHandler is a dataclass, these input fields will be automatically populated via
-    # a default __init__
-    cb_handler = CallbackHandler(callbacks, metrics)
-    cb_handler.state_dict['skip_validate'] = learn.data.empty_val
-    pbar = master_bar(range(epochs))
-    cb_handler.on_train_begin(epochs, pbar=pbar, metrics=metrics)
-    # Note that metrics in the on_train begin method need a name field.
-    exception = False
-    loss = None
-    try:
-        for epoch in pbar:
-            learn.model.train()
-            cb_handler.set_dl(learn.data.train_dl)
-            cb_handler.on_epoch_begin()
-            # TODO 1st change: While the loss is None, the model's memory has not filled  and / or is not ready.
-            while loss is None:
-                # TODO 2nd change: in fit function, original uses xb, yb. Maybe figure out what 2nd value to include?
-                for element in progress_bar(learn.data.train_dl, parent=pbar):
-                    # TODO 3rd change: get the action for the given s. Move to on batch begin callback?
-                    learn.data.train_ds.actions = learn.predict(element)
-                    cb_handler.on_batch_begin(element, learn.data.train_ds.actions)
-                    # TODO 4th change: loss_batch is way simpler... What is a batch to be defined as?
-                    loss = loss_batch(learn.model, cb_handler)
-                    if cb_handler.on_batch_end(loss): break
-
-            loss = None
-            if not cb_handler.skip_validate and not learn.data.empty_val:
-                val_loss = validate(learn, learn.data.valid_dl, cb_handler=cb_handler, pbar=pbar)
-            else: val_loss = None
-            if cb_handler.on_epoch_end(val_loss): break
-    except Exception as e:
-        exception = e
-        raise
-    finally: cb_handler.on_train_end(exception)
