@@ -12,8 +12,8 @@ from fast_rl.core.basic_train import AgentLearner
 
 
 params_dqn = [DuelingDQN, DoubleDQN, DQN, FixedTargetDQN, DoubleDuelingDQN]
-params_envs = ['CartPole-v0']#, 'maze-random-5x5-v0']
-params_state_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
+params_envs = ['CartPole-v0', 'maze-random-5x5-v0']
+params_state_format = [FEED_TYPE_STATE, FEED_TYPE_IMAGE]
 
 
 @pytest.mark.parametrize(["env", "model", "s_format"], list(product(params_envs, params_dqn, params_state_format)))
