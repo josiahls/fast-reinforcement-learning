@@ -65,7 +65,7 @@ def test_mdp_dataset_iter(env):
     del dataset
 
 
-@pytest.mark.parametrize("env", sorted(ENV_NAMES))
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
 def test_mdpdataset_init(env):
     try:
         init_env = gym.make(env)
@@ -92,7 +92,7 @@ def test_mdpdataset_init(env):
     del data
 
 
-@pytest.mark.parametrize("env", sorted(ENV_NAMES))
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
 def test_bound_init(env):
     try:
         init_env = gym.make(env)
@@ -107,7 +107,7 @@ def test_bound_init(env):
             assert bound.n_possible_values != np.inf, f'Env {env} is deterministic, should have discrete values.'
     init_env.close()
 
-@pytest.mark.parametrize("env", sorted(ENV_NAMES))
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
 def test_action_init(env):
     try:
         init_env = gym.make(env)
@@ -131,7 +131,7 @@ def test_action_init(env):
     init_env.close()
 
 
-@pytest.mark.parametrize("env", sorted(ENV_NAMES))
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
 def test_state_init(env):
     try:
         init_env = gym.make(env)
@@ -146,7 +146,7 @@ def test_state_init(env):
     init_env.close()
 
 
-@pytest.mark.parametrize("env", sorted(ENV_NAMES))
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
 def test_state_str(env):
     try:
         init_env = gym.make(env)
