@@ -300,7 +300,7 @@ class DuelingDQN(FixedTargetDQN):
 
     def initialize_action_model(self, layers, data):
         base = super().initialize_action_model(layers, data)[:-2]
-        dueling_head = DuelingDQNModule(action=data.action, stream_input_size=base[-2].out_features)
+        dueling_head = DuelingDQNModule(action=data.action, stream_input_size=base[-3].out_features)
         return nn.Sequential(base, dueling_head)
 
 
