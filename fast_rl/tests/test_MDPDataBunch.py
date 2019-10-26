@@ -35,6 +35,8 @@ def test_mdp_clean_callback(env):
     model = DQN(data)
     learner = AgentLearner(data, model)
     learner.fit(15)
+    data.train_ds.env.close()
+    data.valid_ds.env.close()
     del learner
 #
 #

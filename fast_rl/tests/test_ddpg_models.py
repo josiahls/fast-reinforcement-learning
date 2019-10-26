@@ -22,6 +22,7 @@ def test_ddpg_models(env, model, s_format):
     data = MDPDataBunch.from_env(env, render='rgb_array', max_steps=20, bs=4, add_valid=False, feed_type=s_format)
     learn = AgentLearner(data, model(data))
     learn.fit(3)
+    data.train_ds.env.close()
     del learn
     del model
     del data

@@ -24,6 +24,8 @@ def test_dqn_models(env, model, s_format):
 
     learn = AgentLearner(data, model(data))
 
+    data.train_ds.env.close()
+
     learn.fit(3)
     del learn
     del model
