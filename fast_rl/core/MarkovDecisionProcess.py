@@ -250,7 +250,8 @@ class MDPStep(object):
         self.reward = torch.tensor(data=self.reward).reshape(1, -1).float()
         self.done = torch.tensor(data=self.done).reshape(1, -1).float()
 
-    def __str__(self): return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
+    def __str__(self):
+        return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
 
     def clean(self):
         r""" Removes fields that are generally unimportant (purely debugging) """
@@ -265,7 +266,7 @@ class MDPStep(object):
         self.action.n_possible_values = None
 
     @property
-    def data(self): return self.state.s_prime[0], self.state.alt_s_prime[0]
+    def data(self): return self.s_prime[0], self.alt_s_prime[0] if self.alt_s_prime is not None else None
     @property
     def obj(self): return self.__dict__
     @property
@@ -349,7 +350,6 @@ class MDPMemoryManager(LearnerCallback):
 
         return list(set([k for k in info if not info[k][1]]) - set(k_top))
 
-
     def on_epoch_end(self, **kwargs: Any):
         for ds_type in [DatasetType.Train] if self.learn.data.empty_val else [DatasetType.Train, DatasetType.Valid]:
             ds: MDPDataset = self.learn.dl(ds_type).dataset
@@ -359,7 +359,8 @@ class MDPMemoryManager(LearnerCallback):
 
 
 class MDPDataset(Dataset):
-    def __init__(self, env: gym.Env, memory_manager, bs, render='rgb_array', feed_type=FEED_TYPE_STATE, max_steps=None):
+    def __init__(self, env: gym.Env, memory_manager, bs, render='rgb_array', feed_type=FEED_TYPE_STATE, max_steps=None,
+                 x=None):
         r"""
         Handles env execution and ItemList building.
 
@@ -378,12 +379,12 @@ class MDPDataset(Dataset):
         self.s_prime, self.alt_s_prime = None, None
         self.callback = [MDPCallback, memory_manager]
         # Tracking fields
-        self.episode = -1
+        self.episode = -1 if x is None else max([i.episode + 1 for i in x.items])
         self.counter = 0
         self.is_warming_up = True
 
         # FastAI fields
-        self.x = MDPList([])
+        self.x = ifnone(x, MDPList([]))
         self.item: Union[MDPStep, None] = None
         self.new(None)
 
@@ -471,7 +472,7 @@ class MDPDataset(Dataset):
     def to_pickle(self, root_path, name):
         if not os.path.exists(root_path): os.makedirs(root_path)
         if not self.x: raise IOError('The dataset is empty, cannot pickle.')
-        pickle.dump(self.x, open(root_path / (name + ".pickle"), "wb"), pickle.HIGHEST_PROTOCOL)
+        pickle.dump(self.x, open(Path(root_path) / (name + ".pickle"), "wb"), pickle.HIGHEST_PROTOCOL)
 
 
 class MDPDataBunch(DataBunch):
@@ -485,51 +486,43 @@ class MDPDataBunch(DataBunch):
         ds = ifnone(self.train_ds, self.valid_ds)  # type: MDPDataset
         return ds.state, ds.action if ds is not None else None
 
+
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
                  feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_partitions_top',
-                 split_env_init=True, device: torch.device = None, no_check: bool = False,
+                 split_env_init=True, device: torch.device = None, no_check: bool = False, x=None, val_x=None,
                  add_valid=True, **dl_kwargs):
 
         env = gym.make(env_name)
         memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy)
         train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
-                                memory_manager=memory_manager)
+                                memory_manager=memory_manager, x=x)
         if add_valid:
-            valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps,
+            valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps, x=val_x,
                                     render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
-        path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
-        return cls.create(train_list, valid_list, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
+        path = './data/' + env_name + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
+        return cls.create(train_list, valid_list, path=path, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def from_pickle(cls, env_name='CartPole-v1', bs: int = 1, feed_type=FEED_TYPE_STATE, render='rgb_array',
-                    max_steps=None, add_valid=True, num_workers: int = defaults.cpus, path: PathOrStr = None,
-                    device: torch.device = None, **dl_kwargs):
+    def from_pickle(cls, env_name=None, path: PathOrStr = None, **dl_kwargs):
 
         if path is None:
             path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0].lower())]
             if not path: raise IOError(f'There is no pickle dirs file found in ./data/ with the env name {env_name}')
             path = Path('./data/' + path[0])
 
-        env = gym.make(env_name)
-        train_ls = pickle.load(open(path / 'train.pickle', 'rb'))
-        train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=train_ls)
+        path = Path(path)
 
-        if add_valid:
-            valid_ls = pickle.load(open(path / 'valid.pickle', 'rb'))
-            valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=valid_ls)
-        else:
-            valid_list = None
+        train_x = pickle.load(open(path / 'train.pickle', 'rb')) if (path / 'train.pickle').exists() else None
+        val_x = pickle.load(open(path / 'valid.pickle', 'rb')) if (path / 'valid.pickle').exists() else None
 
-        if path is None: path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
-
-        return cls.create(train_list, valid_list, num_workers=num_workers, path=path, bs=bs, feed_type=feed_type,
-                          val_bs=1, device=device, **dl_kwargs)
+        env_name = ifnone(env_name, Path(path).parts[-1].split('_')[0])
+        return cls.from_env(env_name=env_name, x=train_x, val_x=val_x, **dl_kwargs)
 
     @classmethod
-    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1,
+    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1, path='.',
                num_workers: int = defaults.cpus, device: torch.device = None, **dl_kwargs) -> 'DataBunch':
         """Create a `DataBunch` from `train_ds`, `valid_ds` and maybe `test_ds` with a batch size of `bs`.
         Passes `**dl_kwargs` to `DataLoader()`
@@ -539,7 +532,7 @@ class MDPDataBunch(DataBunch):
         datasets = cls._init_ds(train_ds, valid_ds, None)
         dls = [DataLoader(d, b, shuffle=s, drop_last=s, num_workers=num_workers, **dl_kwargs) for d, b, s in
                zip(datasets, (bs, bs, bs, bs), (False, False, False, False)) if d is not None]
-        databunch = cls(*dls, **dl_kwargs)
+        databunch = cls(path=path, *dls, **dl_kwargs)
         if valid_ds is None: databunch.valid_dl = None
         return databunch
 
@@ -547,9 +540,9 @@ class MDPDataBunch(DataBunch):
         if self.train_ds is not None: self.train_ds.to_csv(self.path, 'train')
         if self.valid_ds is not None: self.valid_ds.to_csv(self.path, 'valid')
 
-    def to_pickle(self):
-        if self.train_ds is not None: self.train_ds.to_pickle(self.path, 'train')
-        if self.valid_ds is not None: self.valid_ds.to_pickle(self.path, 'valid')
+    def to_pickle(self, path=None):
+        if self.train_ds is not None: self.train_ds.to_pickle(ifnone(path, self.path), 'train')
+        if self.valid_ds is not None: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
 
     @staticmethod
     def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset] = None):
@@ -575,6 +568,7 @@ class MDPList(ItemList):
             feed_type:
             **kwargs:
         """
+        # if items is not None:
         super().__init__(items, **kwargs)
         self.info = {}
 

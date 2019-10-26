@@ -1,21 +1,10 @@
-from functools import partial
-
-import gym
-import numpy as np
 import pytest
-import torch
 from fastai.basic_train import ItemLists
-from gym import error
-from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
-from gym.envs.toy_text import discrete
-from gym.wrappers import TimeLimit
 
 from fast_rl.agents.DQN import DQN
 from fast_rl.core.Envs import Envs
-from fast_rl.core.MarkovDecisionProcess import Action, Bounds, State, MDPDataset, MDPDataBunch, MDPMemoryManager
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.basic_train import AgentLearner
-from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
-from fast_rl.util.misc import list_in_str
 
 ENV_NAMES = Envs.get_all_latest_envs()
 
@@ -27,6 +16,41 @@ def validate_item_list(item_list: ItemLists):
             i - 1].done, f'The dataset has duplicate "done\'s" that are consecutive.'
         assert item.state.s is not None, f'The item: {item}\'s state is None'
         assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
+
+
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_mdp_from_pickle(env):
+    data = MDPDataBunch.from_env(env, render='rgb_array')
+    model = DQN(data)
+    learner = AgentLearner(data, model)
+    learner.fit(2)
+    data.to_pickle(path='data/CartPole-v0_testing')
+    data = MDPDataBunch.from_pickle(path='data/CartPole-v0_testing')
+    del data
+
+
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_mdp_to_csv(env):
+    data = MDPDataBunch.from_env(env, render='rgb_array')
+    model = DQN(data)
+    learner = AgentLearner(data, model)
+    learner.fit(2)
+    data.to_csv()
+    data.train_ds.env.close()
+    data.valid_ds.env.close()
+    del learner
+
+
+@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+def test_mdp_to_pickle(env):
+    data = MDPDataBunch.from_env(env, render='rgb_array')
+    model = DQN(data)
+    learner = AgentLearner(data, model)
+    learner.fit(2)
+    data.to_pickle()
+    data.train_ds.env.close()
+    data.valid_ds.env.close()
+    del learner
 
 
 @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
