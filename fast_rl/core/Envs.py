@@ -22,15 +22,16 @@ class Envs:
         banned_envs = {
             'Defender': 'Defender (%s) seems to load for an extremely long time. Skipping for now. Determine cause.',
             'Fetch': 'Fetch (%s) envs are not ready yet.',
+            'Blackjack-v0': 'Blackjack (%s) does not have a render function... Skipping',
             'InvertedPendulumMuJoCoEnv': 'Mujoco Inverted Pendulum (%s) has a bug.',
-            'HopperMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
-            'InvertedDoublePendulumMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
-            'HalfCheetahMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
-            'HumanoidMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
-            'Walker2DMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
-            'AntMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
-            'AtlasPyBulletEnv': 'AtlasPyBulletEnv (%s) seems to load very slowly. Skipping for now.',
-            'MazeEnv': '(%s) Having a maze view issue.',
+            # 'HopperMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
+            # 'InvertedDoublePendulumMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
+            # 'HalfCheetahMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
+            # 'HumanoidMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
+            # 'Walker2DMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
+            # 'AntMuJoCoEnv': '(%s) Does not pass azure pipeline tests',
+            # 'AtlasPyBulletEnv': 'AtlasPyBulletEnv (%s) seems to load very slowly. Skipping for now.',
+            # 'MazeEnv': '(%s) Having a maze view issue.',
         }
         envs = np.array(envs)[list(map(partial(Envs._error_out, ban_list=banned_envs), envs))]
 
@@ -47,4 +48,4 @@ class Envs:
     def get_all_latest_envs(key=None, exclude_key=None):
         all_envs = Envs.get_all_envs(key, exclude_key)
         roots = list(set(map(lambda x: str(x).split('-v')[0], all_envs)))
-        return list(set([sorted([env for env in all_envs if env.__contains__(root)])[-1] for root in roots]))
+        return list(set([sorted([env for env in all_envs if env.split('-v')[0] == root])[-1] for root in roots]))

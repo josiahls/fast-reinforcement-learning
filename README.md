@@ -70,13 +70,10 @@ known environments. Prior to 1.0.0, new changes might break previous code versio
 working at their best. Post 1.0.0 will be more formal feature development with CI, unit testing, etc. 
 
 **Critical**
-- [X] 0.1.0 DQN Agent: Reference `tests/test_Learner/test_basic_dqn_model_maze`. We use Learner callbacks for 
-handling the different fit behaviors. 
-
 Testable code:
 ```python
 from fast_rl.agents.DQN import DQN
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
@@ -102,13 +99,15 @@ Usage example:
 ```python
 from fast_rl.agents.DQN import DQN
 from fast_rl.core.Interpreter import AgentInterpretationAlpha
-from fast_rl.core.Learner import AgentLearner
+from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
 learn = AgentLearner(data, model)
 learn.fit(10)
+
+# Note that the Interpretation is broken, will be fixed with documentation in 0.9
 interp = AgentInterpretationAlpha(learn)
 interp.plot_heatmapped_episode(5)
 ```
@@ -201,8 +200,8 @@ learn.fit(5)
 reset commit
 
 - [X] 0.7.0 Full test suite using multi-processing. Connect to CI.
-- [ ] **Working On**  0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. Also, massive refactoring will be needed.
-- [ ] 0.9.0 Notebook demonstrations of basic model usage.
+- [X] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. Also, massive refactoring will be needed.
+- [ ] **Working on** 0.9.0 Notebook demonstrations of basic model usage.
 - [ ] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
 - [ ] 1.2.0 Add PyBullet Fetch Environments
