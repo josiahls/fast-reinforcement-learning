@@ -84,7 +84,7 @@ def get_action_dqn_cnn(layers, action: Action, state: State, activation=nn.ReLU,
     layers.append(action.n_possible_values)
     for i, layer in enumerate(layers):
         module_layers += [nn.Linear(out_size, layer)] if i == 0 else [nn.Linear(layers[i - 1], layer)]
-        module_layers += [activation()]
+        if i != len(layers) - 1: module_layers += [activation()]
 
     return nn.Sequential(*module_layers)
 
@@ -300,7 +300,7 @@ class DuelingDQN(FixedTargetDQN):
 
     def initialize_action_model(self, layers, data):
         base = super().initialize_action_model(layers, data)[:-2]
-        dueling_head = DuelingDQNModule(action=data.action, stream_input_size=base[-3].out_features)
+        dueling_head = DuelingDQNModule(action=data.action, stream_input_size=base[-1].out_features)
         return nn.Sequential(base, dueling_head)
 
 

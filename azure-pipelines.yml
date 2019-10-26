@@ -30,7 +30,7 @@ steps:
   displayName: 'Install Python Packages'
 
 - script: |
-    xvfb-run -s "-screen 0 1400x900x24" pytest -n 8 fast_rl/tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
+    xvfb-run -s "-screen 0 1400x900x24" pytest -n 2 fast_rl/tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
   displayName: 'Test with pytest'
 
 - task: PublishTestResults@2
