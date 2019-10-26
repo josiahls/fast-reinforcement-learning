@@ -1,8 +1,8 @@
-from numbers import Integral
-
 import gym
-from fastai.basic_train import LearnerCallback
-from gym.spaces import Discrete, Box
+from fastai.basic_train import LearnerCallback, DatasetType
+from gym.spaces import Discrete, Box, MultiDiscrete
+
+from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 
 try:
     # noinspection PyUnresolvedReferences
@@ -17,231 +17,393 @@ except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 
 from fastai.core import *
-# noinspection PyProtectedMember
-from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, data_collate, DataLoader, PreProcessors
+from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, DataLoader
 from fastai.imports import torch
-from fastai.vision import Image
-from gym import error
-from gym.envs.algorithmic.algorithmic_env import AlgorithmicEnv
-from gym.envs.toy_text import discrete
-from gym.wrappers import TimeLimit
 from datetime import datetime
 import pickle
 
-from fast_rl.util.misc import b_colors
+from fast_rl.util.misc import b_colors, list_in_str
 
 FEED_TYPE_IMAGE = 0
 FEED_TYPE_STATE = 1
 
 
-class MDPMemoryManager(LearnerCallback):
-    def __init__(self, learn, mem_strategy, k, max_episodes=None, episode=0, iteration=0):
+@dataclass
+class Bounds(object):
+    r"""
+    Handles bounds for 1 dimensional spaces.
+
+    between (gym.Space): A convenience variable for determining the min and max bounds
+
+    discrete (bool): Whether the Bounds are discrete or not. Important for N possible values calc.
+
+    min (list): Correlated min for a given dimension
+
+    max (list): Correlated max for a given dimension
+    """
+    between: Any = None
+    discrete: bool = False
+    min: list = None
+    max: list = None
+
+    def __len__(self):
+        r"""
+        Returns the number of dimensions the bounds have.
+
+        `self.min`'s length is returned because `self.max` and `self.min` as validated to have the same length.
         """
-        Handles different ways of memory management:
-        - (k_partitions_best)  keep partition best episodes
-        - (k_partitions_worst) keep partition worst episodes
-        - (k_partitions_both)  keep partition worst best episodes
-        - (k_top_best)         keep high fidelity k top episodes
-        - (k_top_worst)        keep k top worst
-        - (k_top_both)         keep k top worst and best
-        - (none)                keep none, only load into memory (always keep first)
-        - (all):               keep all steps will be kept (most memory inefficient)
+        return len(self.min)
+
+    @property
+    def n_possible_values(self):
+        """
+        Returns the maximum number of values that can be taken.
+
+        This is important for doing embeddings.
+        """
+        if not self.discrete: return np.inf
+        else: return np.prod(np.subtract(self.max, self.min))
+
+    def __post_init__(self):
+        """Sets min and max fields then validates them."""
+        self.min, self.max = ifnone(self.min, []), ifnone(self.max, [])
+        # If a tuple has been passed, break it into correlated min max variables.
+        if self.between is not None:
+            for b in (self.between if isinstance(self.between, gym.spaces.Tuple) else listify(self.between)):
+                if isinstance(b, (int, np.int64, np.int, float, np.float)):
+                    self.min, self.max = self.min + [0], self.max + [b]
+                    self.discrete = isinstance(b, (int, np.int, np.int64))
+                elif isinstance(b, Discrete):
+                    self.min, self.max, self.discrete = self.min + [0], self.max + [b.n], True
+                elif isinstance(b, MultiDiscrete):
+                    self.min, self.max, self.discrete = self.min + [0] * sum(b.nvec.shape), self.max + b.nvec, True
+                elif isinstance(b, Box):
+                    self.min, self.max = self.min + list(b.low), self.max + list(b.high)
+                    self.discrete = any([b.dtype in (int, np.int, np.int64)])
+                else:
+                    raise ValueError(f'Tuple not understood {self.between}')
+
+        if len(self.min) != len(self.max):
+            raise ValueError(f'Min Max do not match min {len(self.min)} max {len(self.max)}')
+        if len(self.min) == 0: raise ValueError(f'Min and Max are 0')
+
+
+@dataclass
+class Action(object):
+    r"""
+    Handles actions, action space, and value verification.
+
+    An important difference between taken_action and raw_action is that the raw action is the immediate
+    raw output from the model before any argmax processing.
+
+    taken_action (np.array): Expected to always to be numpy arrays with shape (-1, 1). This is the action that
+    is to be input into the env `step` function.
+
+    raw_action (np.array): Expected to always to be numpy arrays with shape (-1, 1). This is the raw model
+    output such as neural net final layer output. Can be None.
+
+    action_space (gym.Space): Used for estimating the max number of values. This is important for embeddings.
+
+    bounds (tuple): Maximum and minimum values for each action dimension.
+
+    n_possible_values (int): An integer or inf value indicating the total number of possible actions there are.
+    """
+    taken_action: torch.tensor
+    action_space: gym.Space
+    raw_action: torch.tensor = None
+    bounds: Bounds = None
+    n_possible_values: int = 0
+
+    def __post_init__(self):
+        # Determine bounds
+        self.bounds = Bounds(self.action_space)
+        self.n_possible_values = self.bounds.n_possible_values
+
+        # Fix shapes
+        self.taken_action = torch.tensor(data=self.taken_action).reshape(1, -1)
+        if self.raw_action is not None: self.raw_action = torch.tensor(data=self.raw_action).reshape(1, -1)
+
+    def get_single_action(self):
+        """ OpenAI envs do not like 1x1 arrays when they are expecting scalars, so we need to unwrap them. """
+        a = self.taken_action.detach().numpy()[0]
+        if len(self.bounds) == 1: a = a[0]
+        if self.bounds.discrete and len(self.bounds) == 1: return int(a)
+        elif self.bounds.discrete and len(self.bounds) != 1: return a.astype(int)
+        elif not self.bounds.discrete and len(self.bounds) == 1: return [float(a)]
+        elif not self.bounds.discrete and len(self.bounds) != 1: return a.reshape(-1,).astype(float)
+        raise ValueError(f'This should not have crashed.')
+
+    def set_single_action(self, action: np.array):
+        if np.isscalar(action):
+            self.taken_action = torch.tensor(data=action).reshape(1, -1)
+        elif len(action.shape) == 1:
+            self.taken_action = torch.tensor(data=action).reshape(1, -1)
+        elif len(action.shape) == 3 and action.shape[0] == 1:
+            self.taken_action = torch.tensor(data=action)[0]
+        self.taken_action = self.taken_action.int() if self.bounds.discrete else self.taken_action.float()
+
+
+@dataclass
+class State(object):
+    r"""
+    Handles states, both their main and alternate formats.
+
+    s (np.array): State space acquired from `env.reset` `s_prime` or `env.render`.
+
+    s_prime (np.array): State space acquired from `env.step` or `env.render`.
+
+    alt_s (np.array): Alternate State space acquired from `env.reset` `s_prime` or `env.render`. Should be an image.
+
+    alt_s_prime (np.array): Alternate State space acquired from `env.step` or `env.render`. Should be an image.
+
+    mode (int): Should be either FEED_TYPE_IMAGE or FEED_TYPE_STATE
+
+    observation_space (gym.Space): Used for estimating the max number of values. This is important for embeddings.
+
+    bounds (Bounds): Maximum and minimum values for each state dimension.
+
+    n_possible_values (int): An integer or inf value indicating the total number of possible actions there are.
+    """
+    s: torch.tensor
+    s_prime: torch.tensor
+    alt_s: Union[torch.tensor, np.array]
+    alt_s_prime: Union[torch.tensor, np.array]
+    observation_space: gym.Space
+    mode: int = FEED_TYPE_STATE
+    bounds: Bounds = None
+    n_possible_values: int = 0
+
+    def __str__(self):
+        out = copy(self.__dict__)
+        for key in out:
+            if out[key] is not None and (key == 's' or list_in_str(key, ['_s', 's_'])):  out[key] = out[key].shape
+
+        return f'State: ' + ', '.join([str(i) for i in out.items()])
+
+    def _fix_field(self, input_field):
+        if input_field is None: return None
+        input_field = copy(input_field)
+
+        if type(input_field) is str: input_field = np.array(input_field)
+        elif type(input_field) is tuple:
+            dtype = int if self.bounds.discrete else float
+            input_field = torch.tensor(data=np.array(input_field).reshape(1, -1).astype(dtype))
+        elif np.isscalar(input_field): input_field = torch.tensor(data=input_field)
+        elif type(input_field) is torch.Tensor: input_field = input_field.clone().detach()
+        else: input_field = torch.from_numpy(input_field)
+
+        # If a non-image state missing the batch dim
+        if len(input_field.shape) <= 1: return input_field.reshape(1, -1)
+        # If a non-image 2+d state missing the batch dim
+        elif input_field.shape[0] != 1 and len(input_field.shape) != 3: return input_field.reshape(1, -1)
+        # If an image state and missing the batch dim
+        elif input_field.shape[0] != 1 and len(input_field.shape) == 3: return input_field.unsqueeze(0)
+        # If an image with 4 dims (b, w, h, c), return safely
+        elif input_field.shape[0] == 1 and len(input_field.shape) == 4: return input_field
+        # If not an image, but has 2 dims (b, d), return safely
+        elif input_field.shape[0] == 1 and len(input_field.shape) == 2: return input_field
+        raise ValueError(f'Input has shape {input_field} for mode {self.mode}. This is unexpected.')
+
+    def __post_init__(self):
+        if self.mode not in [FEED_TYPE_IMAGE, FEED_TYPE_STATE]:
+            ValueError(f'Mode invalid {self.mode} not valid feed type')
+        # We want to swap the state variables if the alt is the image state
+        if self.mode == FEED_TYPE_IMAGE and len(self.alt_s.shape) > 2 and len(self.s.shape) != 3:
+            self.observation_space = gym.spaces.Box(0, 255, self.alt_s.shape, dtype=np.int64)
+            self.alt_s, self.alt_s_prime, self.s, self.s_prime = self.s, self.s_prime, self.alt_s, self.alt_s_prime
+        # Determine bounds
+        self.bounds = Bounds(self.observation_space)
+        self.n_possible_values = self.bounds.n_possible_values
+        # Fix Shapes
+        self.s, self.s_prime = self._fix_field(self.s), self._fix_field(self.s_prime)
+        self.alt_s, self.alt_s_prime = self._fix_field(self.alt_s), self._fix_field(self.alt_s_prime)
+
+
+@dataclass
+class MDPStep(object):
+    r"""
+    Contains all the variables to represent a Markov Decision Process step.
+
+    action (Action):
+
+    state (State):
+
+    done (bool):
+
+    reward (float):
+
+    episode (int):
+
+    step (int):
+
+    """
+    action: Action
+    state: State
+    done: torch.tensor
+    reward: torch.tensor
+    episode: int
+    step: int
+
+    def __post_init__(self):
+        self.action = deepcopy(self.action)
+        self.state = deepcopy(self.state)
+        self.reward = torch.tensor(data=self.reward).reshape(1, -1).float()
+        self.done = torch.tensor(data=self.done).reshape(1, -1).float()
+
+    def __str__(self): return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
+
+    def clean(self):
+        r""" Removes fields that are generally unimportant (purely debugging) """
+        self.state.alt_s_prime = None
+        self.state.alt_s = None
+        self.state.observation_space = None
+        self.state.bounds = None
+        self.state.n_possible_values = None
+        self.action.raw_action = None
+        self.action.action_space = None
+        self.action.bounds = None
+        self.action.n_possible_values = None
+
+    @property
+    def data(self): return self.state.s_prime[0], self.state.alt_s_prime[0]
+    @property
+    def obj(self): return self.__dict__
+    @property
+    def s(self): return self.state.s
+    @property
+    def s_prime(self): return self.state.s_prime
+    @property
+    def alt_s_prime(self): return self.state.alt_s_prime
+    @property
+    def a(self): return self.action.taken_action
+    @property
+    def d(self):
+        return bool(self.done)
+
+
+class MDPCallback(LearnerCallback):
+    def __init__(self, learn):
+        """
+        Handles action assignment, episode naming.
 
         Args:
             learn:
-            mem_strategy:
-            k:
-            max_episodes:
-            episode:
-            iteration:
         """
         super().__init__(learn)
-        self.mem_strategy = mem_strategy
+        self.train_ds: MDPDataset = learn.data.train_ds
+        self.valid_ds: MDPDataset = None if learn.data.empty_val else learn.data.valid_ds
+
+    def on_batch_begin(self, last_input, last_target, train, **kwargs: Any):
+        """ Set the Action of a dataset, determine if still warming up. """
+        a = self.learn.predict(last_input)
+        if train: self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
+        else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
+        self.train_ds.is_warming_up = self.learn.model.warming_up
+        if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.model.warming_up
+        if not self.learn.model.warming_up and self.learn.loss_func is None:
+            self.learn.init_loss_func()
+        return {'skip_bwd': True}
+
+    def on_backward_end(self, **kwargs: Any):
+        return {'skip_step': True}
+
+    def on_step_end(self, **kwargs: Any):
+        return {'skip_zero': True}
+
+    def on_epoch_end(self, last_metrics, epoch, **kwargs: Any) -> None:
+        """ Updates the most recent episode number in both datasets. """
+        self.train_ds.x.set_recent_run_episode(epoch)
+        self.train_ds.episode = epoch
+        if last_metrics[0] is not None:
+            self.valid_ds.x.set_recent_run_episode(epoch)
+            self.valid_ds.episode = epoch
+
+
+class MDPMemoryManager(LearnerCallback):
+    def __init__(self, learn, strategy, k=1):
+        super().__init__(learn)
+        self.strategy = strategy
         self.k = k
-        self.ds = None
-        self.max_episodes = max_episodes
-        self.episode = episode
-        self.last_episode = episode
-        self.iteration = iteration
-        self._persist = max_episodes is not None
+        self._strategy_fn_dict = {
+            'k_partitions_top': self.k_top
+        }
 
-        # Private Util Fields
-        self._train_episodes_keep = {}
-        self._valid_episodes_keep = {}
-        self._current_partition = 0
+    def _comp_less(self, key, info, episode):
+        return info[key] < info[episode]
 
-        self._lower = 0
-        self._upper = 0
+    def _comp_greater(self, key, info, episode):
+        return info[key] > info[episode]
 
-    def _comp_less(self, key, d, episode): return d[key] < self.data.x.info[episode]
-    def _comp_greater(self, key, d, episode): return d[key] > self.data.x.info[episode]
-    def _dict_access(self, key, dictionary): return {key: dictionary[key]}
+    def k_top(self, info: Dict[int, List[Tuple[float, bool]]]):
+        # If the episode -1 is defined, then clean it, this is just placeholder data
+        if -1 in info and not info[-1][1]: return [-1]
+        # If the number of not-clean episodes is less than k, don't do anything
+        if len([k for k in info if not info[k][1]]) <= self.k: return None
+        # Collect k top episodes, then clean the rest
+        k_top = []
+        for episode in [i for i in info if i != -1]:
+            # If the episode is greater than all of the other episodes that are not already in k_top
+            compared = [info[episode][0] > info[k][0] for k in info if k not in k_top and k != -1 and k != episode]
+            if all(compared) and len(compared) != 0 and len(k_top) < self.k:
+                k_top.append(episode)
 
-    def _k_top_best(self, episode, episodes_keep):
-        best = dict(filter(partial(self._comp_greater, d=episodes_keep, episode=episode), episodes_keep))
-        return list(dict(sorted(best.items(), reverse=True)).keys())
+        return list(set([k for k in info if not info[k][1]]) - set(k_top))
 
-    def _k_top_worst(self, episode, episodes_keep):
-        worst = dict(filter(partial(self._comp_less, d=episodes_keep, episode=episode), episodes_keep))
-        return list(dict(sorted(worst.items())).keys())
 
-    def _k_top_both(self, episode, episodes_keep):
-        best, worst = self._k_top_best(episode, episodes_keep), self._k_top_worst(episode, episodes_keep)
-        if best: return best
-        return worst
-
-    def _k_partitions_best(self, episode, episodes_keep):
-        # Filter episodes by their partition
-        if episode >= self._upper: self.lower, self._upper = self._upper, self._upper + self.max_episodes // self.k
-        filtered_episodes = {ep: episodes_keep[ep] for ep in episodes_keep if self._lower <= ep < self._upper}
-        best = list(filter(partial(self._comp_greater, d=filtered_episodes, episode=episode), filtered_episodes))
-        best = {k: filtered_episodes[k] for k in filtered_episodes if k in best}
-        return list(dict(sorted(best.items(), reverse=True)).keys())
-
-    def _k_partitions_worst(self, episode, episodes_keep):
-        # Filter episodes by their partition
-        if episode >= self._upper: self.lower, self._upper = self._upper, self._upper + self.max_episodes // self.k
-        filtered_episodes = {ep: episodes_keep[ep] for ep in episodes_keep if self._lower <= ep < self._upper}
-        worst = list(filter(partial(self._comp_less, d=filtered_episodes, episode=episode), filtered_episodes))
-        worst = {k: filtered_episodes[k] for k in filtered_episodes if k in worst}
-        return list(dict(sorted(worst.items())).keys())
-
-    def _k_partitions_both(self, episode, episodes_keep):
-        best, worst = self._k_partitions_best(episode, episodes_keep), self._k_partitions_worst(episode, episodes_keep)
-        if best: return best
-        return worst
-
-    def on_loss_begin(self, **kwargs: Any):
-        self.iteration += 1
-
-    def manage_memory(self, episodes_keep, episode):
-        if episode not in self.ds.x.info: return
-        episodes_keep[episode] = self.ds.x.info[episode]
-        if len(episodes_keep) < self.k: return
-        # We operate of the second to most recent episode so the agent still has an opportunity to use the full episode
-        episode = episode - 1
-        if episode not in self.ds.x.info: return
-
-        try:
-            # If the episodes to keep is full, then we have to decide which ones to remove
-            if self.mem_strategy == 'k_top_best': del_ep = self._k_top_best(episode, episodes_keep)
-            if self.mem_strategy == 'k_top_worst': del_ep = self._k_top_worst(episode, episodes_keep)
-            if self.mem_strategy == 'k_top_both': del_ep = self._k_top_both(episode, episodes_keep)
-            if self.mem_strategy == 'k_partitions_best': del_ep = self._k_partitions_best(episode, episodes_keep)
-            if self.mem_strategy == 'k_partitions_worst': del_ep = self.k_partitions_worst(episode, episodes_keep)
-            if self.mem_strategy == 'k_partitions_both': del_ep = self._k_partitions_both(episode, episodes_keep)
-            if self.mem_strategy == 'all': del_ep = [-1]
-
-            # If there are episodes to delete, then set them as the main episode to delete
-            if len(del_ep) != 0:
-                # episodes_keep[episode] = self.ds.x.info[episode]
-                del episodes_keep[del_ep[0]]
-                episode = del_ep[0]
-                self.ds.x.clean(episode)
-            self.ds.x.info = episodes_keep
-
-        except KeyError as e:
-            pass
-        except TypeError as e:
-            pass
-
-    def on_train_begin(self, n_epochs, **kwargs: Any):
-        self.max_episodes = n_epochs if not self._persist else self.max_episodes
-        self._upper = self.max_episodes // self.k
-
-    def on_epoch_begin(self, epoch, **kwargs: Any):
-        self.episode = epoch if not self._persist else self.episode + 1
-        self.iteration = 0
-
-    def on_epoch_end(self, **kwargs: Any) -> None:
-        if self.learn.data.train_ds is not None:
-            self.ds = self.learn.data.train_ds
-            self.manage_memory(self._train_episodes_keep, self.episode)
-        if self.learn.data.valid_dl is not None:
-            self.ds = self.learn.data.valid_ds
-            self.manage_memory(self._valid_episodes_keep, self.episode)
+    def on_epoch_end(self, **kwargs: Any):
+        for ds_type in [DatasetType.Train] if self.learn.data.empty_val else [DatasetType.Train, DatasetType.Valid]:
+            ds: MDPDataset = self.learn.dl(ds_type).dataset
+            episodes = self._strategy_fn_dict[self.strategy](ds.x.info)
+            if episodes is not None:
+                for e in episodes: ds.x.clean(e)
 
 
 class MDPDataset(Dataset):
-    def __init__(self, env: gym.Env, feed_type=FEED_TYPE_STATE, render='rgb_array', max_steps=None, bs=8,
-                 x=None, memory_management_strategy='k_partitions_best', k=1, skip=False, embeddable=False):
-        """
-        Handles the running and loading of environments, as well as storing episode steps.
-
-        mem_strategy has a few settings. This is for inference on the existing data:
-        - (k_partitions_best) keep partition best episodes
-        - (k_partitions_both) keep partition worst best episodes
-        - (k_top_best)        keep high fidelity k top episodes
-        - (k_top_worst)       keep k top worst
-        - (k_top_both)        keep k top worst and best
-        - (non)               keep non, only load into memory (always keep first)
-        - (all):              keep all steps will be kept (most memory inefficient)
+    def __init__(self, env: gym.Env, memory_manager, bs, render='rgb_array', feed_type=FEED_TYPE_STATE, max_steps=None):
+        r"""
+        Handles env execution and ItemList building.
 
         Args:
-            env:
-            feed_type:
-            render:
-            max_steps:
-            bs:
-            x:
-            memory_management_strategy: Reference above. Tests `self` how to keep memory usage down.
-            k: Related to the `mem_strategy` and is either k quartiles and k most.
-            save_every: Skip adding to datasets.
+            env: OpenAI environment to execute.
+            memory_manager: Handles how the list size will be reduced sch as removing image data.
+            bs: Size of a single batch for models and the dataset to use.
         """
-        self.k = k
-        self.skip = False
-        if skip:
-            self.skip = skip
-            return
-        self.mem_strat = memory_management_strategy
-        self.bs = bs
-        # noinspection PyUnresolvedReferences,PyProtectedMember
-        env._max_episode_steps = env.spec.max_episode_steps if not hasattr(env, '_max_episode_steps') else env._max_episode_steps
-        self.max_steps = env._max_episode_steps if max_steps is None else max_steps
+        self.env = env
         self.render = render
         self.feed_type = feed_type
-        self.env = env
-        # MDP specific values
-        self.actions = self.get_random_action(env.action_space)
-        if isinstance(env.action_space, Box): self.raw_action = np.random.randn((env.action_space.shape[0]))
-        elif isinstance(env.action_space, Discrete): self.raw_action = np.random.randn((env.action_space.n))
-        else: self.raw_action = self.get_random_action(env.action_space)
+        self.bs = bs
+        self._max_steps = max_steps
+        self.action = Action(taken_action=self.env.action_space.sample(), action_space=self.env.action_space)
+        self.state = None
+        self.s_prime, self.alt_s_prime = None, None
+        self.callback = [MDPCallback, memory_manager]
+        # Tracking fields
+        self.episode = -1
+        self.counter = 0
+        self.is_warming_up = True
 
-        self.is_done = True
-        self.current_state = None
-        self.current_image = None
+        # FastAI fields
+        self.x = MDPList([])
+        self.item: Union[MDPStep, None] = None
+        self.new(None)
 
-        self.embeddable = embeddable
-
-        self.env_specific_handle()
-        self.counter = -1
-        self.episode = 0
-        self.x = MarkovDecisionProcessList() if x is None else x  # self.new(0)
-        self.item = None
-        self.episodes_to_keep = {}
+    def aug_steps(self, steps):
+        if self.is_warming_up and steps < self.bs: return self.bs
+        return steps
 
     @property
-    def state_size(self):
-        if self.feed_type == FEED_TYPE_STATE:
-            return self.env.observation_space
-        else:
-            return gym.spaces.Box(0, 255, shape=self.env.render('rgb_array').shape)
+    def max_steps(self):
+        if self._max_steps is not None: return self._max_steps
+        if hasattr(self.env, '_max_episode_steps'): return getattr(self.env, '_max_episode_steps')
+        if self.env.spec.max_episode_steps is not None: return self.env.spec.max_episode_steps
 
-    def __del__(self):
-        self.env.close()
+        msg = f'Env {self.env.spec.id} does not have max episode steps. '
+        msg += ' Either pass the max steps as a param, or catch this exception then pass a default max step param.'
+        raise MaxEpisodeStepsMissingError(msg)
 
-    def env_specific_handle(self):
-        if isinstance(self.env, TimeLimit) and isinstance(self.env.unwrapped, AlgorithmicEnv):
-            self.render = 'ansi' if self.render == 'rgb_array' else self.render
-        if isinstance(self.env, TimeLimit) and isinstance(self.env.unwrapped, discrete.DiscreteEnv):
-            self.render = 'ansi' if self.render == 'rgb_array' else self.render
-
-    def get_random_action(self, action_space=None):
-        action_space = action_space if action_space is not None else self.env.action_space
-        return action_space.sample()
-
-    def _get_image(self):
-        # Specifically for the stupid blackjack-v0 env >:(
+    @property
+    def image(self):
+        r""" Needed because of blackjack-v0 env >:( """
         try:
             current_image = self.env.render('rgb_array')
             if self.render == 'human': self.env.render(self.render)
@@ -250,66 +412,61 @@ class MDPDataset(Dataset):
             current_image = None
         return current_image
 
-    def new(self, _):
-        """
-        New element is a query of the environment
-
-        Args:
-            _:
-
-        Returns:
-
-        """
-        # First Phase: decide on episode reset. Collect current state and image representations.
-        if self.is_done or self.counter >= self.max_steps - 3:
-            self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
-            if type(self.current_state) is not list and type(self.current_state) is not np.ndarray: self.current_state = [self.current_state]
-            # Specifically for the stupid blackjack-v0 env >:(
-            self.current_image = self._get_image()
-
-        result_state, reward, self.is_done, info = self.env.step(self.actions)
-        if self.is_done and self.counter == -1:
-            self.current_state, reward, self.is_done, info = self.env.reset(), 0, False, {}
-
-        if type(result_state) is not list and type(result_state) is not np.ndarray: result_state = [result_state]
-        result_image = self._get_image()
-        self.counter += 1
-
-        # Second Phase: Generate MDP slice
-        result_state = result_image.transpose(2, 0, 1) if self.feed_type == FEED_TYPE_IMAGE and result_image is not None else result_state
-        current_state = self.current_image.transpose(2, 0, 1) if self.feed_type == FEED_TYPE_IMAGE and self.current_image is not None else self.current_state
-        alternate_state = result_state if self.feed_type == FEED_TYPE_IMAGE or result_state is None else result_image
-        items = MarkovDecisionProcessSlice(state=np.copy(current_state), state_prime=np.copy(result_state),
-                                           alt_state=np.copy(alternate_state), action=np.copy(self.actions),
-                                           reward=reward, done=copy(self.is_done), feed_type=copy(self.feed_type),
-                                           episode=copy(self.episode), raw_action=self.raw_action)
-        self.current_state = copy(result_state)
-        self.current_image = copy(result_image)
-
-        list_item = MarkovDecisionProcessList([items])
-        return list_item
+    def __del__(self):
+        self.env.close()
 
     def __len__(self):
-        return self.max_steps
+        return self.aug_steps(self.max_steps)
 
-    def __getitem__(self, _) -> 'MDPDataset':
+    def stage_1_env_reset(self):
+        r"""
+        Handles environment resetting and dataset batch termination.
+
+        We are interested in the entire dataset ending when an item is done.
+
+        Returns: The state space and the image after a reset.
+
+        """
+        if self.counter != 0 and self.item.d:
+            self.counter = 0
+            if not self.is_warming_up: raise StopIteration
+        if self.item is None or self.item.d: return self.env.reset(), self.image
+        return self.s_prime, self.alt_s_prime
+
+    def stage_2_env_step(self) -> Tuple[np.array, float, bool, None, np.array]:
+        r"""
+        Handles taking a step in the environment.
+
+        We want to cancel the env early if we are at our max step amount.
+
+        Returns: The state, reward, whether the episode is done, and the image.
+        """
+        s_prime, reward, done, _ = self.env.step(self.action.get_single_action())
+        # If we are at the max steps limit but the env is not done, we need to force an env end.
+        # However, we need the loop to iterate +1 time for allowing the stage_1_env_reset
+        if len(self) - 2 == self.counter: done = True
+        return s_prime, reward, done, _, self.image
+
+    def new(self, _):
+        s, alt_s = self.stage_1_env_reset()
+        self.s_prime, reward, done, _, self.alt_s_prime = self.stage_2_env_step()
+        # If both the current item and the done are both true, then we need to retry the env
+        if self.item is not None and self.item.d and done: return self.new()
+
+        self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
+        self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
+        self.counter += 1
+
+        return MDPList([self.item])
+
+    def __getitem__(self, _):
         item = self.new(_)
-        if (self.x and self.is_done and self.counter != -1) or \
-                (self.counter >= self.max_steps - 2):
-            self.x.add(item)
-            self.counter = -1
-            self.episode += 1
-            raise StopIteration
-
         self.x.add(item)
-        # x = self.x[idxs]  # Perhaps have this as an option?
-        x = self.x[-1]
-        return x.copy() if isinstance(x, np.ndarray) else x
+        return self.x[-1]
 
     def to_csv(self, root_path, name):
-        df = self.x.to_df()  # type: pd.DateFrame()
         if not os.path.exists(root_path): os.makedirs(root_path)
-        df.to_csv(root_path / (name + '.csv'), index=False)
+        self.x.to_df().to_csv(root_path / (name + '.csv'), index=False)
 
     def to_pickle(self, root_path, name):
         if not os.path.exists(root_path): os.makedirs(root_path)
@@ -318,149 +475,71 @@ class MDPDataset(Dataset):
 
 
 class MDPDataBunch(DataBunch):
-    def _get_sizes_and_possible_values(self, item):
-        if isinstance(item, Discrete) and len(item.shape) != 0: return item.n, item.n
-        if isinstance(item, Discrete) and len(item.shape) == 0: return 1, item.n
-        if isinstance(item, Box) and (item.dtype == int or item.dtype == np.uint8):
-            return item.shape if len(item.shape) > 1 else item.shape[0], np.prod(item.high)
-        if isinstance(item, Box) and item.dtype == np.float32:
-            return item.shape if len(item.shape) > 1 else item.shape[0], np.inf
 
-    # noinspection PyUnresolvedReferences
-    def get_action_state_size(self):
-        if self.train_ds is not None:
-            a_s, s_s = self.train_ds.env.action_space, self.train_ds.state_size
-        elif self.valid_ds is not None:
-            a_s, s_s = self.valid_ds.env.action_space, self.valid_ds.state_size
+    def __del__(self):
+        if self.train_dl is not None: del self.train_dl.train_ds
+        if self.valid_dl is not None: del self.valid_dl.valid_ds
+
+    @property
+    def state_action_sample(self) -> Union[Tuple[State, Action], None]:
+        ds = ifnone(self.train_ds, self.valid_ds)  # type: MDPDataset
+        return ds.state, ds.action if ds is not None else None
+
+    @classmethod
+    def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
+                 feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_partitions_top',
+                 split_env_init=True, device: torch.device = None, no_check: bool = False,
+                 add_valid=True, **dl_kwargs):
+
+        env = gym.make(env_name)
+        memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy)
+        train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
+                                memory_manager=memory_manager)
+        if add_valid:
+            valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps,
+                                    render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
-            return None
-        return tuple(map(self._get_sizes_and_possible_values, [a_s, s_s]))
-
-    @classmethod
-    def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
-                 path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
-                 num_workers: int = 0, embed=False, memory_management_strategy='k_partitions_both',
-                 dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
-                 collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
-        """
-
-
-        Args:
-            env_name:
-            max_steps:
-            render:
-            test_ds:
-            path:
-            bs:
-            feed_type:
-            val_bs:
-            num_workers:
-            embed:
-            memory_management_strategy: has a few settings. This is for inference on the existing data.
-                - (k_partitions_best) keep partition best episodes
-                - (k_partitions_both) keep partition worst best episodes
-                - (k_top_best)        keep high fidelity k top episodes
-                - (k_top_worst)       keep k top worst
-                - (k_top_both)        keep k top worst and best
-                - (non)               keep non, only load into memory (always keep first)
-                - (all):              keep all steps will be kept (most memory inefficient)
-            dl_tfms:
-            device:
-            collate_fn:
-            no_check:
-            add_valid:
-            **dl_kwargs:
-
-        Returns:
-
-        """
-
-        try:
-            # train_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
-            # valid_list = MDPDataset(gym.make(env_name), max_steps=max_steps, render=render)
-            env = gym.make(env_name)
-            val_bs = bs if val_bs is None else val_bs
-            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, embeddable=embed,
-                                    memory_management_strategy=memory_management_strategy)
-            if add_valid: valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs, embeddable=embed,
-                                                  memory_management_strategy=memory_management_strategy)
-            else: valid_list = None
-        except error.DependencyNotInstalled as e:
-            print('Mujoco is not installed. Returning None')
-            if e.args[0].lower().__contains__('mujoco'): return None
-
-        bs, val_bs = 1, None
+            valid_list = None
         path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
-
-        return cls.create(train_list, valid_list, num_workers=num_workers, test_ds=test_ds, path=path, bs=bs,
-                          feed_type=feed_type, val_bs=val_bs, dl_tfms=dl_tfms, device=device, collate_fn=collate_fn,
-                          no_check=no_check, **dl_kwargs)
+        return cls.create(train_list, valid_list, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def from_pickle(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
-                    path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
-                    num_workers: int = 0,
-                    dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
-                    collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
+    def from_pickle(cls, env_name='CartPole-v1', bs: int = 1, feed_type=FEED_TYPE_STATE, render='rgb_array',
+                    max_steps=None, add_valid=True, num_workers: int = defaults.cpus, path: PathOrStr = None,
+                    device: torch.device = None, **dl_kwargs):
 
         if path is None:
             path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0].lower())]
             if not path: raise IOError(f'There is no pickle dirs file found in ./data/ with the env name {env_name}')
             path = Path('./data/' + path[0])
 
-        try:
-            env = gym.make(env_name)
-            val_bs = bs if val_bs is None else val_bs
-            train_ls = pickle.load(open(path / 'train.pickle', 'rb'))
-            train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=train_ls)
+        env = gym.make(env_name)
+        train_ls = pickle.load(open(path / 'train.pickle', 'rb'))
+        train_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=train_ls)
 
-            if add_valid:
-                valid_ls = pickle.load(open(path / 'valid.pickle', 'rb'))
-                valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=val_bs, x=valid_ls)
-            else:
-                valid_list = None
+        if add_valid:
+            valid_ls = pickle.load(open(path / 'valid.pickle', 'rb'))
+            valid_list = MDPDataset(env, max_steps=max_steps, render=render, bs=bs, x=valid_ls)
+        else:
+            valid_list = None
 
-        except error.DependencyNotInstalled as e:
-            print('Mujoco is not installed. Returning None')
-            if e.args[0].lower().__contains__('mujoco'): return None
-
-        bs, val_bs = 1, None
         if path is None: path = './data/' + env_name.split('-v')[0].lower() + datetime.now().strftime('%Y%m%d%H%M%S')
 
-        return cls.create(train_list, valid_list, num_workers=num_workers, test_ds=test_ds, path=path, bs=bs,
-                          feed_type=feed_type, val_bs=val_bs, dl_tfms=dl_tfms, device=device, collate_fn=collate_fn,
-                          no_check=no_check, **dl_kwargs)
+        return cls.create(train_list, valid_list, num_workers=num_workers, path=path, bs=bs, feed_type=feed_type,
+                          val_bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def from_csv(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', test_ds: Optional[Dataset] = None,
-                 path: PathOrStr = None, bs: int = 1, feed_type=FEED_TYPE_STATE, val_bs: int = None,
-                 num_workers: int = 0,
-                 dl_tfms: Optional[Collection[Callable]] = None, device: torch.device = None,
-                 collate_fn: Callable = data_collate, no_check: bool = False, add_valid=True, **dl_kwargs):
-        raise NotImplementedError('Not implemented for now. Saving state data into a csv seems extremely clunky.'
-                                  ' Suggested to use to_pickle and from_pickle due to easier numpy conversion.')
-
-    @classmethod
-    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None,
-               test_ds: Optional[Dataset] = None, path: PathOrStr = '.', bs: int = 1,
-               feed_type=FEED_TYPE_STATE,
-               val_bs: int = None, num_workers: int = defaults.cpus, dl_tfms: Optional[Collection[Callable]] = None,
-               device: torch.device = None, collate_fn: Callable = data_collate, no_check: bool = False,
-               **dl_kwargs) -> 'DataBunch':
+    def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1,
+               num_workers: int = defaults.cpus, device: torch.device = None, **dl_kwargs) -> 'DataBunch':
         """Create a `DataBunch` from `train_ds`, `valid_ds` and maybe `test_ds` with a batch size of `bs`.
         Passes `**dl_kwargs` to `DataLoader()`
 
         Since this is a MarkovProcess, the batches need to be `bs=1` (for now...)
         """
-        train_ds.feed_type = feed_type
-        if valid_ds is not None: valid_ds.feed_type = feed_type
-        if test_ds is not None: test_ds.feed_type = feed_type
-
-        datasets = cls._init_ds(train_ds, valid_ds, test_ds)
-        val_bs = ifnone(val_bs, bs)
+        datasets = cls._init_ds(train_ds, valid_ds, None)
         dls = [DataLoader(d, b, shuffle=s, drop_last=s, num_workers=num_workers, **dl_kwargs) for d, b, s in
-               zip(datasets, (bs, val_bs, val_bs, val_bs), (False, False, False, False)) if d is not None]
-        databunch = cls(*dls, path=path, device=device, dl_tfms=dl_tfms, collate_fn=collate_fn, no_check=no_check)
+               zip(datasets, (bs, bs, bs, bs), (False, False, False, False)) if d is not None]
+        databunch = cls(*dls, **dl_kwargs)
         if valid_ds is None: databunch.valid_dl = None
         return databunch
 
@@ -474,15 +553,13 @@ class MDPDataBunch(DataBunch):
 
     @staticmethod
     def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset] = None):
-        # train_ds, but without training tfms
-        fix_ds = copy(train_ds)  # valid_ds.new(train_ds.x) if hasattr(valid_ds, 'new') else train_ds
-        return [o for o in (train_ds, valid_ds, fix_ds, test_ds) if o is not None]
+        return [o for o in (train_ds, valid_ds, copy(train_ds), test_ds) if o is not None]
 
 
-class MarkovDecisionProcessList(ItemList):
+class MDPList(ItemList):
     _bunch = MDPDataBunch
 
-    def __init__(self, items=np.array([]), feed_type=FEED_TYPE_IMAGE, **kwargs):
+    def __init__(self, items: Iterator, **kwargs):
         """
         Represents a MDP sequence over episodes.
 
@@ -490,7 +567,7 @@ class MarkovDecisionProcessList(ItemList):
         Notes:
             Two important fields for you to be aware of: `items` and `x`.
             `x` is just the values being used for directly being feed into the model.
-            `items` contains an ndarray of MarkovDecisionProcessSlice instances. These contain the the primary values
+            `items` contains an ndarray of MarkovDecisionProcessSliceAlpha instances. These contain the the primary values
             in x, but also the other important properties of a MDP.
 
         Args:
@@ -498,73 +575,32 @@ class MarkovDecisionProcessList(ItemList):
             feed_type:
             **kwargs:
         """
-        super(MarkovDecisionProcessList, self).__init__(items, **kwargs)
-        self.feed_type = feed_type
-        self.copy_new.append('feed_type')
-        self.ignore_empty = True
+        super().__init__(items, **kwargs)
         self.info = {}
 
+    def set_recent_run_episode(self, episode):
+        for i, item in enumerate(reversed(self.items)):
+            if item.d and i != 0: break
+            item.episode = episode
+            self._update_info(episode, item)
+
     def clean(self, episode):
-        for item in self.items:
-            if item.episode == episode: item.clean()
+        self.info[episode][1] = True
+        [item.clean() for item in self.items if item.episode == episode]
+
+    def _update_info(self, ep, item: MDPStep):
+        self.info[ep] = float(np.sum(self.info[ep][0] + float(item.reward))) if ep in self.info else float(item.reward)
+        self.info[ep] = [self.info[ep], False]
 
     def add(self, items: 'ItemList'):
-        # Update the episode related composition information
-        for item in items.items:
-            if item.episode in self.info: self.info[item.episode] = float(np.sum(self.info[item.episode] + item.reward))
-            else: self.info[item.episode] = float(item.reward)
-
+        [self._update_info(item.episode, item) for item in items.items]
         super().add(items)
 
-    def to_df(self):
-        return pd.DataFrame([i.obj for i in self.items])
+    def to_df(self): return pd.DataFrame([i.obj for i in self.items])
 
-    def to_dict(self):
-        return [i.obj for i in self.items]
+    def to_dict(self): return [i.obj for i in self.items]
 
-    def get(self, i):
-        return self.items[i].data
+    def get(self, i): return self.items[i].data
 
     def reconstruct(self, t: Tensor, x: Tensor = None):
-        if self.feed_type == FEED_TYPE_IMAGE:
-            return MarkovDecisionProcessSlice(state=Image(t), state_prime=Image(x[0]),
-                                              alt_state=Floats(x[1]), action=Floats(x[1]),
-                                              reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
-        else:
-            return MarkovDecisionProcessSlice(state=Floats(t), state_prime=Floats(x[0]),
-                                              alt_state=Image(x[1]), action=Floats(x[1]),
-                                              reward=Floats(x[2]), done=x[3], feed_type=self.feed_type)
-
-
-class MarkovDecisionProcessSlice(ItemBase):
-    # noinspection PyMissingConstructor
-    def __init__(self, state, state_prime, alt_state, action, reward, done, episode, raw_action,
-                 feed_type=FEED_TYPE_IMAGE):
-        action = np.copy(action)
-        raw_action = np.copy(raw_action)
-        if len(action.shape) == 0: action = np.array(action, ndmin=1)
-        if isinstance(np.copy(action), int): action = np.array(action, ndmin=1)
-        if isinstance(reward, float) or isinstance(reward, int): reward = np.array(reward, ndmin=1)
-        self.current_state, self.result_state, self.alternate_state, self.actions, self.reward, self.done, self.episode, self.raw_action = state, state_prime, alt_state, action, reward, done, episode, raw_action
-        self.data, self.obj = alt_state if feed_type == FEED_TYPE_IMAGE else state, \
-                              {'state': self.current_state, 'state_prime': self.result_state,
-                               'alt_state': self.alternate_state, 'action': action, 'reward': reward, 'done': done,
-                               'episode': episode, 'feed_type': feed_type, 'raw_action': raw_action}
-
-    def clean(self, only_alt=False):
-        if not only_alt:
-            self.current_state, self.result_state = None, None
-            self.obj['state'], self.obj['state_prime'] = None, None
-
-        self.alternate_state, self.obj['alt_state'] = None, None
-
-    def __str__(self):
-        formatted = (
-            map(lambda y: f'{y}:{self.obj[y].shape}', filter(lambda y: y.__contains__('state'), self.obj.keys())),
-            map(lambda y: f'{y}:{self.obj[y]}', filter(lambda y: not y.__contains__('state'), self.obj.keys()))
-        )
-
-        return ', '.join(list(formatted[0]) + list(formatted[1]))
-
-    def to_one(self):
-        return Image(self.alternate_state)
+        raise NotImplementedError('Not sure when this will be important.')

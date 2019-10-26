@@ -1,18 +1,28 @@
 from copy import deepcopy
 
-import torch
-from fastai.basic_train import LearnerCallback, Any, OptimWrapper, ifnone, F
 import numpy as np
-from fastai.metrics import RMSE
+import torch
+from fastai.basic_train import LearnerCallback, Any, OptimWrapper, ifnone
 from torch import nn
 from torch.nn import MSELoss
 from torch.optim import Adam
 
-from fast_rl.agents.BaseAgent import BaseAgent, create_nn_model, create_cnn_model, get_next_conv_shape, get_conv, \
+from fast_rl.agents.BaseAgent import BaseAgent, get_conv, \
     Flatten
-from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
-from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay
+from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, Action, State
+from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
+
+
+def get_action_ddpg_cnn(layers, action: Action, state: State, activation=nn.ReLU, kernel_size=5, stride=2):
+    module_layers, out_size = get_conv(state.s.shape, activation(), kernel_size=kernel_size, stride=stride,
+                                       n_conv_layers=3, layers=[])
+    module_layers += [Flatten()]
+    layers.append(action.taken_action.shape[1])
+    for i, layer in enumerate(layers):
+        module_layers += [nn.Linear(out_size, layer)] if i == 0 else [nn.Linear(layers[i - 1], layer)]
+        module_layers += [activation()]
+
+    return nn.Sequential(*module_layers)
 
 
 class BaseDDPGCallback(LearnerCallback):
@@ -28,8 +38,6 @@ class BaseDDPGCallback(LearnerCallback):
 
     def on_epoch_begin(self, epoch, **kwargs: Any):
         self.episode = epoch
-        # if self.learn.model.training and self.iteration != 0:
-        #     self.learn.model.memory.update(item=self.learn.data.x.items[-1])
         self.iteration = 0
 
     def on_loss_begin(self, **kwargs: Any):
@@ -41,21 +49,42 @@ class BaseDDPGCallback(LearnerCallback):
         post_optimize = self.learn.model.optimize()
         if self.learn.model.training:
             self.learn.model.memory.refresh(post_optimize=post_optimize)
-            # if self.iteration % self.copy_over_frequency == 0:
             self.learn.model.target_copy_over()
             self.iteration += 1
-    #
-    # def on_epoch_end(self, **kwargs: Any):
-    #     if self.episode % self.copy_over_frequency == 0:
-    #         self.learn.model.target_copy_over()
+
+
+class NNActor(nn.Module):
+    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU, embed=False):
+        super().__init__()
+        layers += [action.taken_action.shape[1]]
+        module_layers = []
+
+        for i, layer in enumerate(layers):
+            module_layers.append(nn.Linear(state.s.shape[1] if i == 0 else layers[i - 1], layer))
+            if i != len(layers) - 1: module_layers.append(activation())
+
+        module_layers += [nn.Tanh()]
+        self.model = nn.Sequential(*module_layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class CNNActor(nn.Module):
+    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU):
+        super().__init__()
+        # This is still some complete overlap in nn builders, for here, the default function has everything we need
+        self.model = get_action_ddpg_cnn(layers, action, state, activation=activation, kernel_size=5, stride=2)
+
+    def forward(self, x):
+        return self.model(x)
 
 
 class NNCritic(nn.Module):
-    def __init__(self, layer_list: list, action_size, state_size, use_bn=False, use_embed=True,
-                 activation_function=None):
+    def __init__(self, layer_list: list, action: Action, state: State):
         super().__init__()
-        self.action_size = action_size[0]
-        self.state_size = state_size[0]
+        self.action_size = action.taken_action.shape[1]
+        self.state_size = state.s.shape[1]
 
         self.fc1 = nn.Linear(self.state_size, layer_list[0])
         self.fc2 = nn.Linear(layer_list[0] + self.action_size, layer_list[1])
@@ -72,10 +101,10 @@ class NNCritic(nn.Module):
 
 
 class CNNCritic(nn.Module):
-    def __init__(self, layer_list: list, action_size, state_size, activation_function=None):
+    def __init__(self, action: Action, state: State):
         super().__init__()
-        self.action_size = action_size[0]
-        self.state_size = state_size[0]
+        self.action_size = action.taken_action.shape[1]
+        self.state_size = state.s.shape
 
         layers = []
         layers, input_size = get_conv(self.state_size, nn.LeakyReLU(), 8, 2, 3, layers)
@@ -97,15 +126,15 @@ class CNNCritic(nn.Module):
 
 class DDPG(BaseAgent):
 
-    def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, batch=64, discount=0.99,
+    def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, discount=0.99,
                  lr=1e-3, actor_lr=1e-4, exploration_strategy=None):
         """
-        Implementation of a continuous control algorithm using an actor/critic architecture.
+        Implementation of a discrete control algorithm using an actor/critic architecture.
 
         Notes:
             Uses 4 networks, 2 actors, 2 critics.
             All models use batch norm for feature invariance.
-            NNCritic simply predicts Q while the Actor proposes the actions to take given a state s.
+            NNCritic simply predicts Q while the Actor proposes the actions to take given a s s.
 
         References:
             [1] Lillicrap, Timothy P., et al. "Continuous control with deep reinforcement learning."
@@ -115,7 +144,6 @@ class DDPG(BaseAgent):
             data: Primary data object to use.
             memory: How big the memory buffer will be for offline training.
             tau: Defines how "soft/hard" we will copy the target networks over to the primary networks.
-            batch: Size of per memory query.
             discount: Determines the amount of discounting the existing Q reward.
             lr: Rate that the opt will learn parameter gradients.
         """
@@ -123,8 +151,9 @@ class DDPG(BaseAgent):
         self.name = 'DDPG'
         self.lr = lr
         self.discount = discount
-        self.batch = batch
         self.tau = 1
+        self.warming_up = True
+        self.batch_size = data.train_ds.bs
         self.memory = ifnone(memory, ExperienceReplay(10000))
 
         self.action_model = self.initialize_action_model([400, 300], data)
@@ -143,28 +172,23 @@ class DDPG(BaseAgent):
 
         self.loss_func = MSELoss()
 
-        self.exploration_strategy = ifnone(exploration_strategy, GreedyEpsilon(epsilon_start=1, epsilon_end=0.1,
-                                                                               decay=0.001,
-                                                                               do_exploration=self.training))
+        self.exploration_strategy = ifnone(exploration_strategy, OrnsteinUhlenbeck(size=data.action.taken_action.shape,
+                                                                                   epsilon_start=1, epsilon_end=0.1,
+                                                                                   decay=0.001,
+                                                                                   do_exploration=self.training))
 
     def initialize_action_model(self, layers, data):
-        actions, state = data.get_action_state_size()
-        if type(state[0]) is tuple and len(state[0]) == 3:
-            # actions, state = actions[0], state[0]
-            # If the shape has 3 dimensions, we will try using cnn's instead.
-            return create_cnn_model([200, 200], actions, state, False, kernel_size=8,
-                                    final_activation_function=nn.Tanh, action_val_to_dim=False)
+        if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
+            return CNNActor(layers, data.action, data.state)
         else:
-            return create_nn_model(layers, *data.get_action_state_size(), False, use_embed=data.train_ds.embeddable,
-                                   final_activation_function=nn.Tanh, action_val_to_dim=False)
+            return NNActor(layers, data.action, data.state)
 
     def initialize_critic_model(self, layers, data):
-        """ Instead of state -> action, we are going state + action -> single expected reward. """
-        actions, state = data.get_action_state_size()
-        if type(state[0]) is tuple and len(state[0]) == 3:
-            return CNNCritic(layers, *data.get_action_state_size())
+        """ Instead of s -> action, we are going s + action -> single expected reward. """
+        if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
+            return CNNCritic(data.action, data.state)
         else:
-            return NNCritic(layers, *data.get_action_state_size())
+            return NNCritic(layers, data.action, data.state)
 
     def pick_action(self, x):
         if self.training: self.action_model.eval()
@@ -174,7 +198,7 @@ class DDPG(BaseAgent):
         return np.clip(action, -1, 1)
 
     def optimize(self):
-        """
+        r"""
         Performs separate updates to the actor and critic models.
 
         Get the predicted yi for optimizing the actor:
@@ -187,14 +211,17 @@ class DDPG(BaseAgent):
         Returns:
 
         """
-        if len(self.memory) > self.batch:
+        if len(self.memory) > self.batch_size:
+            self.warming_up = False
             # Perhaps have memory as another item list? Should investigate.
-            sampled = self.memory.sample(self.batch)
+            sampled = self.memory.sample(self.batch_size)
 
-            r = torch.from_numpy(np.array([item.reward for item in sampled]).astype(float)).float()
-            s_prime = torch.from_numpy(np.array([item.result_state for item in sampled])).float()
-            s = torch.from_numpy(np.array([item.current_state for item in sampled])).float()
-            a = torch.from_numpy(np.array([item.actions for item in sampled]).astype(float)).float()
+            with torch.no_grad():
+                r = torch.cat([item.reward.float() for item in sampled])
+                s_prime = torch.cat([item.s_prime.float() for item in sampled])
+                s = torch.cat([item.s.float() for item in sampled])
+                a = torch.cat([item.a.float() for item in sampled])
+                # d = torch.cat([item.done.float() for item in sampled]) # Do we need a mask??
 
             with torch.no_grad():
                 y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))
@@ -234,7 +261,7 @@ class DDPG(BaseAgent):
 
     def soft_target_copy_over(self, t_m, f_m, tau):
         for target_param, local_param in zip(t_m.parameters(), f_m.parameters()):
-            target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
+            target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
 
     def interpret_q(self, items):
         with torch.no_grad():

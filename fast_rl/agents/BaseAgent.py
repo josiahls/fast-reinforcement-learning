@@ -1,15 +1,12 @@
 from math import floor
+from typing import Collection
 
-import gym
+import numpy as np
 import torch
-from fastai.basic_train import LearnerCallback, Any
-from fastai.callback import Callback
+from fastai.basic_train import LearnerCallback
 from fastai.layers import bn_drop_lin
 from gym.spaces import Discrete, Box
 from torch import nn
-from traitlets import List
-import numpy as np
-from typing import Collection
 
 from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
 from fast_rl.core.agent_core import ExplorationStrategy
@@ -29,6 +26,7 @@ class BaseAgent(nn.Module):
         self.loss = None
         self.out = None
         self.opt = None
+        self.warming_up = False
         self.learner_callbacks = []  # type: Collection[LearnerCallback]
         # Root model that will be accessed for action decisions
         self.action_model = None  # type: nn.Module
@@ -77,39 +75,6 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-
-
-def create_nn_model(layer_list: list, action_size, state_size, use_bn=False, use_embed=False,
-                    activation_function=None, final_activation_function=None, action_val_to_dim=True):
-    """Generates an nn module.
-
-    Notes:
-        TabularModel could possibly be used along side a cnn learner instead. Will be a good idea to investigate.
-
-    Returns:
-
-    """
-    act = nn.LeakyReLU if activation_function is None else activation_function
-    # For now the dimension of the action does not make a difference.
-    action_size = action_size[0] if not action_val_to_dim else action_size[1]
-    # For now keep drop out as 0, test including dropout later
-    ps = [0] * len(layer_list)
-    sizes = [state_size] + layer_list + [action_size]
-    actns = [act() for _ in range(len(sizes) - 2)] + [None]
-    layers = []
-    for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):
-        if i == 0 and use_embed:
-            embedded, n_in = get_embedded(n_in[0], n_out, n_in[1], 5)
-            layers += [ToLong(), embedded, Flatten()]
-        elif i == 0: n_in = n_in[0]
-        if i == 0 and use_bn: layers += [nn.BatchNorm1d(n_in)]
-
-        layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)
-
-    if final_activation_function is not None: layers += [final_activation_function()]
-    return nn.Sequential(*layers)
-
-
 def get_next_conv_shape(c_w, c_h, stride, kernel_size):
     h = floor((c_h - kernel_size - 2) / stride) + 1 # 3 convolutional layers given (3c, 640w, 640h)
     w = floor((c_w - kernel_size - 2) / stride) + 1
@@ -117,7 +82,7 @@ def get_next_conv_shape(c_w, c_h, stride, kernel_size):
 
 
 def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
-    """
+    r"""
     Useful guideline for convolutional net shape change:
 
     Shape:
@@ -141,37 +106,12 @@ def get_conv(input_tuple, act, kernel_size, stride, n_conv_layers, layers):
         n_conv_layers:
         layers:
     """
-    h, w = input_tuple[0], input_tuple[1]
+    h, w = input_tuple[1], input_tuple[2]
     conv_layers = [SwapImageChannel()]
     for i in range(n_conv_layers):
         h, w = get_next_conv_shape(h, w, stride, kernel_size)
-        conv_layers.append(torch.nn.Conv2d(input_tuple[2], 3, kernel_size=kernel_size, stride=stride))
+        conv_layers.append(torch.nn.Conv2d(input_tuple[3], 3, kernel_size=kernel_size, stride=stride))
         conv_layers.append(act)
-    return layers + conv_layers, 3 * (h + 1) * (w + 1)
 
-
-def create_cnn_model(layer_list: list, action_size, state_size, use_bn=False, kernel_size=5, stride=3, n_conv_layers=3,
-                     activation_function=None, final_activation_function=None, action_val_to_dim=True):
-    """Generates an nn module.
-
-    Notes:
-        TabularModel could possibly be used along side a cnn learner instead. Will be a good idea to investigate.
-
-    Returns:
-
-    """
-    act = nn.LeakyReLU if activation_function is None else activation_function
-    # For now keep drop out as 0, test including dropout later
-    ps = [0] * len(layer_list)
-    action_size = action_size[0] if not action_val_to_dim else action_size[1]
-    sizes = [state_size[0]] + layer_list + [action_size]
-    actns = [act() for _ in range(n_conv_layers + len(sizes) - 2)] + [None]
-    layers = []
-    for i, (n_in, n_out, dp, act) in enumerate(zip(sizes[:-1], sizes[1:], [0.] + ps, actns)):
-        if type(n_in) == tuple:
-            layers, n_in = get_conv(n_in, act, kernel_size, n_conv_layers=n_conv_layers, layers=layers, stride=stride)
-            layers += [Flatten()]
-
-        layers += bn_drop_lin(n_in, n_out, bn=use_bn and i != 0, p=dp, actn=act)
-    if final_activation_function is not None: layers += [final_activation_function()]
-    return nn.Sequential(*layers)
+    output_size = torch.prod(torch.tensor(nn.Sequential(*(layers + conv_layers))(torch.rand(input_tuple)).shape))
+    return layers + conv_layers, output_size

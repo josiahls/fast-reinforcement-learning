@@ -13,6 +13,11 @@ class b_colors:
     UNDERLINE = '\033[4m'
 
 
+def list_in_str(s: str, str_list: list, make_lower=True):
+    if make_lower: s = s.lower()
+    return any([s.__contains__(el) for el in str_list])
+
+
 def is_goal_env(env, suppress_errors=True):
     msg = 'GoalEnv requires the "{}" key to be part of the observation d.'
     # Enforce that each GoalEnv uses a Goal-compatible observation space.

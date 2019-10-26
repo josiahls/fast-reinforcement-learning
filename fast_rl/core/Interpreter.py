@@ -17,7 +17,7 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 from torch import nn
 
 from fast_rl.core import Learner
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSlice, FEED_TYPE_IMAGE
+from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, FEED_TYPE_IMAGE
 
 
 class AgentInterpretationAlpha(Interpretation):
@@ -55,11 +55,11 @@ class AgentInterpretationAlpha(Interpretation):
     def top_losses(self, k: int = None, largest=True):
         raise NotImplementedError
 
-    def reward_heatmap(self, episode_slices: List[MarkovDecisionProcessSlice], action=None):
+    def reward_heatmap(self, episode_slices: List[MarkovDecisionProcessSliceAlpha], action=None):
         """
         Takes a state_space and uses the agent to heat map rewards over the space.
 
-        We first need to determine if the state space is discrete or continuous.
+        We first need to determine if the s space is discrete or discrete.
 
         Args:
             state_space:
@@ -86,7 +86,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def plot_heatmapped_episode(self, episode, fig_size=(13, 5), action_index=None, return_heat_maps=False):
         """
-        Generates plots of heatmapped state spaces for analyzing reward distribution.
+        Generates plots of heatmapped s spaces for analyzing reward distribution.
 
         Currently only makes sense for grid based envs. Will be expecting gym_maze environments that are discrete.
 
@@ -94,9 +94,9 @@ class AgentInterpretationAlpha(Interpretation):
 
         """
         if not str(self.ds.env.spec).__contains__('maze'):
-            raise NotImplementedError('Currently only supports gym_maze envs that have discrete state spaces')
+            raise NotImplementedError('Currently only supports gym_maze envs that have discrete s spaces')
         if not isinstance(self.ds.state_size, Box):
-            raise NotImplementedError('Currently only supports Box based state spaces with 2 dimensions')
+            raise NotImplementedError('Currently only supports Box based s spaces with 2 dimensions')
 
         items = self._get_items()
         heat_maps = []
@@ -141,7 +141,7 @@ class AgentInterpretationAlpha(Interpretation):
         if return_heat_maps: return heat_maps
 
     def plot_episode(self, episode):
-        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSliceAlpha]
 
         episode_counter = 0
         # For each episode
@@ -213,7 +213,7 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSliceAlpha]
         x, y = self.get_agent_accuracy_density(items, episode_num)
 
         fig = plt.figure(figsize=(8, 8))
@@ -250,7 +250,7 @@ class AgentInterpretationAlpha(Interpretation):
         Returns:
 
         """
-        items = self._get_items(False)  # type: List[MarkovDecisionProcessSlice]
+        items = self._get_items(False)  # type: List[MarkovDecisionProcessSliceAlpha]
         x, y = self.get_q_density(items, episode_num)
 
         # Define the borders
