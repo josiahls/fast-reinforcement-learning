@@ -476,6 +476,10 @@ class MDPDataset(Dataset):
 
 class MDPDataBunch(DataBunch):
 
+    def __del__(self):
+        if self.train_dl is not None: del self.train_dl.train_ds
+        if self.valid_dl is not None: del self.valid_dl.valid_ds
+
     @property
     def state_action_sample(self) -> Union[Tuple[State, Action], None]:
         ds = ifnone(self.train_ds, self.valid_ds)  # type: MDPDataset

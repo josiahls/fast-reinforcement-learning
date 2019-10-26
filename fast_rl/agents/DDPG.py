@@ -198,7 +198,7 @@ class DDPG(BaseAgent):
         return np.clip(action, -1, 1)
 
     def optimize(self):
-        """
+        r"""
         Performs separate updates to the actor and critic models.
 
         Get the predicted yi for optimizing the actor:
