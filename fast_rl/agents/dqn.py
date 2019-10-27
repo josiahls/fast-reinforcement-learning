@@ -6,8 +6,8 @@ import torch
 from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
 
-from fast_rl.agents.BaseAgent import BaseAgent, ToLong, get_embedded, Flatten, get_conv
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, MDPDataset, State, Action
+from fast_rl.agents.agents_base import BaseAgent, ToLong, get_embedded, Flatten, get_conv
+from fast_rl.core.data_block import MDPDataBunch, MDPDataset, State, Action
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
 
@@ -43,11 +43,11 @@ class BaseDQNCallback(LearnerCallback):
 
 class FixedTargetDQNCallback(LearnerCallback):
     def __init__(self, learn, copy_over_frequency=3):
-        """Handles updating the target model in a fixed target DQN.
+        r"""Handles updating the target model in a fixed target DQN.
 
         Args:
             learn: Basic Learner.
-            copy_over_frequency: Per how many episodes we want to update the target model.
+            copy_over_frequency: For every N iterations we want to update the target model.
         """
         super().__init__(learn)
         self._order = 1
@@ -232,6 +232,7 @@ class FixedTargetDQN(DQN):
         Uses the equation:
 
         .. math::
+
                 Q^{*}(s, a) = \mathbb{E}_{s'∼ \Big\epsilon} \Big[r + \lambda \displaystyle\max_{a'}(Q^{*}(s' , a'))
                 \;|\; s, a \Big]
 

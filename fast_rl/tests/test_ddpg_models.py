@@ -5,9 +5,9 @@ from itertools import product
 import pytest
 from fastai.basic_train import LearnerCallback
 
-from fast_rl.agents.DDPG import DDPG
+from fast_rl.agents.ddpg import DDPG
 from fast_rl.core.Envs import Envs
-from fast_rl.core.MarkovDecisionProcess import FEED_TYPE_IMAGE, FEED_TYPE_STATE, MDPDataBunch
+from fast_rl.core.data_block import FEED_TYPE_IMAGE, FEED_TYPE_STATE, MDPDataBunch
 from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 from fast_rl.core.basic_train import AgentLearner
 

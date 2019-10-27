@@ -8,15 +8,14 @@ from fastai.layers import bn_drop_lin
 from gym.spaces import Discrete, Box
 from torch import nn
 
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.agent_core import ExplorationStrategy
 
 
 class BaseAgent(nn.Module):
-    """
-    One of the basic differences between this model type and typical openai models is that this will have its
+    r"""
+    One of the basic differences between this model type and typical Openai models is that this will have its
     own learner_callbacks. This is due to the often strange and beautiful methods created for training RL agents.
-
     """
     def __init__(self, data: MDPDataBunch):
         super().__init__()

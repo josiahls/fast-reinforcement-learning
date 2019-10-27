@@ -1,9 +1,9 @@
 import pytest
 from fastai.basic_train import ItemLists
 
-from fast_rl.agents.DQN import DQN
+from fast_rl.agents.dqn import DQN
 from fast_rl.core.Envs import Envs
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.basic_train import AgentLearner
 
 ENV_NAMES = Envs.get_all_latest_envs()

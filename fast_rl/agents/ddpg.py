@@ -7,9 +7,9 @@ from torch import nn
 from torch.nn import MSELoss
 from torch.optim import Adam
 
-from fast_rl.agents.BaseAgent import BaseAgent, get_conv, \
+from fast_rl.agents.agents_base import BaseAgent, get_conv, \
     Flatten
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch, Action, State
+from fast_rl.core.data_block import MDPDataBunch, Action, State
 from fast_rl.core.agent_core import ExperienceReplay, OrnsteinUhlenbeck
 
 

@@ -283,6 +283,8 @@ class MDPStep(object):
 
 
 class MDPCallback(LearnerCallback):
+    _order = -11  # Needs to happen before Recorder
+
     def __init__(self, learn):
         """
         Handles action assignment, episode naming.
@@ -297,13 +299,14 @@ class MDPCallback(LearnerCallback):
     def on_batch_begin(self, last_input, last_target, train, **kwargs: Any):
         """ Set the Action of a dataset, determine if still warming up. """
         a = self.learn.predict(last_input)
-        if train: self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
+        if self.learn.model.training:
+            self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         self.train_ds.is_warming_up = self.learn.model.warming_up
         if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.model.warming_up
         if not self.learn.model.warming_up and self.learn.loss_func is None:
             self.learn.init_loss_func()
-        return {'skip_bwd': True}
+        return {'skip_bwd': True, 'train': not self.train_ds.is_warming_up and train}
 
     def on_backward_end(self, **kwargs: Any):
         return {'skip_step': True}
@@ -430,8 +433,11 @@ class MDPDataset(Dataset):
         """
         if self.counter != 0 and self.item.d:
             self.counter = 0
-            if not self.is_warming_up: raise StopIteration
-        if self.item is None or self.item.d: return self.env.reset(), self.image
+            if not self.is_warming_up:
+                self.env.reset()
+                raise StopIteration
+        if self.item is None or self.item.d:
+            return self.env.reset(), self.image
         return self.s_prime, self.alt_s_prime
 
     def stage_2_env_step(self) -> Tuple[np.array, float, bool, None, np.array]:
@@ -478,14 +484,13 @@ class MDPDataset(Dataset):
 class MDPDataBunch(DataBunch):
 
     def __del__(self):
-        if self.train_dl is not None: del self.train_dl.train_ds
-        if self.valid_dl is not None: del self.valid_dl.valid_ds
+        if hasattr(self, 'train_dl'): del self.train_dl.train_ds
+        if hasattr(self, 'valid_dl'): del self.valid_dl.valid_ds
 
     @property
     def state_action_sample(self) -> Union[Tuple[State, Action], None]:
         ds = ifnone(self.train_ds, self.valid_ds)  # type: MDPDataset
         return ds.state, ds.action if ds is not None else None
-
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,

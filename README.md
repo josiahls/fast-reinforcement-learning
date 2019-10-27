@@ -69,9 +69,9 @@ working at their best. Post 1.0.0 will be more formal feature development with C
 **Critical**
 Testable code:
 ```python
-from fast_rl.agents.DQN import DQN
+from fast_rl.agents.dqn import DQN
 from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.data_block import MDPDataBunch
 
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
@@ -94,10 +94,10 @@ good reason. Heatmapping rewards over a maze is pretty easy as opposed to other 
 
 Usage example:
 ```python
-from fast_rl.agents.DQN import DQN
+from fast_rl.agents.dqn import DQN
 from fast_rl.core.Interpreter import AgentInterpretationAlpha
 from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.data_block import MDPDataBunch
 
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
 model = DQN(data)
@@ -181,9 +181,9 @@ the existing the Fastai
 | *Fig 11: Resulting output of a typical fit function using ref code below.* |
 
 ```python
-from fast_rl.agents.DQN import DuelingDQN
+from fast_rl.agents.dqn import DuelingDQN
 from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.core.data_block import MDPDataBunch
 
 
 data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)

@@ -17,7 +17,7 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 from torch import nn
 
 from fast_rl.core import Learner
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, FEED_TYPE_IMAGE
+from fast_rl.core.data_block import MarkovDecisionProcessSliceAlpha, FEED_TYPE_IMAGE
 
 
 class AgentInterpretationAlpha(Interpretation):
