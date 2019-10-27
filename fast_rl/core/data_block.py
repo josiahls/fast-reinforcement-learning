@@ -484,8 +484,8 @@ class MDPDataset(Dataset):
 class MDPDataBunch(DataBunch):
 
     def __del__(self):
-        if hasattr(self, 'train_dl'): del self.train_dl.train_ds
-        if hasattr(self, 'valid_dl'): del self.valid_dl.valid_ds
+        if hasattr(self.train_dl, 'train_ds'): del self.train_dl.train_ds
+        if hasattr(self.valid_dl, 'valid_ds'): del self.valid_dl.valid_ds
 
     @property
     def state_action_sample(self) -> Union[Tuple[State, Action], None]:

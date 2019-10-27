@@ -2,7 +2,6 @@ from functools import partial
 from itertools import  product
 
 import pytest
-from fastai.gen_doc.doctest import this_tests
 
 from fast_rl.agents.dqn import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE

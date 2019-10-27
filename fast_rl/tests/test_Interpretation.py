@@ -8,8 +8,6 @@ from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.train import AgentInterpretation, GroupAgentInterpretation
 
-from fastai.gen_doc.nbdoc import *
-from fastai.tabular import tabular_learner
 
 reward_plot_list = list(product([True, False], repeat=2))
 

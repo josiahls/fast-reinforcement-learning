@@ -47,6 +47,10 @@ class GroupField:
     value_type: str
     per_episode: bool
 
+    def __str__(self):
+        out = (np.average(self.values), np.max(self.values), np.min(self.values), self.value_type)
+        return 'Average %s Max %s Min %s %s' % out
+
     @property
     def unique_tuple(self): return self.model, self.meta, self.value_type
 
@@ -75,12 +79,12 @@ class AgentInterpretation(Interpretation):
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         return fig
 
-    def plot_rewards(self, per_episode=False, return_fig: bool = None, group_name=None, **kwargs):
+    def plot_rewards(self, per_episode=False, return_fig: bool = None, group_name=None, cumulative=False, **kwargs):
         values = self.get_values(self.ds.x, 'reward', per_episode)
-        processed_values = cumulate_squash(values, squash_episodes=per_episode, **kwargs)
+        processed_values = cumulate_squash(values, squash_episodes=per_episode, cumulative=cumulative, **kwargs)
         if group_name: self.groups.append(GroupField(processed_values, self.learn.model.name, group_name, 'reward',
                                                      per_episode))
-        fig = self.line_figure(processed_values, per_episode=per_episode, **kwargs)
+        fig = self.line_figure(processed_values, per_episode=per_episode, cumulative=cumulative, **kwargs)
 
         if ifnone(return_fig, defaults.return_fig): return fig
         if not IN_NOTEBOOK: plot_sixel(fig)
@@ -115,7 +119,7 @@ class GroupAgentInterpretation(object):
             max_bounds = np.max([v.values[:min_len] for v in grouped], axis=0)
             overflow = [v.values for v in grouped if len(v.values) > min_len]
 
-            ax.plot(min_bounds, c=c)
+            ax.plot(min_bounds, c=c, label=f'{grouped[0].meta} {grouped[0].model}')
             ax.plot(max_bounds, c=c)
             for v in overflow: ax.plot(v, c=c)
             ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
