@@ -1,15 +1,11 @@
 from math import floor
-from typing import Collection
 
-import numpy as np
-import torch
 from fastai.basic_train import LearnerCallback
-from fastai.layers import bn_drop_lin
+from fastai.torch_core import *
 from gym.spaces import Discrete, Box
-from torch import nn
 
-from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.agent_core import ExplorationStrategy
+from fast_rl.core.data_block import MDPDataBunch
 
 
 class BaseAgent(nn.Module):

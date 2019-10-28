@@ -1,15 +1,11 @@
 import copy
-import math
-import random
 from collections import deque
-from functools import partial
 from math import ceil
-from typing import List
 
 import gym
-import numpy as np
-import torch
 from fastai.basic_train import *
+from fastai.torch_core import *
+
 from fast_rl.core.data_structures import SumTree
 
 
@@ -134,7 +130,7 @@ class ExperienceReplay(Experience):
         """
         super().__init__(memory_size, **kwargs)
         self.max_size = memory_size
-        self.memory = deque(maxlen=memory_size)  # type: List[MarkovDecisionProcessSliceAlpha]
+        self.memory = deque(maxlen=memory_size)
 
     def __len__(self):
         return len(self.memory)
@@ -159,7 +155,7 @@ class PriorityExperienceReplay(Experience):
     def handle_loss(self, y, y_hat, base_function):
         return (base_function(y, y_hat) * torch.from_numpy(self.priority_weights).float()).mean().float()
 
-    def __init__(self, memory_size, batch_size=64, epsilon=0.001, alpha=0.6, beta=0.5):
+    def __init__(self, memory_size, batch_size=64, epsilon=0.001, alpha=0.6, beta=0.5, **kwargs):
         """
         Prioritizes sampling based on samples requiring the most learning.
 
@@ -172,7 +168,7 @@ class PriorityExperienceReplay(Experience):
             epsilon (float): Keeps the probabilities of items from being 0
             memory_size (int): Max N samples to store
         """
-        super().__init__(memory_size)
+        super().__init__(memory_size, **kwargs)
         self.batch_size = batch_size
         self.alpha = alpha
         self.beta = beta

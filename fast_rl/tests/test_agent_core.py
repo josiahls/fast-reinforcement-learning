@@ -8,7 +8,7 @@ from fast_rl.core.basic_train import AgentLearner
 
 
 def test_priority_experience_replay():
-    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=100, add_valid=False)
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', bs=4, max_steps=100, add_valid=False)
     model = FixedTargetDQN(data, memory=PriorityExperienceReplay(1000))
     learn = AgentLearner(data, model)
     learn.fit(3)

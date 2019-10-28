@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-VERSION = "0.7.0"
+VERSION = "0.9.0"
 
 setup(name='fast_rl',
       version=VERSION,
@@ -19,7 +19,7 @@ setup(name='fast_rl',
       license='',
       packages=find_packages(),
       zip_safe=False,
-      install_requires=['fastai>=1.0.59', 'gym[box2d, atari]', 'jupyter', 'moviepy'],
+      install_requires=['fastai>=1.0.59', 'gym[box2d, atari]', 'jupyter'],
       classifiers=[
           "Development Status :: 3 - Alpha",
           "Programming Language :: Python :: 3",

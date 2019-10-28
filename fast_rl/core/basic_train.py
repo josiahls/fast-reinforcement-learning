@@ -1,3 +1,6 @@
+from multiprocessing.pool import Pool
+from threading import Thread
+
 from fastai.basic_train import Learner
 
 
@@ -29,3 +32,13 @@ class AgentLearner(Learner):
          loss.
          """
         self.loss_func = self._loss_func
+
+
+class PipeLine(object):
+    def __init__(self, n_threads, pipe_line_function):
+        self.pipe_line_function = pipe_line_function
+        self.n_threads = n_threads
+        self.pool = Pool(self.n_threads)
+
+    def start(self, n_runs):
+        return self.pool.map(self.pipe_line_function,  range(n_runs))

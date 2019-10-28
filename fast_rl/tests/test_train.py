@@ -6,6 +6,11 @@ from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
+def test_pipeline_init():
+    pass
+
+
+
 def test_interpretation_reward_group_plot():
     group_interp = GroupAgentInterpretation()
     group_interp2 = GroupAgentInterpretation()
