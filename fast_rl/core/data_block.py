@@ -487,6 +487,10 @@ class MDPDataBunch(DataBunch):
         if hasattr(self.train_dl, 'train_ds'): del self.train_dl.train_ds
         if hasattr(self.valid_dl, 'valid_ds'): del self.valid_dl.valid_ds
 
+    def close(self):
+        if hasattr(self.train_dl, 'train_ds'): self.train_dl.env.close()
+        if hasattr(self.valid_dl, 'valid_ds'): self.valid_dl.env.close()
+
     @property
     def state_action_sample(self) -> Union[Tuple[State, Action], None]:
         ds = ifnone(self.train_ds, self.valid_ds)  # type: MDPDataset
