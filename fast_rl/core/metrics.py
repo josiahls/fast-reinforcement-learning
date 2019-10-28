@@ -33,7 +33,7 @@ class RewardMetric(LearnerCallback):
     def on_epoch_begin(self, **kwargs:Any):
         self.train_reward, self.valid_reward = [], []
 
-    def on_backward_end(self, **kwargs:Any):
+    def on_batch_end(self, **kwargs: Any):
         if self.learn.model.training: self.train_reward.append(self.learn.data.train_ds.item.reward.numpy()[0][0])
         elif not self.learn.recorder.no_val: self.valid_reward.append(self.learn.data.valid_ds.item.reward.numpy()[0][0])
 

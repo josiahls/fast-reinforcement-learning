@@ -141,7 +141,7 @@ class ExperienceReplay(Experience):
 
     def update(self, item, **kwargs):
         if self.reduce_ram: item.clean()
-        self.memory.append(copy.deepcopy(item))
+        self.memory.append(deepcopy(item))
 
 
 class PriorityExperienceReplayCallback(LearnerCallback):
