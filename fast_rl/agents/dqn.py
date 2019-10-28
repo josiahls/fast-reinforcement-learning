@@ -155,7 +155,7 @@ class DQN(BaseAgent):
     def calc_y_hat(self, s, a): return self.action_model(s).gather(1, a)
 
     def calc_y(self, s_prime, masking, r, y_hat):
-        return self.discount * self.action_model(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
+        return self.discount * self.action_model(s_prime).max(1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
 
     def optimize(self):
         r"""Uses ER to optimize the Q-net (without fixed targets).
@@ -237,7 +237,7 @@ class FixedTargetDQN(DQN):
                 \;|\; s, a \Big]
 
         """
-        return self.discount * self.target_net(s_prime).max(axis=1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
+        return self.discount * self.target_net(s_prime).max(1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)
 
 
 class DoubleDQN(FixedTargetDQN):

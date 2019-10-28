@@ -541,7 +541,7 @@ class MDPDataBunch(DataBunch):
         datasets = cls._init_ds(train_ds, valid_ds, None)
         dls = [DataLoader(d, b, shuffle=s, drop_last=s, num_workers=num_workers, **dl_kwargs) for d, b, s in
                zip(datasets, (bs, bs, bs, bs), (False, False, False, False)) if d is not None]
-        databunch = cls(path=path, *dls, **dl_kwargs)
+        databunch = cls(path=path, device=device, *dls, **dl_kwargs)
         if valid_ds is None: databunch.valid_dl = None
         return databunch
 
