@@ -6,8 +6,7 @@ from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
-def test_pipeline_init():
-    pass
+
 
 
 

@@ -113,6 +113,9 @@ class AgentInterpretation(Interpretation):
 class GroupAgentInterpretation(object):
     groups: List[GroupField] = field(default_factory=list)
 
+    @property
+    def analysis(self): return [g.analysis for g in self.groups]
+
     def append_meta(self, post_fix):
         r""" Useful before calling `to_pickle` if you want this set to be seen differently from future runs."""
         for g in self.groups: g.meta = g.meta + post_fix
