@@ -5,19 +5,20 @@ from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
-# group_interp = GroupAgentInterpretation()
-#
-# for i in range(4):
-#     data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=128, device='cpu')
-#     model = DQN(data, memory=ExperienceReplay(memory_size=100000, reduce_ram=True))
-#     learn = AgentLearner(data, model)
-#     learn.fit(450)
-#     interp = AgentInterpretation(learn)
-#     interp.plot_rewards(cumulative=True, per_episode=True, group_name='run', no_show=True)
-#     group_interp.add_interpretation(interp)
-#     data.close()
-# group_interp.to_pickle('../docs_src/data/dqn/', 'dqn')
+group_interp = GroupAgentInterpretation()
 
+for i in range(5):
+    data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=128, device='cpu')
+    model = DQN(data, memory=PriorityExperienceReplay(memory_size=100000, reduce_ram=True))
+    learn = AgentLearner(data, model)
+    learn.fit(450)
+    interp = AgentInterpretation(learn)
+    interp.plot_rewards(cumulative=True, per_episode=True, group_name='per', no_show=True)
+    group_interp.add_interpretation(interp)
+    group_interp.to_pickle('../../docs_src/data/dqn/', 'dqn_per')
+    data.close()
+group_interp.to_pickle('../../docs_src/data/dqn/', 'dqn_per')
+"""
 def pipeline_fn(num):
     group_interp = GroupAgentInterpretation()
     data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=128, device='cpu')
@@ -28,9 +29,10 @@ def pipeline_fn(num):
     interp.plot_rewards(cumulative=True, per_episode=True, group_name='per', no_show=True)
     group_interp.add_interpretation(interp)
     data.close()
-    group_interp.to_pickle('../docs/src/data/dqn', 'dqn' + str(num))
+    group_interp.to_pickle('../../docs_src/data/dqn', 'dqn' + str(num))
     return group_interp.analysis
 
 
-pl = PipeLine(2, pipeline_fn)
-print(pl.start(5))
+pl = PipeLine(1, pipeline_fn)
+print(pl.start(1))
+"""
