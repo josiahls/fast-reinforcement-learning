@@ -102,7 +102,7 @@ class SumTree(object):
         return is_weight.astype(float)
 
     def batch_get(self, ss):
-        return np.array(list(zip(*list([self.get(s) for s in ss]))))
+        return np.array(list(zip(*list([self.get(s) for s in ss if self.get(s)[2] != 0]))))
 
 
 def print_tree(tree: SumTree):
