@@ -2,10 +2,11 @@ import pickle
 from copy import copy
 from pathlib import Path
 
+from torch.distributions import Normal
 from dataclasses import dataclass, field
-from fastai.basic_train import Learner, DatasetType, ifnone, defaults, range_of
+from fastai.basic_train import *
 from fastai.sixel import plot_sixel
-from fastai.train import Interpretation
+from fastai.train import Interpretation, torch, DatasetType, defaults, ifnone
 import matplotlib.pyplot as plt
 from fastprogress.fastprogress import IN_NOTEBOOK
 from matplotlib.axes import Axes
@@ -69,6 +70,11 @@ class GroupField:
         comp_tuple = other.unique_tuple if isinstance(other, GroupField) else other
         return all([self.unique_tuple[i] == comp_tuple[i] for i in range(len(self.unique_tuple))])
 
+    def smooth(self, smooth_groups):
+        smooth_kernel = torch.empty((1, 1, smooth_groups)).normal_(mean=smooth_groups / 2, std=0.5)
+        reshaped_inputs = torch.tensor(self.values).view(1, 1, -1)
+        self.values = torch.conv1d(reshaped_inputs, smooth_kernel, padding=smooth_groups // 2).numpy().reshape(-1)
+
 
 class AgentInterpretation(Interpretation):
     def __init__(self, learn: Learner, ds_type: DatasetType = DatasetType.Valid, close_env=True):
@@ -114,7 +120,8 @@ class GroupAgentInterpretation(object):
     groups: List[GroupField] = field(default_factory=list)
 
     @property
-    def analysis(self): return [g.analysis for g in self.groups]
+    def analysis(self):
+        return [g.analysis for g in self.groups]
 
     def append_meta(self, post_fix):
         r""" Useful before calling `to_pickle` if you want this set to be seen differently from future runs."""
@@ -130,8 +137,10 @@ class GroupAgentInterpretation(object):
     def add_interpretation(self, interp):
         self.groups += interp.groups
 
-    def plot_reward_bounds(self, title=None, return_fig: bool = None, per_episode=False, figsize=(5, 5)):
+    def plot_reward_bounds(self, title=None, return_fig: bool = None, per_episode=False,
+                           smooth_groups: Union[None, float] = None, figsize=(5, 5)):
         groups = self.filter_by(per_episode, 'reward')
+        if smooth_groups is not None: [g.smooth(smooth_groups) for g in groups]
         unique_values = list(set([g.unique_tuple for g in groups]))
         colors = list(islice(cycle(plt.rcParams['axes.prop_cycle'].by_key()['color']), len(unique_values)))
         fig, ax = plt.subplots(1, 1, figsize=figsize)  # type: Figure, Axes
@@ -161,7 +170,8 @@ class GroupAgentInterpretation(object):
         if not os.path.exists(root_path): os.makedirs(root_path)
         pickle.dump(self, open(Path(root_path) / (name + ".pickle"), "wb"), pickle.HIGHEST_PROTOCOL)
 
-    def from_pickle(self, root_path, name):
+    @classmethod
+    def from_pickle(cls, root_path, name) -> 'GroupAgentInterpretation':
         return pickle.load(open(Path(root_path) / f'{name}.pickle', 'rb'))
 
     def merge(self, other):
