@@ -71,9 +71,7 @@ class GroupField:
         return all([self.unique_tuple[i] == comp_tuple[i] for i in range(len(self.unique_tuple))])
 
     def smooth(self, smooth_groups):
-        smooth_kernel = torch.empty((1, 1, smooth_groups)).normal_(mean=smooth_groups / 2, std=0.5)
-        reshaped_inputs = torch.tensor(self.values).view(1, 1, -1)
-        self.values = torch.conv1d(reshaped_inputs, smooth_kernel, padding=smooth_groups // 2).numpy().reshape(-1)
+        self.values = np.convolve(self.values, np.ones(smooth_groups), 'same') / smooth_groups
 
 
 class AgentInterpretation(Interpretation):
@@ -129,7 +127,7 @@ class GroupAgentInterpretation(object):
         return self
 
     def filter_by(self, per_episode, value_type):
-        return [g for g in self.groups if g.value_type == value_type and g.per_episode == per_episode]
+        return copy([g for g in self.groups if g.value_type == value_type and g.per_episode == per_episode])
 
     def group_by(self, groups, unique_values):
         for comp_tuple in unique_values: yield [g for g in groups if g == comp_tuple]
