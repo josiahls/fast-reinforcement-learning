@@ -21,7 +21,8 @@ def test_ddpg_models(env, model, s_format):
     model = partial(model, memory=ExperienceReplay(memory_size=1000, reduce_ram=True))
     data = MDPDataBunch.from_env(env, render='rgb_array', max_steps=20, bs=4, add_valid=False, feed_type=s_format)
     learn = AgentLearner(data, model(data))
-    learn.fit(3)
+    if s_format == FEED_TYPE_STATE: learn.fit(3)
+    else: learn.fit(1)
     data.train_ds.env.close()
     del learn
     del model

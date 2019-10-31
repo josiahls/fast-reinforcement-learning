@@ -7,7 +7,9 @@ from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
 
-
+def test_groupagentinterpretation_from_pickle():
+    group_interp = GroupAgentInterpretation.from_pickle('data/dqn', 'dqn_er')
+    group_interp.plot_reward_bounds(return_fig=True, per_episode=True, smooth_groups=5).show()
 
 
 def test_interpretation_reward_group_plot():
