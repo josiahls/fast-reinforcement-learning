@@ -256,7 +256,7 @@ class DoubleDQN(FixedTargetDQN):
         self.name = 'DDQN'
 
     def calc_y(self, s_prime, masking, r, y_hat):
-        return self.discount * self.target_net(s_prime).gather(1, self.action_model(s_prime).argmax(axis=1).unsqueeze(
+        return self.discount * self.target_net(s_prime).gather(1, self.action_model(s_prime).argmax(1).unsqueeze(
             1)) * masking + r.expand_as(y_hat)
 
 

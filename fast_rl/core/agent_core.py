@@ -173,12 +173,12 @@ class PriorityExperienceReplay(Experience):
         self.alpha = alpha
         self.beta = beta
         self.b_inc = -0.00001
-        self.priority_weights = np.zeros(self.batch_size, dtype=float)
+        self.priority_weights = None  # np.zeros(self.batch_size, dtype=float)
         self.epsilon = epsilon
         self.memory = SumTree(self.max_size)
         self.callbacks = [PriorityExperienceReplayCallback]
         # When sampled, store the sample indices for refresh.
-        self._indices = np.zeros(self.batch_size, dtype=int)
+        self._indices = None  # np.zeros(self.batch_size, dtype=int)
 
     def __len__(self):
         return self.memory.n_entries
@@ -190,7 +190,7 @@ class PriorityExperienceReplay(Experience):
     def sample(self, batch, **kwargs):
         self.beta = np.min([1., self.beta + self.b_inc])
         # ranges = np.linspace(0, self.memory.total(), num=ceil(self.memory.total() / self.batch_size))
-        ranges = np.linspace(0, ceil(self.memory.total() / self.batch_size), num=self.batch_size + 1)
+        ranges = np.linspace(0, ceil(self.memory.total() / batch), num=batch + 1)
         uniform_ranges = [np.random.uniform(ranges[i], ranges[i + 1]) for i in range(len(ranges) - 1)]
         self._indices, weights, samples = self.memory.batch_get(uniform_ranges)
         self.priority_weights = self.memory.anneal_weights(weights, self.beta)
