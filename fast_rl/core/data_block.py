@@ -318,7 +318,7 @@ class MDPCallback(LearnerCallback):
         """ Updates the most recent episode number in both datasets. """
         self.train_ds.x.set_recent_run_episode(epoch)
         self.train_ds.episode = epoch
-        if last_metrics[0] is not None:
+        if last_metrics[0] is not None and self.valid_ds is not None:
             self.valid_ds.x.set_recent_run_episode(epoch)
             self.valid_ds.episode = epoch
 

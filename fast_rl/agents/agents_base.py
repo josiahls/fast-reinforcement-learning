@@ -38,8 +38,8 @@ class BaseAgent(nn.Module):
         with torch.no_grad():
             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
 
-            if isinstance(self.data.train_ds.env.action_space, Discrete): action = x.argmax().numpy().item()
-            elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).numpy()
+            if isinstance(self.data.train_ds.env.action_space, Discrete): action = x.argmax().cpu().numpy().item()
+            elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).cpu().numpy()
 
             action = self.exploration_strategy.perturb(action, self.data.train_ds.env.action_space)
 
