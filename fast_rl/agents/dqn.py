@@ -144,11 +144,11 @@ class DQN(BaseAgent):
         # Perhaps have memory as another itemlist? Should investigate.
         sampled = self.memory.sample(self.batch_size)
         with torch.no_grad():
-            r = torch.cat([item.reward.float() for item in sampled])
-            s_prime = torch.cat([item.s_prime.float() for item in sampled])
-            s = torch.cat([item.s.float() for item in sampled])
-            a = torch.cat([item.a.long() for item in sampled])
-            d = torch.cat([item.done.float() for item in sampled])
+            r = torch.cat([item.reward.float() for item in sampled]).to(self.data.device)
+            s_prime = torch.cat([item.s_prime.float() for item in sampled]).to(self.data.device)
+            s = torch.cat([item.s.float() for item in sampled]).to(self.data.device)
+            a = torch.cat([item.a.long() for item in sampled]).to(self.data.device)
+            d = torch.cat([item.done.float() for item in sampled]).to(self.data.device)
 
         masking = torch.sub(1.0, d)
         return r, s_prime, s, a, d, masking
@@ -191,7 +191,7 @@ class DQN(BaseAgent):
 
             with torch.no_grad():
                 self.loss = loss
-                post_info = {'td_error': (y - y_hat).numpy()}
+                post_info = {'td_error': (y - y_hat).cpu().numpy()}
                 return post_info
 
     def interpret_q(self, items):
