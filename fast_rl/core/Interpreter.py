@@ -204,7 +204,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def plot_agent_accuracy_density(self, episode_num=None):
         """
-        Heat maps the density of actual vs estimated q values. Good reference for this is at [1].
+        Heat maps the density of actual vs estimated q v. Good reference for this is at [1].
 
         References:
             [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.
@@ -241,7 +241,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def plot_q_density(self, episode_num=None):
         """
-        Heat maps the density of actual vs estimated q values. Good reference for this is at [1].
+        Heat maps the density of actual vs estimated q v. Good reference for this is at [1].
 
         References:
             [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.

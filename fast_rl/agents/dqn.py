@@ -269,7 +269,7 @@ class DuelingDQNModule(nn.Module):
         self.adv = nn.Linear(stream_input_size, action.n_possible_values)
 
     def forward(self, x):
-        r"""Splits the base neural net output into 2 streams to evaluate the advantage and values of the s space and
+        r"""Splits the base neural net output into 2 streams to evaluate the advantage and v of the s space and
         corresponding actions.
 
         .. math::
