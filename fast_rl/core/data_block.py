@@ -216,7 +216,6 @@ class State(object):
             self.alt_s, self.alt_s_prime, self.s, self.s_prime = self.s, self.s_prime, self.alt_s, self.alt_s_prime
         # Determine bounds
         self.bounds = Bounds(self.observation_space)
-        self.n_possible_values = self.bounds.n_possible_values
         # Fix Shapes
         self.s, self.s_prime = self._fix_field(self.s), self._fix_field(self.s_prime)
         self.alt_s, self.alt_s_prime = self._fix_field(self.alt_s), self._fix_field(self.alt_s_prime)
@@ -262,11 +261,9 @@ class MDPStep(object):
         self.state.alt_s = None
         self.state.observation_space = None
         self.state.bounds = None
-        self.state.n_possible_values = None
         self.action.raw_action = None
         self.action.action_space = None
         self.action.bounds = None
-        self.action.n_possible_values = None
 
     @property
     def data(self): return self.s_prime[0], self.alt_s_prime[0] if self.alt_s_prime is not None else None
@@ -387,6 +384,8 @@ class MDPDataset(Dataset):
         # Tracking fields
         self.episode = -1 if x is None else max([i.episode + 1 for i in x.items])
         self.counter = 0
+        # While true, the dataset object with loop until the the number of loops is more than the batch size.
+        # This allows a model to fill its buffers before doing proper epoch iterating.
         self.is_warming_up = True
 
         # FastAI fields

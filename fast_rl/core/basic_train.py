@@ -1,7 +1,6 @@
 from multiprocessing.pool import Pool
-from threading import Thread
 
-from fastai.basic_train import Learner
+from fastai.basic_train import Learner, warn
 
 
 class WrapperLossFunc(object):
@@ -36,6 +35,7 @@ class AgentLearner(Learner):
 
 class PipeLine(object):
     def __init__(self, n_threads, pipe_line_function):
+        warn(Warning('Currently not super useful. Seems to have issues with running a single env in multiple threads.'))
         self.pipe_line_function = pipe_line_function
         self.n_threads = n_threads
         self.pool = Pool(self.n_threads)

@@ -150,7 +150,8 @@ class GroupAgentInterpretation(object):
             min_len = min([len(v.values) for v in grouped])
             min_b = np.min([v.values[:min_len] for v in grouped], axis=0)
             max_b = np.max([v.values[:min_len] for v in grouped], axis=0)
-            overflow = [v.values for v in grouped if len(v.values) > min_len]
+            # TODO fit function sometimes does +1 more episodes...  WHY?
+            overflow = [v.values for v in grouped if len(v.values) - min_len > 2]
 
             ax.plot(min_b, c=c, label=f'{grouped[0].meta} {grouped[0].model}')
             ax.plot(max_b, c=c)

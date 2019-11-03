@@ -155,7 +155,7 @@ class PriorityExperienceReplay(Experience):
     def handle_loss(self, y, y_hat, base_function):
         return (base_function(y, y_hat) * torch.from_numpy(self.priority_weights).float()).mean().float()
 
-    def __init__(self, memory_size, batch_size=64, epsilon=0.001, alpha=0.6, beta=0.5, **kwargs):
+    def __init__(self, memory_size, batch_size=64, epsilon=0.01, alpha=0.6, beta=0.4, b_inc=-0.001, **kwargs):
         """
         Prioritizes sampling based on samples requiring the most learning.
 
@@ -172,7 +172,7 @@ class PriorityExperienceReplay(Experience):
         self.batch_size = batch_size
         self.alpha = alpha
         self.beta = beta
-        self.b_inc = -0.00001
+        self.b_inc = b_inc
         self.priority_weights = None  # np.zeros(self.batch_size, dtype=float)
         self.epsilon = epsilon
         self.memory = SumTree(self.max_size)
