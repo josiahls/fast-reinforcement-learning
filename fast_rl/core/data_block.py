@@ -35,7 +35,7 @@ class Bounds(object):
 
     between (gym.Space): A convenience variable for determining the min and max bounds
 
-    discrete (bool): Whether the Bounds are discrete or not. Important for N possible values calc.
+    discrete (bool): Whether the Bounds are discrete or not. Important for N possible v calc.
 
     min (list): Correlated min for a given dimension
 
@@ -57,7 +57,7 @@ class Bounds(object):
     @property
     def n_possible_values(self):
         """
-        Returns the maximum number of values that can be taken.
+        Returns the maximum number of v that can be taken.
 
         This is important for doing embeddings.
         """
@@ -102,9 +102,9 @@ class Action(object):
     raw_action (np.array): Expected to always to be numpy arrays with shape (-1, 1). This is the raw model
     output such as neural net final layer output. Can be None.
 
-    action_space (gym.Space): Used for estimating the max number of values. This is important for embeddings.
+    action_space (gym.Space): Used for estimating the max number of v. This is important for embeddings.
 
-    bounds (tuple): Maximum and minimum values for each action dimension.
+    bounds (tuple): Maximum and minimum v for each action dimension.
 
     n_possible_values (int): An integer or inf value indicating the total number of possible actions there are.
     """
@@ -112,12 +112,13 @@ class Action(object):
     action_space: gym.Space
     raw_action: torch.tensor = None
     bounds: Bounds = None
-    n_possible_values: int = 0
+
+    @property
+    def n_possible_values(self): return self.bounds.n_possible_values
 
     def __post_init__(self):
         # Determine bounds
         self.bounds = Bounds(self.action_space)
-        self.n_possible_values = self.bounds.n_possible_values
 
         # Fix shapes
         self.taken_action = torch.tensor(data=self.taken_action).reshape(1, -1)
@@ -158,9 +159,9 @@ class State(object):
 
     mode (int): Should be either FEED_TYPE_IMAGE or FEED_TYPE_STATE
 
-    observation_space (gym.Space): Used for estimating the max number of values. This is important for embeddings.
+    observation_space (gym.Space): Used for estimating the max number of v. This is important for embeddings.
 
-    bounds (Bounds): Maximum and minimum values for each state dimension.
+    bounds (Bounds): Maximum and minimum v for each state dimension.
 
     n_possible_values (int): An integer or inf value indicating the total number of possible actions there are.
     """
@@ -171,7 +172,9 @@ class State(object):
     observation_space: gym.Space
     mode: int = FEED_TYPE_STATE
     bounds: Bounds = None
-    n_possible_values: int = 0
+
+    @property
+    def n_possible_values(self): return self.bounds.n_possible_values
 
     def __str__(self):
         out = copy(self.__dict__)
@@ -213,7 +216,6 @@ class State(object):
             self.alt_s, self.alt_s_prime, self.s, self.s_prime = self.s, self.s_prime, self.alt_s, self.alt_s_prime
         # Determine bounds
         self.bounds = Bounds(self.observation_space)
-        self.n_possible_values = self.bounds.n_possible_values
         # Fix Shapes
         self.s, self.s_prime = self._fix_field(self.s), self._fix_field(self.s_prime)
         self.alt_s, self.alt_s_prime = self._fix_field(self.alt_s), self._fix_field(self.alt_s_prime)
@@ -259,11 +261,9 @@ class MDPStep(object):
         self.state.alt_s = None
         self.state.observation_space = None
         self.state.bounds = None
-        self.state.n_possible_values = None
         self.action.raw_action = None
         self.action.action_space = None
         self.action.bounds = None
-        self.action.n_possible_values = None
 
     @property
     def data(self): return self.s_prime[0], self.alt_s_prime[0] if self.alt_s_prime is not None else None
@@ -384,6 +384,8 @@ class MDPDataset(Dataset):
         # Tracking fields
         self.episode = -1 if x is None else max([i.episode + 1 for i in x.items])
         self.counter = 0
+        # While true, the dataset object with loop until the the number of loops is more than the batch size.
+        # This allows a model to fill its buffers before doing proper epoch iterating.
         self.is_warming_up = True
 
         # FastAI fields
@@ -568,8 +570,8 @@ class MDPList(ItemList):
 
         Notes:
             Two important fields for you to be aware of: `items` and `x`.
-            `x` is just the values being used for directly being feed into the model.
-            `items` contains an ndarray of MarkovDecisionProcessSliceAlpha instances. These contain the the primary values
+            `x` is just the v being used for directly being feed into the model.
+            `items` contains an ndarray of MarkovDecisionProcessSliceAlpha instances. These contain the the primary v
             in x, but also the other important properties of a MDP.
 
         Args:

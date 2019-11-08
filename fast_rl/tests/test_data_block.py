@@ -141,9 +141,9 @@ def test_mdp_clean_callback(env):
 #
 #     for bound in (Bounds(init_env.action_space), Bounds(init_env.observation_space)):
 #         if env.lower().__contains__('continuous'):
-#             assert bound.n_possible_values == np.inf, f'Env {env} is continuous, should have inf values.'
+#             assert bound.n_possible_values == np.inf, f'Env {env} is continuous, should have inf v.'
 #         if env.lower().__contains__('deterministic'):
-#             assert bound.n_possible_values != np.inf, f'Env {env} is deterministic, should have discrete values.'
+#             assert bound.n_possible_values != np.inf, f'Env {env} is deterministic, should have discrete v.'
 #     init_env.close()
 #
 # @pytest.mark.parametrize("env", sorted(['CartPole-v0']))

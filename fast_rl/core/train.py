@@ -46,6 +46,9 @@ def group_by_episode(items: MDPList, episodes: list):
     return [il for il in ils if len(il.items) != 0]
 
 
+def smooth(v, smoothing_const): return np.convolve(v, np.ones(smoothing_const), 'same') / smoothing_const
+
+
 @dataclass
 class GroupField:
     values: list
@@ -70,8 +73,7 @@ class GroupField:
         comp_tuple = other.unique_tuple if isinstance(other, GroupField) else other
         return all([self.unique_tuple[i] == comp_tuple[i] for i in range(len(self.unique_tuple))])
 
-    def smooth(self, smooth_groups):
-        self.values = np.convolve(self.values, np.ones(smooth_groups), 'same') / smooth_groups
+    def smooth(self, smooth_groups): self.values = smooth(self.values, smooth_groups)
 
 
 class AgentInterpretation(Interpretation):
@@ -96,12 +98,13 @@ class AgentInterpretation(Interpretation):
         return fig
 
     def plot_rewards(self, per_episode=False, return_fig: bool = None, group_name=None, cumulative=False, no_show=False,
-                     **kwargs):
+                     smooth_const: Union[None, float] = None, **kwargs):
         values = self.get_values(self.ds.x, 'reward', per_episode)
         processed_values = cumulate_squash(values, squash_episodes=per_episode, cumulative=cumulative, **kwargs)
         if group_name: self.groups.append(GroupField(processed_values, self.learn.model.name, group_name, 'reward',
                                                      per_episode))
         if no_show: return
+        if smooth_const: processed_values = smooth(processed_values, smooth_const)
         fig = self.line_figure(processed_values, per_episode=per_episode, cumulative=cumulative, **kwargs)
 
         if ifnone(return_fig, defaults.return_fig): return fig
@@ -147,7 +150,8 @@ class GroupAgentInterpretation(object):
             min_len = min([len(v.values) for v in grouped])
             min_b = np.min([v.values[:min_len] for v in grouped], axis=0)
             max_b = np.max([v.values[:min_len] for v in grouped], axis=0)
-            overflow = [v.values for v in grouped if len(v.values) > min_len]
+            # TODO fit function sometimes does +1 more episodes...  WHY?
+            overflow = [v.values for v in grouped if len(v.values) - min_len > 2]
 
             ax.plot(min_b, c=c, label=f'{grouped[0].meta} {grouped[0].model}')
             ax.plot(max_b, c=c)
