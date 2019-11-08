@@ -11,19 +11,22 @@ import torch
 
 group_interp = GroupAgentInterpretation()
 
+meta = 'er_rms'
+
 for i in range(5):
-    data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=32, add_valid=False, feed_type=FEED_TYPE_IMAGE)
+    data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=32, add_valid=False)
     #data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', bs=32, device='cpu')
-    model = DQN(data, lr=0.00025, layers=[64, 64], memory=ExperienceReplay(memory_size=100000, reduce_ram=True),
-                           optimizer=torch.optim.RMSprop)
+    model = DoubleDQN(data, lr=0.00025, layers=[64, 64],
+                           memory=ExperienceReplay(memory_size=100000, reduce_ram=True),
+                           optimizer=torch.optim.RMSprop, copy_over_frequency=3)
     learn = AgentLearner(data, model, callback_fns=[EpsilonMetric, RewardMetric])
     learn.fit(450)
     interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
-    interp.plot_rewards(cumulative=True, per_episode=True, group_name='er+rms')
+    interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
     group_interp.add_interpretation(interp)
-    group_interp.to_pickle('../../docs_src/data/dqn/', 'dqn_er_rms')
+    group_interp.to_pickle(f'../../docs_src/data/{model.name.lower()}/', f'{model.name.lower()}_{meta}')
     data.close()
-group_interp.to_pickle('../../docs_src/data/dqn/', 'dqn_er_rms')
+group_interp.to_pickle(f'../../docs_src/data/{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 """
 def pipeline_fn(num):
     group_interp = GroupAgentInterpretation()
