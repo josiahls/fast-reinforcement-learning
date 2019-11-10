@@ -11,14 +11,14 @@ import torch
 
 group_interp = GroupAgentInterpretation()
 
-meta = 'er_rms'
+meta = 'per_rms'
 
 for i in range(5):
     data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=32, add_valid=False)
     #data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', bs=32, device='cpu')
-    model = DoubleDQN(data, lr=0.00025, layers=[64, 64],
-                           memory=ExperienceReplay(memory_size=100000, reduce_ram=True),
-                           optimizer=torch.optim.RMSprop, copy_over_frequency=3)
+    model = FixedTargetDQN(data, lr=0.0005, layers=[64, 64], discount=0.99, grad_clip=1, tau=1.0,
+                           memory=PriorityExperienceReplay(memory_size=1000000, reduce_ram=True),
+                           optimizer=torch.optim.RMSprop, copy_over_frequency=300)
     learn = AgentLearner(data, model, callback_fns=[EpsilonMetric, RewardMetric])
     learn.fit(450)
     interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
