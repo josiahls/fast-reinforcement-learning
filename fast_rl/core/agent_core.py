@@ -147,13 +147,14 @@ class ExperienceReplay(Experience):
 class PriorityExperienceReplayCallback(LearnerCallback):
     def on_train_begin(self, **kwargs):
         self.learn.model.loss_func = partial(self.learn.model.memory.handle_loss,
-                                             base_function=self.learn.model.loss_func)
+                                             base_function=self.learn.model.loss_func,
+                                             device=self.learn.data.device)
 
 
 class PriorityExperienceReplay(Experience):
 
-    def handle_loss(self, y, y_hat, base_function):
-        return (base_function(y, y_hat) * torch.from_numpy(self.priority_weights).float()).mean().float()
+    def handle_loss(self, y, y_hat, base_function, device):
+        return (base_function(y, y_hat) * torch.from_numpy(self.priority_weights).to(device=device).float()).mean()
 
     def __init__(self, memory_size, batch_size=64, epsilon=0.01, alpha=0.6, beta=0.4, b_inc=-0.001, **kwargs):
         """

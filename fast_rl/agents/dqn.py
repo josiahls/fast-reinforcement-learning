@@ -142,15 +142,16 @@ class DQN(BaseAgent):
     def sample_mask(self) -> Tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor, torch.tensor]:
         self.warming_up = False
         # Perhaps have memory as another itemlist? Should investigate.
-        sampled = self.memory.sample(self.batch_size)
         with torch.no_grad():
+            sampled = self.memory.sample(self.batch_size)
+
             r = torch.cat([item.reward.float() for item in sampled]).to(self.data.device)
             s_prime = torch.cat([item.s_prime.float() for item in sampled]).to(self.data.device)
             s = torch.cat([item.s.float() for item in sampled]).to(self.data.device)
             a = torch.cat([item.a.long() for item in sampled]).to(self.data.device)
             d = torch.cat([item.done.float() for item in sampled]).to(self.data.device)
 
-        masking = torch.sub(1.0, d)
+        masking = torch.sub(1.0, d).to(self.data.device)
         return r, s_prime, s, a, d, masking
 
     def calc_y_hat(self, s, a): return self.action_model(s).gather(1, a)
