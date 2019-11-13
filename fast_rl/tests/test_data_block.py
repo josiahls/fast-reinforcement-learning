@@ -28,50 +28,50 @@ def test_mdpdatabunch_close():
     data.close()
 
 
-@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-def test_mdp_from_pickle(env):
-    data = MDPDataBunch.from_env(env, render='rgb_array')
-    model = DQN(data)
-    learner = AgentLearner(data, model)
-    learner.fit(2)
-    data.to_pickle(path='data/CartPole-v0_testing')
-    data = MDPDataBunch.from_pickle(path='data/CartPole-v0_testing')
-    del data
-
-
-@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-def test_mdp_to_csv(env):
-    data = MDPDataBunch.from_env(env, render='rgb_array')
-    model = DQN(data)
-    learner = AgentLearner(data, model)
-    learner.fit(2)
-    data.to_csv()
-    data.train_ds.env.close()
-    data.valid_ds.env.close()
-    del learner
-
-
-@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-def test_mdp_to_pickle(env):
-    data = MDPDataBunch.from_env(env, render='rgb_array')
-    model = DQN(data)
-    learner = AgentLearner(data, model)
-    learner.fit(2)
-    data.to_pickle()
-    data.train_ds.env.close()
-    data.valid_ds.env.close()
-    del learner
-
-
-@pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-def test_mdp_clean_callback(env):
-    data = MDPDataBunch.from_env(env, render='rgb_array')
-    model = DQN(data)
-    learner = AgentLearner(data, model)
-    learner.fit(15)
-    data.train_ds.env.close()
-    data.valid_ds.env.close()
-    del learner
+# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+# def test_mdp_from_pickle(env):
+#     data = MDPDataBunch.from_env(env, render='rgb_array')
+#     model = DQN(data)
+#     learner = AgentLearner(data, model)
+#     learner.fit(2)
+#     data.to_pickle(path='data/CartPole-v0_testing')
+#     data = MDPDataBunch.from_pickle(path='data/CartPole-v0_testing')
+#     del data
+#
+#
+# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+# def test_mdp_to_csv(env):
+#     data = MDPDataBunch.from_env(env, render='rgb_array')
+#     model = DQN(data)
+#     learner = AgentLearner(data, model)
+#     learner.fit(2)
+#     data.to_csv()
+#     data.train_ds.env.close()
+#     data.valid_ds.env.close()
+#     del learner
+#
+#
+# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+# def test_mdp_to_pickle(env):
+#     data = MDPDataBunch.from_env(env, render='rgb_array')
+#     model = DQN(data)
+#     learner = AgentLearner(data, model)
+#     learner.fit(2)
+#     data.to_pickle()
+#     data.train_ds.env.close()
+#     data.valid_ds.env.close()
+#     del learner
+#
+#
+# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
+# def test_mdp_clean_callback(env):
+#     data = MDPDataBunch.from_env(env, render='rgb_array')
+#     model = DQN(data)
+#     learner = AgentLearner(data, model)
+#     learner.fit(15)
+#     data.train_ds.env.close()
+#     data.valid_ds.env.close()
+#     del learner
 #
 #
 # @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
