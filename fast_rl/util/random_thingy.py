@@ -20,7 +20,7 @@ for model_cls in [DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN]:
             if meta.__contains__('per_rms'): mem = PriorityExperienceReplay
             else: mem = ExperienceReplay
 
-            if isinstance(model_cls, DQN):
+            if model_cls is DQN:
                 model = model_cls(data, lr=0.01, layers=[64, 64], discount=0.99, grad_clip=1,
                                   memory=mem(memory_size=1000000, reduce_ram=True), optimizer=torch.optim.RMSprop)
             else:
