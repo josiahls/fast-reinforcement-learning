@@ -37,7 +37,8 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
         print('\n')
         data = MDPDataBunch.from_env('MiniGrid-FourRooms-v0', render='human', bs=32, add_valid=False,
                                      feed_type=s_format)
-        learn = AgentLearner(data, model(data))
+        model = model(data)
+        learn = AgentLearner(data, model, callback_fns=[RewardMetric, EpsilonMetric])
         learn.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
