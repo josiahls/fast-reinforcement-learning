@@ -3,7 +3,7 @@ import pytest
 
 def pytest_addoption(parser):
     parser.addoption("--include_performance_tests", action="store_true",
-                     default="Will run the performance tests which do full model testing. This could take a few"
+                     help="Will run the performance tests which do full model testing. This could take a few"
                              "days to fully accomplish.")
 
 @pytest.fixture()
