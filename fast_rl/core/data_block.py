@@ -1,18 +1,33 @@
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType
-from gym.spaces import Discrete, Box, MultiDiscrete
+from gym.spaces import Discrete, Box, MultiDiscrete, Dict
+from gym_minigrid.minigrid import MiniGridEnv
+from gym_minigrid.wrappers import FlatObsWrapper
 
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
+
+# Some imported libraries have env wrappers that can make compatibility less messy.
+WRAP_ENV_FNS = []
 
 try:
     # noinspection PyUnresolvedReferences
     import pybulletgym.envs
-
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 try:
     # noinspection PyUnresolvedReferences
     import gym_maze
+except ModuleNotFoundError as e:
+    print(f'Can\'t import one of these: {e}')
+try:
+    # noinspection PyUnresolvedReferences
+    import gym_minigrid
+
+    def mini_grid_wrap(env):
+        if issubclass(env.__class__, MiniGridEnv): env = FlatObsWrapper(env)
+        return env
+
+    WRAP_ENV_FNS.append(mini_grid_wrap)
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 
@@ -69,7 +84,9 @@ class Bounds(object):
         self.min, self.max = ifnone(self.min, []), ifnone(self.max, [])
         # If a tuple has been passed, break it into correlated min max variables.
         if self.between is not None:
-            for b in (self.between if isinstance(self.between, gym.spaces.Tuple) else listify(self.between)):
+            between = list(self.between.spaces.values()) if isinstance(self.between, gym.spaces.Dict) else self.between
+
+            for b in (between if isinstance(between, gym.spaces.Tuple) else listify(between)):
                 if isinstance(b, (int, np.int64, np.int, float, np.float)):
                     self.min, self.max = self.min + [0], self.max + [b]
                     self.discrete = isinstance(b, (int, np.int, np.int64))
@@ -372,6 +389,7 @@ class MDPDataset(Dataset):
             memory_manager: Handles how the list size will be reduced sch as removing image data.
             bs: Size of a single batch for models and the dataset to use.
         """
+        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env)
         self.env = env
         self.render = render
         self.feed_type = feed_type
@@ -400,6 +418,8 @@ class MDPDataset(Dataset):
     @property
     def max_steps(self):
         if self._max_steps is not None: return self._max_steps
+        if hasattr(self.env, 'max_steps'): return getattr(self.env, 'max_steps')
+        if hasattr(self.env.unwrapped, 'max_steps'): return getattr(self.env.unwrapped, 'max_steps')
         if hasattr(self.env, '_max_episode_steps'): return getattr(self.env, '_max_episode_steps')
         if self.env.spec.max_episode_steps is not None: return self.env.spec.max_episode_steps
 

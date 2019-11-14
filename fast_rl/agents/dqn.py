@@ -2,6 +2,7 @@ from copy import deepcopy
 from functools import partial
 from typing import Tuple
 
+import numpy as np
 import torch
 from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
 from torch import optim, nn
@@ -60,8 +61,19 @@ class FixedTargetDQNCallback(LearnerCallback):
             self.learn.model.target_copy_over()
 
 
-def get_action_dqn_fully_conn(layers, action: Action, state: State, activation=nn.ReLU, embed=False):
+class StateNorm(nn.Module):
+    def __init__(self, state: State):
+        super().__init__()
+        self.minimum = torch.from_numpy(np.array(state.bounds.min)).float()
+        self.maximum = torch.from_numpy(np.array(state.bounds.max)).float()
+
+    def forward(self, x):
+        return (x - self.minimum.expand_as(x)) / (self.maximum.expand_as(x) - self.minimum.expand_as(x))
+
+
+def get_action_dqn_fully_conn(layers, action: Action, state: State, activation=nn.ReLU, embed=False, normalize=False):
     module_layers = []
+    if normalize: module_layers.append(StateNorm(state))
     for i, size in enumerate(layers):
         if i == 0:
             if embed:
@@ -92,7 +104,7 @@ def get_action_dqn_cnn(layers, action: Action, state: State, activation=nn.ReLU,
 class DQN(BaseAgent):
     def __init__(self, data: MDPDataBunch, memory=None, lr=0.00025, discount=0.95, grad_clip=5,
                  max_episodes=None, exploration_strategy=None, use_embeddings=False, layers=None,
-                 loss_func=None, optimizer=None):
+                 loss_func=None, optimizer=None, attempt_normalize=True):
         """Trains an Agent using the Q Learning method on a neural net.
 
         Notes:
@@ -107,6 +119,7 @@ class DQN(BaseAgent):
         """
         super().__init__(data)
         # TODO add recommend cnn based on s size?
+        self.attempt_normalize = attempt_normalize
         self.name = 'DQN'
         self.use_embeddings = use_embeddings
         self.batch_size = data.train_ds.bs
@@ -131,7 +144,8 @@ class DQN(BaseAgent):
     def initialize_action_model(self, layers, data):
         if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
             model = get_action_dqn_cnn(deepcopy(layers), data.action, data.state, kernel_size=5, stride=2)
-        else: model = get_action_dqn_fully_conn(deepcopy(layers), data.action, data.state, embed=self.use_embeddings)
+        else: model = get_action_dqn_fully_conn(deepcopy(layers), data.action, data.state, embed=self.use_embeddings,
+                                                normalize=self.attempt_normalize)
         model.apply(self.init_weights)
         return model
 
