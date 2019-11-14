@@ -1,7 +1,7 @@
 from fastai.basic_data import DatasetType
 
 from fast_rl.agents.dqn import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
-from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay
+from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
 from fast_rl.core.basic_train import AgentLearner, PipeLine
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_IMAGE
 from fast_rl.core.metrics import EpsilonMetric, RewardMetric
@@ -9,8 +9,8 @@ from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 import torch
 
 
-for model_cls in [DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN]:
-    for meta in ['er_rms', 'per_rms']:
+for model_cls in [DoubleDuelingDQN]:#, DQN, FixedTargetDQN, DoubleDQN, DuelingDQN]:
+    for meta in ['per_rms', 'er_rms']:
         group_interp = GroupAgentInterpretation()
 
         for i in range(5):
@@ -21,13 +21,15 @@ for model_cls in [DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN]:
             else: mem = ExperienceReplay
 
             if model_cls is DQN:
-                model = model_cls(data, lr=0.01, layers=[64, 64], discount=0.99, grad_clip=1,
-                                  memory=mem(memory_size=1000000, reduce_ram=True), optimizer=torch.optim.RMSprop)
+                model = model_cls(data, lr=0.001, layers=[64, 64], discount=0.99, grad_clip=1,
+                                  memory=mem(memory_size=1000000, reduce_ram=True), optimizer=torch.optim.RMSprop,
+                                  exploration_strategy=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.0001))
             else:
-                model = model_cls(data, lr=0.0005, layers=[64, 64], discount=0.99, grad_clip=1, tau=1.0,
+                model = model_cls(data, lr=0.001, layers=[64, 64], discount=0.99, grad_clip=1, tau=1.0,
                                          copy_over_frequency=300,
                                          memory=mem(memory_size=1000000, reduce_ram=True),
-                                         optimizer=torch.optim.RMSprop)
+                                         optimizer=torch.optim.RMSprop,
+                                  exploration_strategy=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.0001))
 
             learn = AgentLearner(data, model, callback_fns=[EpsilonMetric, RewardMetric])
             learn.fit(450)
