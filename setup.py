@@ -20,6 +20,7 @@ setup(name='fast_rl',
       packages=find_packages(),
       zip_safe=False,
       install_requires=['fastai>=1.0.59', 'gym[box2d, atari]', 'jupyter'],
+      extras_require={'all': ['pybulletgym', 'gym_maze', 'gym-minigrid']},
       classifiers=[
           "Development Status :: 3 - Alpha",
           "Programming Language :: Python :: 3",
