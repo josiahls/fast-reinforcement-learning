@@ -9,4 +9,4 @@ gen
 /fast_rl/notebooks/.ipynb_checkpoints/
 
 # Data Files
-/docs_src/data/*
+#/docs_src/data/*

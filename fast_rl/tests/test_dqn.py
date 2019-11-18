@@ -109,7 +109,7 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../../docs_src/data/cartpole_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
+        group_interp.to_pickle(f'../../docs_src/data/lunarlander_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 
         del learn
         del model
