@@ -1,8 +1,6 @@
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType
 from gym.spaces import Discrete, Box, MultiDiscrete, Dict
-from gym_minigrid.minigrid import MiniGridEnv
-from gym_minigrid.wrappers import FlatObsWrapper
 
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 
@@ -22,6 +20,10 @@ except ModuleNotFoundError as e:
 try:
     # noinspection PyUnresolvedReferences
     import gym_minigrid
+    # noinspection PyUnresolvedReferences
+    from gym_minigrid.minigrid import MiniGridEnv
+    # noinspection PyUnresolvedReferences
+    from gym_minigrid.wrappers import FlatObsWrapper
 
     def mini_grid_wrap(env):
         if issubclass(env.__class__, MiniGridEnv): env = FlatObsWrapper(env)

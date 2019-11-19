@@ -62,18 +62,19 @@ class FixedTargetDQNCallback(LearnerCallback):
 
 
 class StateNorm(nn.Module):
-    def __init__(self, state: State):
+    def __init__(self, state: State, device='cpu'):
         super().__init__()
-        self.minimum = torch.from_numpy(np.array(state.bounds.min)).float()
-        self.maximum = torch.from_numpy(np.array(state.bounds.max)).float()
+        self.minimum = torch.from_numpy(np.array(state.bounds.min)).float().to(device=device)
+        self.maximum = torch.from_numpy(np.array(state.bounds.max)).float().to(device=device)
 
     def forward(self, x):
         return (x - self.minimum.expand_as(x)) / (self.maximum.expand_as(x) - self.minimum.expand_as(x))
 
 
-def get_action_dqn_fully_conn(layers, action: Action, state: State, activation=nn.ReLU, embed=False, normalize=False):
+def get_action_dqn_fully_conn(layers, action: Action, state: State, activation=nn.ReLU, embed=False, normalize=False,
+                              device='cpu'):
     module_layers = []
-    if normalize: module_layers.append(StateNorm(state))
+    if normalize: module_layers.append(StateNorm(state, device))
     for i, size in enumerate(layers):
         if i == 0:
             if embed:
@@ -86,7 +87,7 @@ def get_action_dqn_fully_conn(layers, action: Action, state: State, activation=n
         module_layers.append(activation())
 
     module_layers.append(nn.Linear(layers[-1], action.n_possible_values))
-    return nn.Sequential(*module_layers)
+    return nn.Sequential(*module_layers).to(device=device)
 
 
 def get_action_dqn_cnn(layers, action: Action, state: State, activation=nn.ReLU, kernel_size=5, stride=2):
@@ -145,7 +146,7 @@ class DQN(BaseAgent):
         if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
             model = get_action_dqn_cnn(deepcopy(layers), data.action, data.state, kernel_size=5, stride=2)
         else: model = get_action_dqn_fully_conn(deepcopy(layers), data.action, data.state, embed=self.use_embeddings,
-                                                normalize=self.attempt_normalize)
+                                                normalize=self.attempt_normalize, device=self.data.device)
         model.apply(self.init_weights)
         return model
 
