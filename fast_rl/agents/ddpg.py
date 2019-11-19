@@ -127,7 +127,7 @@ class CNNCritic(nn.Module):
 class DDPG(BaseAgent):
 
     def __init__(self, data: MDPDataBunch, memory=None, tau=1e-3, discount=0.99,
-                 lr=1e-3, actor_lr=1e-4, exploration_strategy=None):
+                 lr=1e-3, actor_lr=1e-4, opt=None, exploration_strategy=None, **kwargs):
         """
         Implementation of a discrete control algorithm using an actor/critic architecture.
 
@@ -147,7 +147,7 @@ class DDPG(BaseAgent):
             discount: Determines the amount of discounting the existing Q reward.
             lr: Rate that the opt will learn parameter gradients.
         """
-        super().__init__(data)
+        super().__init__(data, **kwargs)
         self.name = 'DDPG'
         self.lr = lr
         self.discount = discount
@@ -159,8 +159,8 @@ class DDPG(BaseAgent):
         self.action_model = self.initialize_action_model([400, 300], data)
         self.critic_model = self.initialize_critic_model([400, 300], data)
 
-        self.opt = OptimWrapper.create(Adam, lr=actor_lr, layer_groups=[self.action_model])
-        self.critic_optimizer = OptimWrapper.create(Adam, lr=lr, layer_groups=[self.critic_model])
+        self.opt = OptimWrapper.create(ifnone(opt, Adam), lr=actor_lr, layer_groups=[self.action_model])
+        self.critic_optimizer = OptimWrapper.create(ifnone(opt, Adam), lr=lr, layer_groups=[self.critic_model])
 
         self.t_action_model = deepcopy(self.action_model)
         self.t_critic_model = deepcopy(self.critic_model)

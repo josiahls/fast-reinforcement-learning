@@ -105,7 +105,7 @@ def get_action_dqn_cnn(layers, action: Action, state: State, activation=nn.ReLU,
 class DQN(BaseAgent):
     def __init__(self, data: MDPDataBunch, memory=None, lr=0.00025, discount=0.95, grad_clip=5,
                  max_episodes=None, exploration_strategy=None, use_embeddings=False, layers=None,
-                 loss_func=None, optimizer=None, attempt_normalize=True):
+                 loss_func=None, opt=None, attempt_normalize=True):
         """Trains an Agent using the Q Learning method on a neural net.
 
         Notes:
@@ -131,7 +131,7 @@ class DQN(BaseAgent):
         self.loss_func = ifnone(loss_func, F.mse_loss)
         self.memory = ifnone(memory, ExperienceReplay(10000))
         self.action_model = self.initialize_action_model(ifnone(layers, [64, 64]), data.train_ds)
-        self.opt = OptimWrapper.create(ifnone(optim.Adam, optimizer), lr=self.lr, layer_groups=[self.action_model])
+        self.opt = OptimWrapper.create(ifnone(optim.Adam, opt), lr=self.lr, layer_groups=[self.action_model])
         self.learner_callbacks += [partial(BaseDQNCallback, max_episodes=max_episodes)] + self.memory.callbacks
         self.exploration_strategy = ifnone(exploration_strategy, GreedyEpsilon(epsilon_start=1, epsilon_end=0.1,
                                                                                decay=0.001,

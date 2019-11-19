@@ -26,7 +26,7 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
     for i in range(5):
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = partial(model_cls, memory=memory, layers=[64, 64], discount=0.99, grad_clip=1,
-                        optimizer=torch.optim.RMSprop,
+                        opt=torch.optim.RMSprop,
                         exploration_strategy=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.00001))
 
         if model_cls is DQN:
@@ -60,7 +60,7 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
     for i in range(5):
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = partial(model_cls, memory=memory, layers=[64, 64], discount=0.99, grad_clip=1,
-                        optimizer=torch.optim.RMSprop)
+                        opt=torch.optim.RMSprop)
 
         if model_cls is DQN:
             model = partial(model, lr=0.001)
@@ -92,7 +92,7 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
     for i in range(5):
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = partial(model_cls, memory=memory, layers=[128, 64], discount=0.99, grad_clip=1,
-                        optimizer=torch.optim.RMSprop)
+                        opt=torch.optim.RMSprop)
 
         if model_cls is DQN:
             model = partial(model, lr=0.001)
@@ -124,7 +124,7 @@ def test_dqn_models_mountaincar(model_cls, s_format, experience):
     for i in range(5):
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = partial(model_cls, memory=memory, layers=[24, 12], discount=0.99, grad_clip=5,
-                        optimizer=torch.optim.RMSprop,
+                        opt=torch.optim.RMSprop,
                         exploration_strategy=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.0001))
 
         if model_cls is DQN:
