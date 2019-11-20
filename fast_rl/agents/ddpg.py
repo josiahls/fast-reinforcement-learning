@@ -54,7 +54,7 @@ class BaseDDPGCallback(LearnerCallback):
 
 
 class NNActor(nn.Module):
-    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU, embed=False):
+    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU, embed=False, device='cpu'):
         super().__init__()
         layers += [action.taken_action.shape[1]]
         module_layers = []
@@ -64,31 +64,31 @@ class NNActor(nn.Module):
             if i != len(layers) - 1: module_layers.append(activation())
 
         module_layers += [nn.Tanh()]
-        self.model = nn.Sequential(*module_layers)
+        self.model = nn.Sequential(*module_layers).to(device=device)
 
     def forward(self, x):
         return self.model(x)
 
 
 class CNNActor(nn.Module):
-    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU):
+    def __init__(self, layers, action: Action, state: State, activation=nn.ReLU, device='cpu'):
         super().__init__()
         # This is still some complete overlap in nn builders, for here, the default function has everything we need
-        self.model = get_action_ddpg_cnn(layers, action, state, activation=activation, kernel_size=5, stride=2)
+        self.model = get_action_ddpg_cnn(layers, action, state, activation=activation, kernel_size=5, stride=2).to(device=device)
 
     def forward(self, x):
         return self.model(x)
 
 
 class NNCritic(nn.Module):
-    def __init__(self, layer_list: list, action: Action, state: State):
+    def __init__(self, layer_list: list, action: Action, state: State, device='cpu'):
         super().__init__()
         self.action_size = action.taken_action.shape[1]
         self.state_size = state.s.shape[1]
 
-        self.fc1 = nn.Linear(self.state_size, layer_list[0])
-        self.fc2 = nn.Linear(layer_list[0] + self.action_size, layer_list[1])
-        self.fc3 = nn.Linear(layer_list[1], 1)
+        self.fc1 = nn.Linear(self.state_size, layer_list[0]).to(device=device)
+        self.fc2 = nn.Linear(layer_list[0] + self.action_size, layer_list[1]).to(device=device)
+        self.fc3 = nn.Linear(layer_list[1], 1).to(device=device)
 
     def forward(self, x):
         x, action = x
@@ -101,7 +101,7 @@ class NNCritic(nn.Module):
 
 
 class CNNCritic(nn.Module):
-    def __init__(self, action: Action, state: State):
+    def __init__(self, action: Action, state: State, device='cpu'):
         super().__init__()
         self.action_size = action.taken_action.shape[1]
         self.state_size = state.s.shape
@@ -109,10 +109,10 @@ class CNNCritic(nn.Module):
         layers = []
         layers, input_size = get_conv(self.state_size, nn.LeakyReLU(), 8, 2, 3, layers)
         layers += [Flatten()]
-        self.conv_layers = nn.Sequential(*layers)
+        self.conv_layers = nn.Sequential(*layers).to(device=device)
 
-        self.fc1 = nn.Linear(input_size + self.action_size, 200)
-        self.fc2 = nn.Linear(200, 1)
+        self.fc1 = nn.Linear(input_size + self.action_size, 200).to(device=device)
+        self.fc2 = nn.Linear(200, 1).to(device=device)
 
     def forward(self, x):
         x, action = x
@@ -174,21 +174,21 @@ class DDPG(BaseAgent):
 
         self.exploration_strategy = ifnone(exploration_strategy, OrnsteinUhlenbeck(size=data.action.taken_action.shape,
                                                                                    epsilon_start=1, epsilon_end=0.1,
-                                                                                   decay=0.001,
+                                                                                   decay=0.0001,
                                                                                    do_exploration=self.training))
 
     def initialize_action_model(self, layers, data):
         if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
-            return CNNActor(layers, data.action, data.state)
+            return CNNActor(layers, data.action, data.state, device=self.data.device)
         else:
-            return NNActor(layers, data.action, data.state)
+            return NNActor(layers, data.action, data.state, device=self.data.device)
 
     def initialize_critic_model(self, layers, data):
         """ Instead of s -> action, we are going s + action -> single expected reward. """
         if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
-            return CNNCritic(data.action, data.state)
+            return CNNCritic(data.action, data.state, device=self.data.device)
         else:
-            return NNCritic(layers, data.action, data.state)
+            return NNCritic(layers, data.action, data.state, device=self.data.device)
 
     def pick_action(self, x):
         if self.training: self.action_model.eval()
@@ -217,10 +217,10 @@ class DDPG(BaseAgent):
             sampled = self.memory.sample(self.batch_size)
 
             with torch.no_grad():
-                r = torch.cat([item.reward.float() for item in sampled])
-                s_prime = torch.cat([item.s_prime.float() for item in sampled])
-                s = torch.cat([item.s.float() for item in sampled])
-                a = torch.cat([item.a.float() for item in sampled])
+                r = torch.cat([item.reward.float() for item in sampled]).to(self.data.device)
+                s_prime = torch.cat([item.s_prime.float() for item in sampled]).to(self.data.device)
+                s = torch.cat([item.s.float() for item in sampled]).to(self.data.device)
+                a = torch.cat([item.a.float() for item in sampled]).to(self.data.device)
                 # d = torch.cat([item.done.float() for item in sampled]) # Do we need a mask??
 
             with torch.no_grad():
@@ -247,7 +247,7 @@ class DDPG(BaseAgent):
                 self.opt.step()
 
             with torch.no_grad():
-                post_info = {'td_error': (y - y_hat).numpy()}
+                post_info = {'td_error': (y - y_hat).cpu().numpy()}
                 return post_info
 
     def forward(self, x):

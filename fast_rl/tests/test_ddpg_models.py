@@ -12,7 +12,7 @@ from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 params_dqn = [DDPG]
-params_experience = [PriorityExperienceReplay, ExperienceReplay]
+params_experience = [ExperienceReplay, PriorityExperienceReplay]
 params_state_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
 
 
@@ -26,7 +26,7 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
         model = partial(model_cls, memory=memory, opt=torch.optim.RMSprop)
 
         print('\n')
-        data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=32, add_valid=False,
+        data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=64, add_valid=False,
                                      feed_type=s_format)
         model = model(data)
         learn = AgentLearner(data, model, callback_fns=[RewardMetric, EpsilonMetric])
@@ -36,7 +36,7 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../docs_src/data/pendulum_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
+        group_interp.to_pickle(f'../../docs_src/data/pendulum_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 
         del learn
         del model
