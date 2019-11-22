@@ -1,5 +1,6 @@
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType
+from gym import Wrapper
 from gym.spaces import Discrete, Box, MultiDiscrete, Dict
 
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
@@ -10,6 +11,14 @@ WRAP_ENV_FNS = []
 try:
     # noinspection PyUnresolvedReferences
     import pybulletgym.envs
+    # noinspection PyUnresolvedReferences
+    from pybullet_envs.envs.mujoco.envs.env_bases import BaseBulletEnv
+
+    def pybullet_wrap(env, render):
+        if issubclass(env.__class__, BaseBulletEnv):
+            if render == 'human': env.render()
+        return env
+
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 try:
@@ -25,7 +34,7 @@ try:
     # noinspection PyUnresolvedReferences
     from gym_minigrid.wrappers import FlatObsWrapper
 
-    def mini_grid_wrap(env):
+    def mini_grid_wrap(env, **kwargs):
         if issubclass(env.__class__, MiniGridEnv): env = FlatObsWrapper(env)
         return env
 
@@ -411,6 +420,7 @@ class MDPDataset(Dataset):
         # FastAI fields
         self.x = ifnone(x, MDPList([]))
         self.item: Union[MDPStep, None] = None
+        self.env.render()
         self.new(None)
 
     def aug_steps(self, steps):

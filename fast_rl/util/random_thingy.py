@@ -1,59 +1,43 @@
+from functools import partial
+from itertools import product
+
+from fast_rl.agents.ddpg import DDPG
 from fastai.basic_data import DatasetType
 
 from fast_rl.agents.dqn import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
-from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
+from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon, OrnsteinUhlenbeck
 from fast_rl.core.basic_train import AgentLearner, PipeLine
-from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_IMAGE
+from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_IMAGE, FEED_TYPE_STATE
 from fast_rl.core.metrics import EpsilonMetric, RewardMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 import torch
 
 
-for model_cls in [DoubleDuelingDQN]:#, DQN, FixedTargetDQN, DoubleDQN, DuelingDQN]:
-    for meta in ['per_rms', 'er_rms']:
-        group_interp = GroupAgentInterpretation()
+params_dqn = [DDPG]
+params_experience = [ExperienceReplay, PriorityExperienceReplay]
+params_state_format = [FEED_TYPE_STATE]  # , FEED_TYPE_IMAGE]
 
-        for i in range(5):
-            data = MDPDataBunch.from_env('MountainCar-v0', render='rgb_array', bs=32, add_valid=False)
-            #data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', bs=32, device='cpu')
-
-            if meta.__contains__('per_rms'): mem = PriorityExperienceReplay
-            else: mem = ExperienceReplay
-
-            if model_cls is DQN:
-                model = model_cls(data, lr=0.001, layers=[64, 64], discount=0.99, grad_clip=1,
-                                  memory=mem(memory_size=1000000, reduce_ram=True), optimizer=torch.optim.RMSprop,
-                                  exploration_strategy=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.0001))
-            else:
-                model = model_cls(data, lr=0.001, layers=[64, 64], discount=0.99, grad_clip=1, tau=1.0,
-                                         copy_over_frequency=300,
-                                         memory=mem(memory_size=1000000, reduce_ram=True),
-                                         optimizer=torch.optim.RMSprop,
-                                  exploration_strategy=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.0001))
-
-            learn = AgentLearner(data, model, callback_fns=[EpsilonMetric, RewardMetric])
-            learn.fit(450)
-            interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
-            interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
-            group_interp.add_interpretation(interp)
-            group_interp.to_pickle(f'../../docs_src/data/mountaincar_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
-            data.close()
-        group_interp.to_pickle(f'../../docs_src/data/mountaincar_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
-"""
-def pipeline_fn(num):
+for model_cls, experience, s_format in product(params_dqn, params_experience, params_state_format):
     group_interp = GroupAgentInterpretation()
-    data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=128, device='cpu')
-    model = DQN(data, memory=PriorityExperienceReplay(memory_size=100000, reduce_ram=True))
-    learn = AgentLearner(data, model)
-    learn.fit(450)
-    interp = AgentInterpretation(learn)
-    interp.plot_rewards(cumulative=True, per_episode=True, group_name='per', no_show=True)
-    group_interp.add_interpretation(interp)
-    data.close()
-    group_interp.to_pickle('../../docs_src/data/dqn', 'dqn' + str(num))
-    return group_interp.analysis
+    for i in range(5):
+        memory = experience(memory_size=1000000, reduce_ram=True)
 
+        print('\n')
+        data = MDPDataBunch.from_env('ReacherPyBulletEnv-v0', render='human', bs=64, add_valid=False,
+                                     feed_type=s_format)
 
-pl = PipeLine(1, pipeline_fn)
-print(pl.start(1))
-"""
+        model = partial(model_cls, memory=memory, opt=torch.optim.Adam,
+                        exploration_strategy=OrnsteinUhlenbeck(size=data.action.taken_action.shape,
+                                                               epsilon_start=1, epsilon_end=0.1,
+                                                               decay=0.00001,
+                                                               do_exploration=True))
+        model = model(data)
+        learn = AgentLearner(data, model, callback_fns=[RewardMetric, EpsilonMetric])
+        learn.fit(450)
+
+        meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
+        interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
+        interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
+        group_interp.add_interpretation(interp)
+        group_interp.to_pickle(f'../../docs_src/data/mujocoreach_{model.name.lower()}/',
+                               f'{model.name.lower()}_{meta}')
