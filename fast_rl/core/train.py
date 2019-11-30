@@ -12,6 +12,7 @@ from fastprogress.fastprogress import IN_NOTEBOOK
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from typing import Tuple, Union, List
+import pandas as pd
 import numpy as np
 import os
 from matplotlib.ticker import MaxNLocator
@@ -119,10 +120,12 @@ class AgentInterpretation(Interpretation):
 @dataclass
 class GroupAgentInterpretation(object):
     groups: List[GroupField] = field(default_factory=list)
+    in_notebook: bool = IN_NOTEBOOK
 
     @property
     def analysis(self):
-        return [g.analysis for g in self.groups]
+        if not self.in_notebook: return [g.analysis for g in self.groups]
+        else: return pd.DataFrame([{'name': g.unique_tuple, **g.analysis} for g in self.groups])
 
     def append_meta(self, post_fix):
         r""" Useful before calling `to_pickle` if you want this set to be seen differently from future runs."""

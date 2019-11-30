@@ -13,8 +13,8 @@ from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
-params_dqn = [DQN, DuelingDQN, DoubleDQN, FixedTargetDQN, DoubleDuelingDQN]
-params_experience = [PriorityExperienceReplay, ExperienceReplay]
+params_dqn = [DQN]#, DuelingDQN, DoubleDQN, FixedTargetDQN, DoubleDuelingDQN]
+params_experience = [ExperienceReplay]#, PriorityExperienceReplay]
 params_state_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
 
 
@@ -77,7 +77,7 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../../docs_src/data/cartpole_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
+        group_interp.to_pickle(f'../docs_src/data/cartpole_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 
         del learn
         del model
@@ -109,7 +109,7 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../../docs_src/data/lunarlander_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
+        group_interp.to_pickle(f'../docs_src/data/lunarlander_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 
         del learn
         del model
@@ -142,7 +142,7 @@ def test_dqn_models_mountaincar(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../../docs_src/data/mountaincar_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
+        group_interp.to_pickle(f'../docs_src/data/mountaincar_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 
         del learn
         del model
