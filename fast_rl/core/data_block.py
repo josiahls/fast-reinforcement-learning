@@ -9,13 +9,25 @@ from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 WRAP_ENV_FNS = []
 
 try:
+    import pybullet
     # noinspection PyUnresolvedReferences
     import pybulletgym.envs
     # noinspection PyUnresolvedReferences
     from pybullet_envs.envs.mujoco.envs.env_bases import BaseBulletEnv
 
+    class BulletWrapper(Wrapper):
+        def step(self, action):
+            r""" In the event of a random disconnect, retry the env """
+            try:
+                result = super().step(action)
+            except pybullet.error as e:
+                super().reset()
+                result = super().step(action)
+            return result
+
     def pybullet_wrap(env, render):
         if issubclass(env.__class__, BaseBulletEnv):
+            env = BulletWrapper(env=env)
             if render == 'human': env.render()
         return env
 

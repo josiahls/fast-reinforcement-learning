@@ -23,7 +23,7 @@ for model_cls, experience, s_format in product(params_dqn, params_experience, pa
         memory = experience(memory_size=1000000, reduce_ram=True)
 
         print('\n')
-        data = MDPDataBunch.from_env('ReacherPyBulletEnv-v0', render='human', bs=64, add_valid=False,
+        data = MDPDataBunch.from_env('ReacherPyBulletEnv-v0', render='human', bs=64, add_valid=True,
                                      feed_type=s_format)
 
         model = partial(model_cls, memory=memory, opt=torch.optim.Adam,
@@ -33,7 +33,7 @@ for model_cls, experience, s_format in product(params_dqn, params_experience, pa
                                                                do_exploration=True))
         model = model(data)
         learn = AgentLearner(data, model, callback_fns=[RewardMetric, EpsilonMetric])
-        learn.fit(450)
+        learn.fit(2)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)

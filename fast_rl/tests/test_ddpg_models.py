@@ -55,7 +55,7 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
         data = MDPDataBunch.from_env('MountainCarContinuous-v0', render='human', bs=64, add_valid=False,
                                      feed_type=s_format)
 
-        model = partial(model_cls, memory=memory, opt=torch.optim.Adam,
+        model = partial(model_cls, memory=memory, opt=torch.optim.Adam, lr=1e-2, actor_lr=1e-3,
                         exploration_strategy=OrnsteinUhlenbeck(size=data.action.taken_action.shape,
                                                                epsilon_start=1, epsilon_end=0.1,
                                                                decay=0.00001,
