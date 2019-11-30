@@ -36,7 +36,7 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../../docs_src/data/pendulum_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
+        group_interp.to_pickle(f'../docs_src/data/pendulum_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
 
         del learn
         del model
@@ -68,7 +68,7 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
-        group_interp.to_pickle(f'../../docs_src/data/mountaincarcontinuous_{model.name.lower()}/',
+        group_interp.to_pickle(f'../docs_src/data/mountaincarcontinuous_{model.name.lower()}/',
                                f'{model.name.lower()}_{meta}')
 
         del learn

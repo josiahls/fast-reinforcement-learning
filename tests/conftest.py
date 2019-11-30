@@ -11,7 +11,7 @@ def include_performance_tests(pytestconfig):
     return pytestconfig.getoption("include_performance_tests")
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def skip_performance_check(include_performance_tests):
     if not include_performance_tests:
         pytest.skip('Skipping due to performance argument not specified. Add --include_performance_tests to not skip')
