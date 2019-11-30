@@ -292,10 +292,6 @@ class DuelingDQNModule(nn.Module):
            Q(s,a;\; \Theta, \\alpha, \\beta) = V(s;\; \Theta, \\beta) + A(s, a;\; \Theta, \\alpha) - \\frac{1}{|A|}
            \\Big\\sum_{a'} A(s, a';\; \Theta, \\alpha)
 
-        Args:
-            x:
-
-        Returns:
         """
         val, adv = self.val(x), self.adv(x)
         x = val.expand_as(adv) + (adv - adv.mean()).squeeze(0)
