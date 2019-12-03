@@ -128,7 +128,7 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
                                                                do_exploration=True))
         model = model(data)
         learn = AgentLearner(data, model, callback_fns=[RewardMetric, EpsilonMetric])
-        learn.fit(450)
+        learn.fit(2000)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
         interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
