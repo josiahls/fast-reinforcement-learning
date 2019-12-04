@@ -10,9 +10,10 @@ WRAP_ENV_FNS = []
 
 try:
     import pybullet
+    # noinspection PyUnresolvedReferences
     import pybulletgym.envs
-    from pybullet_envs.envs.mujoco.envs.env_bases import BaseBulletEnv
-
+    # noinspection PyUnresolvedReferences
+    from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv
 
     class BulletWrapper(Wrapper):
         def step(self, action):
@@ -24,29 +25,32 @@ try:
                 result = super().step(action)
             return result
 
-
     def pybullet_wrap(env, render):
         if issubclass(env.__class__, BaseBulletEnv):
             env = BulletWrapper(env=env)
             if render == 'human': env.render()
         return env
 
+    WRAP_ENV_FNS.append(pybullet_wrap)
+
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 try:
+    # noinspection PyUnresolvedReferences
     import gym_maze
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 try:
+    # noinspection PyUnresolvedReferences
     import gym_minigrid
+    # noinspection PyUnresolvedReferences
     from gym_minigrid.minigrid import MiniGridEnv
+    # noinspection PyUnresolvedReferences
     from gym_minigrid.wrappers import FlatObsWrapper
-
 
     def mini_grid_wrap(env, **kwargs):
         if issubclass(env.__class__, MiniGridEnv): env = FlatObsWrapper(env)
         return env
-
 
     WRAP_ENV_FNS.append(mini_grid_wrap)
 except ModuleNotFoundError as e:
@@ -97,10 +101,8 @@ class Bounds(object):
 
         This is important for doing embeddings.
         """
-        if not self.discrete:
-            return np.inf
-        else:
-            return np.prod(np.subtract(self.max, self.min))
+        if not self.discrete: return np.inf
+        else: return np.prod(np.subtract(self.max, self.min))
 
     def __post_init__(self):
         """Sets min and max fields then validates them."""
@@ -154,8 +156,7 @@ class Action(object):
     bounds: Bounds = None
 
     @property
-    def n_possible_values(self):
-        return self.bounds.n_possible_values
+    def n_possible_values(self): return self.bounds.n_possible_values
 
     def __post_init__(self):
         # Determine bounds
@@ -169,14 +170,10 @@ class Action(object):
         """ OpenAI envs do not like 1x1 arrays when they are expecting scalars, so we need to unwrap them. """
         a = self.taken_action.detach().numpy()[0]
         if len(self.bounds) == 1: a = a[0]
-        if self.bounds.discrete and len(self.bounds) == 1:
-            return int(a)
-        elif self.bounds.discrete and len(self.bounds) != 1:
-            return a.astype(int)
-        elif not self.bounds.discrete and len(self.bounds) == 1:
-            return [float(a)]
-        elif not self.bounds.discrete and len(self.bounds) != 1:
-            return a.reshape(-1, ).astype(float)
+        if self.bounds.discrete and len(self.bounds) == 1: return int(a)
+        elif self.bounds.discrete and len(self.bounds) != 1: return a.astype(int)
+        elif not self.bounds.discrete and len(self.bounds) == 1: return [float(a)]
+        elif not self.bounds.discrete and len(self.bounds) != 1: return a.reshape(-1,).astype(float)
         raise ValueError(f'This should not have crashed.')
 
     def set_single_action(self, action: np.array):
@@ -219,8 +216,7 @@ class State(object):
     bounds: Bounds = None
 
     @property
-    def n_possible_values(self):
-        return self.bounds.n_possible_values
+    def n_possible_values(self): return self.bounds.n_possible_values
 
     def __str__(self):
         out = copy(self.__dict__)
@@ -233,33 +229,24 @@ class State(object):
         if input_field is None: return None
         input_field = copy(input_field)
 
-        if type(input_field) is str:
-            input_field = np.array(input_field)
+        if type(input_field) is str: input_field = np.array(input_field)
         elif type(input_field) is tuple:
             dtype = int if self.bounds.discrete else float
             input_field = torch.tensor(data=np.array(input_field).reshape(1, -1).astype(dtype))
-        elif np.isscalar(input_field):
-            input_field = torch.tensor(data=input_field)
-        elif type(input_field) is torch.Tensor:
-            input_field = input_field.clone().detach()
-        else:
-            input_field = torch.from_numpy(input_field)
+        elif np.isscalar(input_field): input_field = torch.tensor(data=input_field)
+        elif type(input_field) is torch.Tensor: input_field = input_field.clone().detach()
+        else: input_field = torch.from_numpy(input_field)
 
         # If a non-image state missing the batch dim
-        if len(input_field.shape) <= 1:
-            return input_field.reshape(1, -1)
+        if len(input_field.shape) <= 1: return input_field.reshape(1, -1)
         # If a non-image 2+d state missing the batch dim
-        elif input_field.shape[0] != 1 and len(input_field.shape) != 3:
-            return input_field.reshape(1, -1)
+        elif input_field.shape[0] != 1 and len(input_field.shape) != 3: return input_field.reshape(1, -1)
         # If an image state and missing the batch dim
-        elif input_field.shape[0] != 1 and len(input_field.shape) == 3:
-            return input_field.unsqueeze(0)
+        elif input_field.shape[0] != 1 and len(input_field.shape) == 3: return input_field.unsqueeze(0)
         # If an image with 4 dims (b, w, h, c), return safely
-        elif input_field.shape[0] == 1 and len(input_field.shape) == 4:
-            return input_field
+        elif input_field.shape[0] == 1 and len(input_field.shape) == 4: return input_field
         # If not an image, but has 2 dims (b, d), return safely
-        elif input_field.shape[0] == 1 and len(input_field.shape) == 2:
-            return input_field
+        elif input_field.shape[0] == 1 and len(input_field.shape) == 2: return input_field
         raise ValueError(f'Input has shape {input_field} for mode {self.mode}. This is unexpected.')
 
     def __post_init__(self):
@@ -322,22 +309,16 @@ class MDPStep(object):
 
     @property
     def data(self): return self.s_prime[0], self.alt_s_prime[0] if self.alt_s_prime is not None else None
-
     @property
     def obj(self): return self.__dict__
-
     @property
     def s(self): return self.state.s
-
     @property
     def s_prime(self): return self.state.s_prime
-
     @property
     def alt_s_prime(self): return self.state.alt_s_prime
-
     @property
     def a(self): return self.action.taken_action
-
     @property
     def d(self):
         return bool(self.done)
@@ -362,8 +343,7 @@ class MDPCallback(LearnerCallback):
         a = self.learn.predict(last_input)
         if self.learn.model.training:
             self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
-        else:
-            self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
+        else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         self.train_ds.is_warming_up = self.learn.model.warming_up
         if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.model.warming_up
         if not self.learn.model.warming_up and self.learn.loss_func is None:
@@ -434,7 +414,7 @@ class MDPDataset(Dataset):
             memory_manager: Handles how the list size will be reduced sch as removing image data.
             bs: Size of a single batch for models and the dataset to use.
         """
-        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env)
+        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env, render=render)
         self.env = env
         self.render = render
         self.feed_type = feed_type
@@ -454,7 +434,6 @@ class MDPDataset(Dataset):
         # FastAI fields
         self.x = ifnone(x, MDPList([]))
         self.item: Union[MDPStep, None] = None
-        self.env.reset()
         self.env.render()
         self.new(None)
 
@@ -529,7 +508,7 @@ class MDPDataset(Dataset):
         # If both the current item and the done are both true, then we need to retry the env
         if self.item is not None and self.item.d and done: return self.new()
 
-        self.state = State(s, self.s_prime, alt_s, self.alt_s_prime, self.env.observation_space, self.feed_type)
+        self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
         self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
         self.counter += 1
 
@@ -577,7 +556,7 @@ class MDPDataBunch(DataBunch):
                                 memory_manager=memory_manager, x=x)
         if add_valid:
             valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps, x=val_x,
-                                    render=render, bs=bs, feed_type=feed_type, memory_manager=memory_manager)
+                                    render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
         path = './data/' + env_name + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
@@ -668,14 +647,11 @@ class MDPList(ItemList):
         [self._update_info(item.episode, item) for item in items.items]
         super().add(items)
 
-    def to_df(self):
-        return pd.DataFrame([i.obj for i in self.items])
+    def to_df(self): return pd.DataFrame([i.obj for i in self.items])
 
-    def to_dict(self):
-        return [i.obj for i in self.items]
+    def to_dict(self): return [i.obj for i in self.items]
 
-    def get(self, i):
-        return self.items[i].data
+    def get(self, i): return self.items[i].data
 
     def reconstruct(self, t: Tensor, x: Tensor = None):
         raise NotImplementedError('Not sure when this will be important.')
