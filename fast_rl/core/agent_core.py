@@ -13,7 +13,7 @@ class ExplorationStrategy:
     def __init__(self, do_exploration: bool=True):
         self.do_exploration = do_exploration
 
-    def perturb(self, action,  action_space):
+    def perturb(self, action,  action_space: gym.Space):
         """
         Base method just returns the action. Subclass, and change to return randomly / augmented actions.
 
@@ -21,7 +21,6 @@ class ExplorationStrategy:
         to completely bypass these actions.
 
         Args:
-            raw_action:
             action:
             action_space (gym.Space): The original gym space. Should contain information on the action type, and
             possible convenience methods for random action selection.
