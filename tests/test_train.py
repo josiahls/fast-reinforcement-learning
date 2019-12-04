@@ -8,13 +8,13 @@ import pandas as pd
 
 
 def test_groupagentinterpretation_from_pickle():
-    group_interp = GroupAgentInterpretation.from_pickle('data/cartpole_dqn',
+    group_interp = GroupAgentInterpretation.from_pickle('./data/cartpole_dqn',
                                                         'dqn_PriorityExperienceReplay_FEED_TYPE_STATE')
     group_interp.plot_reward_bounds(return_fig=True, per_episode=True, smooth_groups=5).show()
 
 
 def test_groupagentinterpretation_analysis():
-    group_interp = GroupAgentInterpretation.from_pickle('data/cartpole_dqn',
+    group_interp = GroupAgentInterpretation.from_pickle('./data/cartpole_dqn',
                                                         'dqn_PriorityExperienceReplay_FEED_TYPE_STATE')
     assert isinstance(group_interp.analysis, list)
     group_interp.in_notebook = True
