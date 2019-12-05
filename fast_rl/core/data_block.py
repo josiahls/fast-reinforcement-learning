@@ -13,7 +13,8 @@ try:
     # noinspection PyUnresolvedReferences
     import pybulletgym.envs
     # noinspection PyUnresolvedReferences
-    from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv
+    from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv as MujocoEnv
+    from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
 
     class BulletWrapper(Wrapper):
         def step(self, action):
@@ -26,7 +27,7 @@ try:
             return result
 
     def pybullet_wrap(env, render):
-        if issubclass(env.__class__, BaseBulletEnv):
+        if issubclass(env.unwrapped.__class__, (MujocoEnv, RoboschoolEnv)):
             env = BulletWrapper(env=env)
             if render == 'human': env.render()
         return env
