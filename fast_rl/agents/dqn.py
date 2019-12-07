@@ -4,12 +4,20 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone
+from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone, Learner
 from torch import optim, nn
 
 from fast_rl.agents.agents_base import BaseAgent, ToLong, get_embedded, Flatten, get_conv
 from fast_rl.core.data_block import MDPDataBunch, MDPDataset, State, Action
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
+
+
+class DQNLearner(Learner):
+    pass
+
+
+def create_dqn_model():
+    pass
 
 
 class BaseDQNCallback(LearnerCallback):
@@ -42,7 +50,7 @@ class BaseDQNCallback(LearnerCallback):
         self.iteration += 1
 
 
-class FixedTargetDQNCallback(LearnerCallback):
+class FixedTargetDQNTrainer(LearnerCallback):
     def __init__(self, learn, copy_over_frequency=3):
         r"""Handles updating the target model in a fixed target DQN.
 
@@ -236,10 +244,10 @@ class FixedTargetDQN(DQN):
         self.name = 'DQN Fixed Targeting'
         self.tau = tau
         self.target_net = deepcopy(self.action_model)
-        self.learner_callbacks += [partial(FixedTargetDQNCallback, copy_over_frequency=copy_over_frequency)]
+        self.learner_callbacks += [partial(FixedTargetDQNTrainer, copy_over_frequency=copy_over_frequency)]
 
     def target_copy_over(self):
-        r""" Updates the target network from calls in the FixedTargetDQNCallback callback."""
+        r""" Updates the target network from calls in the FixedTargetDQNTrainer callback."""
         # self.target_net.load_state_dict(self.action_model.state_dict())
         for target_param, local_param in zip(self.target_net.parameters(), self.action_model.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)

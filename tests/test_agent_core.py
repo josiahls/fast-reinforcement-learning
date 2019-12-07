@@ -19,8 +19,8 @@ def test_agent_recorder_loss_plot():
     model = DQN(data)
     learn = AgentLearner(data, model)
     learn.fit(1)
-    learn.recorder.plot()
-    learn.recorder.plot_losses()
+    # learn.recorder.plot()
+    # learn.recorder.plot_losses()
 
 
 def test_databunch_dqn_fit():

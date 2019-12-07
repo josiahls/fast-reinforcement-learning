@@ -435,7 +435,6 @@ class MDPDataset(Dataset):
         # FastAI fields
         self.x = ifnone(x, MDPList([]))
         self.item: Union[MDPStep, None] = None
-        self.env.render()
         self.new(None)
 
     def aug_steps(self, steps):
