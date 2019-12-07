@@ -13,7 +13,7 @@ class ExplorationStrategy:
     def __init__(self, do_exploration: bool=True):
         self.do_exploration = do_exploration
 
-    def perturb(self, action,  action_space: gym.Space):
+    def perturb(self, action,  action_space):
         """
         Base method just returns the action. Subclass, and change to return randomly / augmented actions.
 
