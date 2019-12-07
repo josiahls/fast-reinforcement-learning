@@ -1,5 +1,6 @@
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType
+from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
 from gym.spaces import Discrete, Box, MultiDiscrete, Dict
 
@@ -103,7 +104,7 @@ class Bounds(object):
         This is important for doing embeddings.
         """
         if not self.discrete: return np.inf
-        else: return np.prod(np.subtract(self.max, self.min))
+        else: return np.add(*np.abs((self.max, self.min))).reshape(1, -1)
 
     def __post_init__(self):
         """Sets min and max fields then validates them."""
@@ -215,6 +216,10 @@ class State(object):
     observation_space: gym.Space
     mode: int = FEED_TYPE_STATE
     bounds: Bounds = None
+
+    @property
+    def channels(self):
+        return self.s.shape[3]
 
     @property
     def n_possible_values(self): return self.bounds.n_possible_values
@@ -329,7 +334,7 @@ class MDPCallback(LearnerCallback):
     _order = -11  # Needs to happen before Recorder
 
     def __init__(self, learn):
-        """
+        r"""
         Handles action assignment, episode naming.
 
         Args:
@@ -340,7 +345,7 @@ class MDPCallback(LearnerCallback):
         self.valid_ds: MDPDataset = None if learn.data.empty_val else learn.data.valid_ds
 
     def on_batch_begin(self, last_input, last_target, train, **kwargs: Any):
-        """ Set the Action of a dataset, determine if still warming up. """
+        r""" Set the Action of a dataset, determine if still warming up. """
         a = self.learn.predict(last_input)
         if self.learn.model.training:
             self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
@@ -436,6 +441,9 @@ class MDPDataset(Dataset):
         self.x = ifnone(x, MDPList([]))
         self.item: Union[MDPStep, None] = None
         self.new(None)
+
+    def get_emb_szs(self):
+        return [def_emb_sz(0, 0,None)]
 
     def aug_steps(self, steps):
         if self.is_warming_up and steps < self.bs: return self.bs

@@ -5,7 +5,8 @@ import pytest
 import torch
 from fastai.basic_data import DatasetType
 
-from fast_rl.agents.dqn import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN
+from fast_rl.agents.dqn import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN, create_dqn_model
+from fast_rl.agents.dqn_models import DQNModule
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE
 from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
 from fast_rl.core.basic_train import AgentLearner
@@ -13,14 +14,29 @@ from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
-params_dqn = [DQN]#, DuelingDQN, DoubleDQN, FixedTargetDQN, DoubleDuelingDQN]
-params_experience = [ExperienceReplay]#, PriorityExperienceReplay]
-params_state_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
+p_model = [DQNModule]#, DuelingDQN, DoubleDQN, FixedTargetDQN, DoubleDuelingDQN]
+p_exp = [ExperienceReplay]#, PriorityExperienceReplay]
+p_format = [FEED_TYPE_IMAGE, FEED_TYPE_STATE]
+p_envs = ['CartPole-v1', 'maze-random-5x5-v0']
+
+config_env_expectations = {
+    'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
+    'maze-random-5x5-v0': {'action_shape': (1, 4), 'state_shape': (1, 2)}
+}
+
+@pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
+def test_dqn_create_dqn_model(model_cls, s_format, env):
+    data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
+    model = create_dqn_model(data, model_cls)
+
+    assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
+    if s_format == FEED_TYPE_STATE:
+        assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(params_dqn, params_state_format, params_experience)))
+                         list(product(p_model, p_format, p_exp)))
 def test_dqn_models_minigrids(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -54,7 +70,7 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(params_dqn, params_state_format, params_experience)))
+                         list(product(p_model, p_format, p_exp)))
 def test_dqn_models_cartpole(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -86,7 +102,7 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(params_dqn, params_state_format, params_experience)))
+                         list(product(p_model, p_format, p_exp)))
 def test_dqn_models_lunarlander(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -118,7 +134,7 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(params_dqn, params_state_format, params_experience)))
+                         list(product(p_model, p_format, p_exp)))
 def test_dqn_models_mountaincar(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):

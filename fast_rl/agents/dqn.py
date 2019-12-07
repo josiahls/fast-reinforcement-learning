@@ -5,18 +5,38 @@ from typing import Tuple
 import numpy as np
 import torch
 from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone, Learner
+from fastai.tabular.data import emb_sz_rule
+from fastai.torch_core import *
 from torch import optim, nn
 
 from fast_rl.agents.agents_base import BaseAgent, ToLong, get_embedded, Flatten, get_conv
-from fast_rl.core.data_block import MDPDataBunch, MDPDataset, State, Action
+from fast_rl.agents.dqn_models import DQNModule
+from fast_rl.core.basic_train import AgentLearner
+from fast_rl.core.data_block import MDPDataBunch, MDPDataset, State, Action, FEED_TYPE_STATE, FEED_TYPE_IMAGE
 from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
 
 
-class DQNLearner(Learner):
-    pass
+class DQNLearner(AgentLearner):
+    def __init__(self):
+        super().__init__()
+
+    def predict(self, element, **kwargs):
+        pass
 
 
-def create_dqn_model():
+def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, ignore_embed=False, channels=None, **kwargs):
+    bs, state, action = data.bs, data.state, data.action
+    nc, w, h, n_conv_blocks = -1, -1, -1, [] if state.mode == FEED_TYPE_STATE else ifnone(channels, [3, 3, 1])
+    if state.mode == FEED_TYPE_IMAGE: nc, w, h = state.s.shape[3], state.s.shape[2], state.s.shape[1]
+    _layers = ifnone(layers, [64, 64])
+    if ignore_embed or np.any(state.n_possible_values == np.inf) or state.mode == FEED_TYPE_IMAGE: emb_szs = []
+    else: emb_szs = [(d, int(emb_sz_rule(d))) for d in state.n_possible_values.reshape(-1,)]
+    ao = int(action.n_possible_values[0])
+    model = base_arch(ni=state.s.shape[1], ao=ao, layers=_layers, emb_szs=emb_szs, n_conv_blocks=n_conv_blocks,
+                      nc=nc, w=w, h=h, **kwargs)
+
+
+def dqn_learner():
     pass
 
 
@@ -153,8 +173,9 @@ class DQN(BaseAgent):
     def initialize_action_model(self, layers, data):
         if len(data.state.s.shape) == 4 and data.state.s.shape[-1] < 4:
             model = get_action_dqn_cnn(deepcopy(layers), data.action, data.state, kernel_size=5, stride=2)
-        else: model = get_action_dqn_fully_conn(deepcopy(layers), data.action, data.state, embed=self.use_embeddings,
-                                                normalize=self.attempt_normalize, device=self.data.device)
+        else:
+            model = get_action_dqn_fully_conn(deepcopy(layers), data.action, data.state, embed=self.use_embeddings,
+                                              normalize=self.attempt_normalize, device=self.data.device)
         model.apply(self.init_weights)
         return model
 
@@ -177,7 +198,8 @@ class DQN(BaseAgent):
         masking = torch.sub(1.0, d).to(self.data.device)
         return r, s_prime, s, a, d, masking
 
-    def calc_y_hat(self, s, a): return self.action_model(s).gather(1, a)
+    def calc_y_hat(self, s, a):
+        return self.action_model(s).gather(1, a)
 
     def calc_y(self, s_prime, masking, r, y_hat):
         return self.discount * self.action_model(s_prime).max(1)[0].unsqueeze(1) * masking + r.expand_as(y_hat)

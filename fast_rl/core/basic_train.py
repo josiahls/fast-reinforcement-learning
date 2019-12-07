@@ -17,10 +17,10 @@ class AgentLearner(Learner):
         super().__post_init__()
         self._loss_func = WrapperLossFunc(self)
         self.loss_func = None
-        self.callback_fns += self.model.learner_callbacks + self.data.train_ds.callback
+        self.callback_fns.append(self.data.train_ds.callback)
 
     def predict(self, element, **kwargs):
-        return self.model.pick_action(element)
+        raise NotImplemented
 
     def init_loss_func(self):
         r"""
