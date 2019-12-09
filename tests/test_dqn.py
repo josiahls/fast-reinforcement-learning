@@ -5,8 +5,8 @@ import pytest
 import torch
 from fastai.basic_data import DatasetType
 
-from fast_rl.agents.dqn import DQN, FixedTargetDQN, DoubleDQN, DuelingDQN, DoubleDuelingDQN, create_dqn_model
-from fast_rl.agents.dqn_models import DQNModule
+from fast_rl.agents.dqn import create_dqn_model, dqn_learner
+from fast_rl.agents.dqn_models import *
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE
 from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
 from fast_rl.core.basic_train import AgentLearner
@@ -14,10 +14,10 @@ from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 
-p_model = [DQNModule]#, DuelingDQN, DoubleDQN, FixedTargetDQN, DoubleDuelingDQN]
+p_model = [DoubleDuelingModule, DuelingDQNFixedTargetModule, DuelingDQNModule, DoubleDQNModule, FixedTargetDQNModule, DQNModule]
 p_exp = [ExperienceReplay]#, PriorityExperienceReplay]
-p_format = [FEED_TYPE_IMAGE, FEED_TYPE_STATE]
-p_envs = ['CartPole-v1', 'maze-random-5x5-v0']
+p_format = [FEED_TYPE_IMAGE]#, FEED_TYPE_STATE]
+p_envs = ['CartPole-v1']#, 'maze-random-5x5-v0']
 
 config_env_expectations = {
     'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
@@ -28,6 +28,35 @@ config_env_expectations = {
 def test_dqn_create_dqn_model(model_cls, s_format, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
     model = create_dqn_model(data, model_cls)
+    model.eval()
+    model(data.state.s.float())
+
+    assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
+    if s_format == FEED_TYPE_STATE:
+        assert config_env_expectations[env]['state_shape'] == data.state.s.shape
+
+
+@pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
+def test_dqn_dqn_learner(model_cls, s_format, mem, env):
+    data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
+    model = create_dqn_model(data, model_cls)
+    memory = ExperienceReplay(10000)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+
+    assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
+    if s_format == FEED_TYPE_STATE:
+        assert config_env_expectations[env]['state_shape'] == data.state.s.shape
+
+
+@pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
+def test_dqn_fit(model_cls, s_format, mem, env):
+    data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
+    model = create_dqn_model(data, model_cls)
+    memory = ExperienceReplay(10000)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+    learner.fit(3)
 
     assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
     if s_format == FEED_TYPE_STATE:

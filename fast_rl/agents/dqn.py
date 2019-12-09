@@ -13,15 +13,17 @@ from fast_rl.agents.agents_base import BaseAgent, ToLong, get_embedded, Flatten,
 from fast_rl.agents.dqn_models import DQNModule
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.data_block import MDPDataBunch, MDPDataset, State, Action, FEED_TYPE_STATE, FEED_TYPE_IMAGE
-from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
+from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon, ExplorationStrategy
 
 
 class DQNLearner(AgentLearner):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, data: MDPDataBunch, model, memory, exploration_method, **learn_kwargs):
+        self.memory = memory
+        self.exploration_method = exploration_method
+        super().__init__(data=data, model=model, **learn_kwargs)
 
     def predict(self, element, **kwargs):
-        pass
+        return self.model(element.float())
 
 
 def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, ignore_embed=False, channels=None, **kwargs):
@@ -34,10 +36,12 @@ def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, igno
     ao = int(action.n_possible_values[0])
     model = base_arch(ni=state.s.shape[1], ao=ao, layers=_layers, emb_szs=emb_szs, n_conv_blocks=n_conv_blocks,
                       nc=nc, w=w, h=h, **kwargs)
+    return model
 
 
-def dqn_learner():
-    pass
+def dqn_learner(data: MDPDataBunch, model: DQNModule, memory: ExperienceReplay, exploration_method: ExplorationStrategy,
+                **kwargs):
+    return DQNLearner(data, model, memory, exploration_method, **kwargs)
 
 
 class BaseDQNCallback(LearnerCallback):

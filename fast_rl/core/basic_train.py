@@ -13,14 +13,9 @@ class WrapperLossFunc(object):
 
 class AgentLearner(Learner):
 
-    def __post_init__(self) -> None:
-        super().__post_init__()
+    def __init__(self, data, **learn_kwargs):
+        super().__init__(data=data, loss_func=None, callback_fns=data.callback, **learn_kwargs)
         self._loss_func = WrapperLossFunc(self)
-        self.loss_func = None
-        self.callback_fns.append(self.data.train_ds.callback)
-
-    def predict(self, element, **kwargs):
-        raise NotImplemented
 
     def init_loss_func(self):
         r"""
