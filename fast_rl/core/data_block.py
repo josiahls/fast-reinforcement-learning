@@ -6,9 +6,12 @@ from gym.spaces import Discrete, Box, MultiDiscrete, Dict
 
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
+import os
 
 # Some imported libraries have env wrappers that can make compatibility less messy.
 WRAP_ENV_FNS = []
+# Because concurrency errors happen from Open AI when there are multiple environents.
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 try:
     import pybullet
@@ -41,6 +44,27 @@ except ModuleNotFoundError as e:
 try:
     # noinspection PyUnresolvedReferences
     import gym_maze
+    from gym_maze.envs.maze_env import MazeEnv
+    import pygame
+
+    class GymMazeWrapper(Wrapper):
+        def step(self, action):
+            r""" In the event of a random disconnect, retry the env """
+            try:
+                result = super().step(action)
+            except pygame.error as e:
+                self.env = gym.make(self.env.spec.id)
+                super().reset()
+                result = super().step(action)
+            return result
+
+    def gymmaze_wrap(env, render):
+        if issubclass(env.unwrapped.__class__, MazeEnv):
+            env = GymMazeWrapper(env=env)
+        return env
+
+    WRAP_ENV_FNS.append(gymmaze_wrap)
+
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 try:
@@ -244,7 +268,7 @@ class State(object):
         elif type(input_field) is torch.Tensor: input_field = input_field.clone().detach()
         else: input_field = torch.from_numpy(input_field)
 
-        input_field = input_field.long() if self.bounds.discrete else input_field.float()
+        input_field = input_field.long() if self.bounds.discrete and self.mode != FEED_TYPE_IMAGE else input_field.float()
         # If a non-image state missing the batch dim
         if len(input_field.shape) <= 1: return input_field.reshape(1, -1)
         # If a non-image 2+d state missing the batch dim
@@ -548,8 +572,8 @@ class MDPDataset(Dataset):
 class MDPDataBunch(DataBunch):
 
     def close(self):
-        if hasattr(self.train_dl, 'train_ds'): self.train_dl.env.close()
-        if hasattr(self.valid_dl, 'valid_ds'): self.valid_dl.env.close()
+        if self.train_dl is not None: self.train_dl.env.close()
+        if self.valid_dl is not None: self.valid_dl.env.close()
 
     @property
     def state_action_sample(self) -> Union[Tuple[State, Action], None]:

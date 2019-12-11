@@ -1,5 +1,6 @@
 from functools import partial
 from itertools import  product
+from time import sleep
 
 import pytest
 import torch
@@ -17,7 +18,7 @@ from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 p_model = [DQNModule, FixedTargetDQNModule, DoubleDuelingModule, DuelingDQNModule, DoubleDQNModule]
 p_exp = [ExperienceReplay, PriorityExperienceReplay]
 p_format = [FEED_TYPE_STATE, FEED_TYPE_IMAGE]
-p_envs = ['maze-random-5x5-v0', 'CartPole-v1']
+p_envs = ['CartPole-v1', 'maze-random-5x5-v0']
 
 config_env_expectations = {
     'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
@@ -51,16 +52,35 @@ def test_dqn_dqn_learner(model_cls, s_format, mem, env):
 
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_fit(model_cls, s_format, mem, env):
-    data = MDPDataBunch.from_env(env, render='rgb_array', bs=5, add_valid=False, feed_type=s_format)
+    data = MDPDataBunch.from_env(env, render='rgb_array', bs=5, max_steps=100, add_valid=False, feed_type=s_format)
+    model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
+    memory = ExperienceReplay(10000)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+    learner.fit(2)
+
+    assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
+    if s_format == FEED_TYPE_STATE:
+        assert config_env_expectations[env]['state_shape'] == data.state.s.shape
+
+    del data
+    del model
+    del learner
+
+@pytest.mark.parametrize(["model_cls", "s_format", "mem"], list(product(p_model, p_format, p_exp)))
+def test_dqn_fit_maze_env(model_cls, s_format, mem):
+    data = MDPDataBunch.from_env('maze-random-5x5-v0', render='rgb_array', bs=5, add_valid=False, feed_type=s_format)
     model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
     memory = ExperienceReplay(10000)
     exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
     learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
     learner.fit(3)
+    learner.data.close()
+    sleep(1)
 
-    assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
+    assert config_env_expectations['maze-random-5x5-v0']['action_shape'] == (1, data.action.n_possible_values.item())
     if s_format == FEED_TYPE_STATE:
-        assert config_env_expectations[env]['state_shape'] == data.state.s.shape
+        assert config_env_expectations['maze-random-5x5-v0']['state_shape'] == data.state.s.shape
 
 
 @pytest.mark.usefixtures('skip_performance_check')

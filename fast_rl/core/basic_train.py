@@ -14,11 +14,14 @@ class WrapperLossFunc(object):
 class AgentLearner(Learner):
 
     def __init__(self, data, loss_func=None, **learn_kwargs):
-        self.warming_up = False
         super().__init__(data=data, callback_fns=data.callback, **learn_kwargs)
         self.model.loss_func = ifnone(loss_func, F.mse_loss)
         self.loss_func = None
         self._loss_func = WrapperLossFunc(self)
+
+    @property
+    def warming_up(self):
+        return self.data.bs > len(self.data.x)
 
     def init_loss_func(self):
         r"""
