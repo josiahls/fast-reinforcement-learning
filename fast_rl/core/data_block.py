@@ -4,6 +4,7 @@ from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
 from gym.spaces import Discrete, Box, MultiDiscrete, Dict
 
+from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 
 # Some imported libraries have env wrappers that can make compatibility less messy.
@@ -243,6 +244,7 @@ class State(object):
         elif type(input_field) is torch.Tensor: input_field = input_field.clone().detach()
         else: input_field = torch.from_numpy(input_field)
 
+        input_field = input_field.long() if self.bounds.discrete else input_field.float()
         # If a non-image state missing the batch dim
         if len(input_field.shape) <= 1: return input_field.reshape(1, -1)
         # If a non-image 2+d state missing the batch dim
@@ -333,6 +335,9 @@ class MDPStep(object):
 class MDPCallback(LearnerCallback):
     _order = -11  # Needs to happen before Recorder
 
+    @property
+    def learn(self) -> AgentLearner: return self._learn()
+
     def __init__(self, learn):
         r"""
         Handles action assignment, episode naming.
@@ -350,9 +355,9 @@ class MDPCallback(LearnerCallback):
         if self.learn.model.training:
             self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
-        self.train_ds.is_warming_up = self.learn.model.warming_up
-        if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.model.warming_up
-        if not self.learn.model.warming_up and self.learn.loss_func is None:
+        self.train_ds.is_warming_up = self.learn.warming_up
+        if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.warming_up
+        if not self.learn.warming_up and self.learn.loss_func is None:
             self.learn.init_loss_func()
         return {'skip_bwd': True, 'train': not self.train_ds.is_warming_up and train}
 
@@ -369,6 +374,9 @@ class MDPCallback(LearnerCallback):
         if last_metrics[0] is not None and self.valid_ds is not None:
             self.valid_ds.x.set_recent_run_episode(epoch)
             self.valid_ds.episode = epoch
+
+    def on_train_end(self, **kwargs:Any) ->None:
+        self.learn.data.close()
 
 
 class MDPMemoryManager(LearnerCallback):
@@ -538,10 +546,6 @@ class MDPDataset(Dataset):
 
 
 class MDPDataBunch(DataBunch):
-
-    def __del__(self):
-        if hasattr(self.train_dl, 'train_ds'): del self.train_dl.train_ds
-        if hasattr(self.valid_dl, 'valid_ds'): del self.valid_dl.valid_ds
 
     def close(self):
         if hasattr(self.train_dl, 'train_ds'): self.train_dl.env.close()

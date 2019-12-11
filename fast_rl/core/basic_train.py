@@ -1,6 +1,6 @@
 from multiprocessing.pool import Pool
 
-from fastai.basic_train import Learner, warn
+from fastai.basic_train import Learner, warn, ifnone, F
 
 
 class WrapperLossFunc(object):
@@ -13,8 +13,11 @@ class WrapperLossFunc(object):
 
 class AgentLearner(Learner):
 
-    def __init__(self, data, **learn_kwargs):
-        super().__init__(data=data, loss_func=None, callback_fns=data.callback, **learn_kwargs)
+    def __init__(self, data, loss_func=None, **learn_kwargs):
+        self.warming_up = False
+        super().__init__(data=data, callback_fns=data.callback, **learn_kwargs)
+        self.model.loss_func = ifnone(loss_func, F.mse_loss)
+        self.loss_func = None
         self._loss_func = WrapperLossFunc(self)
 
     def init_loss_func(self):

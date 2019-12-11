@@ -10,8 +10,8 @@ from fast_rl.core.data_structures import SumTree
 
 
 class ExplorationStrategy:
-    def __init__(self, do_exploration: bool=True):
-        self.do_exploration = do_exploration
+    def __init__(self, explore: bool=True):
+        self.explore = explore
 
     def perturb(self, action,  action_space):
         """
@@ -31,8 +31,8 @@ class ExplorationStrategy:
         _ = action_space
         return action
 
-    def update(self, max_episodes, do_exploration, **kwargs):
-        self.do_exploration = do_exploration
+    def update(self, max_episodes, explore, **kwargs):
+        self.explore = explore
 
 
 class GreedyEpsilon(ExplorationStrategy):
@@ -63,7 +63,7 @@ class GreedyEpsilon(ExplorationStrategy):
 
     def update(self, episode, end_episode=0, **kwargs):
         super(GreedyEpsilon, self).update(**kwargs)
-        if self.do_exploration:
+        if self.explore:
             self.end_episode = end_episode
             self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
                            math.exp(-1. * (self.steps_done * self.decay))
@@ -91,7 +91,7 @@ class OrnsteinUhlenbeck(GreedyEpsilon):
         self.x = np.ones(size)
 
     def perturb(self, action, action_space):
-        if self.do_exploration:
+        if self.explore:
             dx = self.theta * (self.mu - self.x) + self.sigma * np.array([np.random.normal() for _ in range(len(self.x))])
         else: dx = np.zeros(self.x.shape)
 
