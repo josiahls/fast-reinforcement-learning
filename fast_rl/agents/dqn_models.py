@@ -1,3 +1,5 @@
+from math import ceil
+
 from fastai.layers import Flatten
 from fastai.tabular import TabularModel, OptimWrapper
 from fastai.torch_core import *
@@ -35,7 +37,7 @@ class DQNModule(Module):
 
     def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99, lr=0.001,
                  n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
-                 w=-1, h=-1, ks=None, stride=None, grad_clip=5,):
+                 w=-1, h=-1, ks=None, stride=None, grad_clip=1):
         r"""
         Basic DQN Module.
 
@@ -48,12 +50,13 @@ class DQNModule(Module):
             nc: Number of channels that will be expected by the convolutional blocks.
         """
         super().__init__()
+        self.name = 'DQN'
         self.loss_func = loss_func
         self.discount = discount
         self.gradient_clipping_norm = grad_clip
         self.lr = lr
-        self.switched, ks = False, ifnone(ks, max((w, h)) // 100)
-        stride = ifnone(stride, ks // 2)
+        self.switched, ks = False, ifnone(ks, max((w, h)) // 50)
+        stride = ifnone(stride, ceil(ks / 2))
         self.action_model = nn.Sequential()
         _layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride) for self.nf in n_conv_blocks]
 
@@ -64,7 +67,11 @@ class DQNModule(Module):
 
     def setup_conv_block(self, _layers, ni, nc, w, h):
         self.action_model.add_module('conv_block', nn.Sequential(*(self.fix_switched_channels(ni, nc, _layers) + [Flatten()])))
-        return int(self.action_model(torch.zeros((1, w, h, nc) if self.switched else (1, nc, w, h))).view(-1, ).shape[0])
+        training = self.action_model.training
+        self.action_model.eval()
+        ni = int(self.action_model(torch.zeros((1, w, h, nc) if self.switched else (1, nc, w, h))).view(-1, ).shape[0])
+        self.action_model.train(training)
+        return ni
 
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
         tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao)
@@ -141,6 +148,7 @@ class DQNModule(Module):
 class FixedTargetDQNModule(DQNModule):
     def __init__(self, ni: int, ao: int, layers: Collection[int], tau=1, **kwargs):
         super().__init__(ni, ao, layers, **kwargs)
+        self.name = 'Fixed Target DQN'
         self.tau = tau
         self.target_model = copy(self.action_model)
 
@@ -164,6 +172,10 @@ class FixedTargetDQNModule(DQNModule):
 
 
 class DoubleDQNModule(FixedTargetDQNModule):
+    def __init__(self, ni: int, ao: int, layers: Collection[int], **kwargs):
+        super().__init__(ni, ao, layers, **kwargs)
+        self.name = 'DDQN'
+
     def calc_y(self, s_prime, masking, r, y_hat):
         return self.discount * self.target_model(s_prime).gather(1, self.action_model(s_prime).argmax(1).unsqueeze(
             1)) * masking + r.expand_as(y_hat)
@@ -193,6 +205,7 @@ class DuelingBlock(nn.Module):
 class DuelingDQNModule(FixedTargetDQNModule):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.name = 'Dueling DQN'
 
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
         model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=False)
@@ -206,3 +219,4 @@ class DuelingDQNModule(FixedTargetDQNModule):
 class DoubleDuelingModule(DuelingDQNModule, DoubleDQNModule):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.name = 'DDDQN'

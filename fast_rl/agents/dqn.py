@@ -1,19 +1,10 @@
-from copy import deepcopy
-from functools import partial
-from typing import Tuple
-
-import numpy as np
-import torch
-from fastai.basic_train import LearnerCallback, Any, F, OptimWrapper, ifnone, Learner
+from fastai.basic_train import LearnerCallback
 from fastai.tabular.data import emb_sz_rule
-from fastai.torch_core import *
-from torch import optim, nn
 
-from fast_rl.agents.agents_base import BaseAgent, ToLong, get_embedded, Flatten, get_conv
 from fast_rl.agents.dqn_models import *
+from fast_rl.core.agent_core import ExperienceReplay, ExplorationStrategy, Experience
 from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.data_block import MDPDataBunch, MDPDataset, State, Action, FEED_TYPE_STATE, FEED_TYPE_IMAGE, MDPStep
-from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon, ExplorationStrategy, Experience
+from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE, MDPStep
 
 
 class DQNLearner(AgentLearner):
@@ -84,7 +75,7 @@ class BaseDQNTrainer(LearnerCallback):
             samples: List[MDPStep] = self.memory.sample(self.learn.data.bs)
             post_optimize = self.learn.model.optimize(samples)
             if self.learn.model.training: self.learn.memory.refresh(post_optimize=post_optimize)
-        self.iteration += 1
+            self.iteration += 1
 
 
 def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, ignore_embed=False, channels=None,
@@ -102,15 +93,16 @@ def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, igno
 
 
 dqn_config = {
-    DQNModule: BaseDQNTrainer,
+    DQNModule: [BaseDQNTrainer],
     DoubleDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
-    DuelingDQNModule: BaseDQNTrainer,
+    DuelingDQNModule: [BaseDQNTrainer],
     DoubleDuelingModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
     FixedTargetDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer]
 }
 
 
 def dqn_learner(data: MDPDataBunch, model: DQNModule, memory: ExperienceReplay, exploration_method: ExplorationStrategy,
-                trainers=None, **kwargs):
-    trainers = ifnone(trainers, dqn_config[model.__class__])
+                trainers=None, copy_over_frequency=300, **kwargs):
+    trainers = ifnone(trainers, [c if c != FixedTargetDQNTrainer else partial(c, copy_over_frequency=copy_over_frequency)
+                                 for c in dqn_config[model.__class__]])
     return DQNLearner(data, model, memory, exploration_method, trainers, **kwargs)

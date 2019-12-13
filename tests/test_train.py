@@ -1,6 +1,5 @@
 from fastai.basic_data import DatasetType
 
-from fast_rl.agents.dqn import DQN
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.data_block import MDPDataBunch
 from fast_rl.core.train import *

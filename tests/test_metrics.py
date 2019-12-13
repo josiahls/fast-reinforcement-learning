@@ -1,4 +1,4 @@
-from fast_rl.agents.dqn import FixedTargetDQN
+
 from fast_rl.core.agent_core import ExperienceReplay
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.data_block import MDPDataBunch

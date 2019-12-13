@@ -1,7 +1,6 @@
 import pytest
 from fastai.basic_train import ItemLists
 
-from fast_rl.agents.dqn import DQN, FixedTargetDQN
 from fast_rl.core.Envs import Envs
 from fast_rl.core.agent_core import ExperienceReplay
 from fast_rl.core.data_block import MDPDataBunch
@@ -18,14 +17,6 @@ def validate_item_list(item_list: ItemLists):
         assert item.state.s is not None, f'The item: {item}\'s state is None'
         assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
 
-
-def test_mdpdatabunch_close():
-    print('\n')
-    data = MDPDataBunch.from_env('CartPole-v0', render='rgb_array')
-    model = FixedTargetDQN(data, memory=ExperienceReplay(memory_size=100000, reduce_ram=True))
-    learn = AgentLearner(data, model)
-    learn.fit(2)
-    data.close()
 
 
 # @pytest.mark.parametrize("env", sorted(['CartPole-v0']))

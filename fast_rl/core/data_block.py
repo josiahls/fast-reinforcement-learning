@@ -10,7 +10,7 @@ import os
 
 # Some imported libraries have env wrappers that can make compatibility less messy.
 WRAP_ENV_FNS = []
-# Because concurrency errors happen from Open AI when there are multiple environents.
+# Because concurrency errors happen from Open AI when there are multiple environments.
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 try:
@@ -46,17 +46,26 @@ try:
     import gym_maze
     from gym_maze.envs.maze_env import MazeEnv
     import pygame
+    # import importlib
 
     class GymMazeWrapper(Wrapper):
-        def step(self, action):
-            r""" In the event of a random disconnect, retry the env """
-            try:
-                result = super().step(action)
-            except pygame.error as e:
-                self.env = gym.make(self.env.spec.id)
-                super().reset()
-                result = super().step(action)
-            return result
+        #     pygame.init()
+        #
+        # def render(self, mode='human', **kwargs):
+        #     try:
+        #         return self.env.render(mode=mode, **kwargs)
+        #     except pygame.error as e:
+        #         original_id = self.env.spec.id
+        #         del self.env
+        #         pygame.init()
+        #         self.env = gym.make(original_id)
+        #         super().reset()
+        #         return self.env.render(mode=mode, **kwargs)
+
+        def close(self):
+            self.env.maze_view.quit_game()
+            self.env.unwrapped.enable_render = False
+
 
     def gymmaze_wrap(env, render):
         if issubclass(env.unwrapped.__class__, MazeEnv):
