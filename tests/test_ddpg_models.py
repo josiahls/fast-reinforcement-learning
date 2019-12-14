@@ -50,9 +50,9 @@ def test_dddpg_ddpglearner(model_cls, s_format, mem, env):
 
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_ddpg_fit(model_cls, s_format, mem, env):
-    data = MDPDataBunch.from_env(env, render='rgb_array', bs=10, max_steps=40, add_valid=False, feed_type=s_format)
-    model = create_ddpg_model(data, model_cls, opt=torch.optim.RMSprop)
-    memory = mem(memory_size=1000, reduce_ram=True)
+    data = MDPDataBunch.from_env(env, render='rgb_array', bs=10, max_steps=20, add_valid=False, feed_type=s_format)
+    model = create_ddpg_model(data, model_cls, opt=torch.optim.RMSprop, layers=[20, 20])
+    memory = mem(memory_size=100, reduce_ram=True)
     exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1, decay=0.001)
     learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
     learner.fit(2)

@@ -46,7 +46,7 @@ class BaseDDPGTrainer(LearnerCallback):
         self.iteration = 0
 
     def on_loss_begin(self, **kwargs: Any):
-        """Performs memory updates, exploration updates, and model optimization."""
+        """Performs tree updates, exploration updates, and model optimization."""
         if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1])
         self.learn.exploration_method.update(self.episode, max_episodes=self.max_episodes, explore=self.learn.model.training)
         if not self.learn.warming_up:
@@ -58,12 +58,12 @@ class BaseDDPGTrainer(LearnerCallback):
             self.iteration += 1
 
 
-def create_ddpg_model(data: MDPDataBunch, base_arch, layers=None, ignore_embed=False, channels=None,
+def create_ddpg_model(data: MDPDataBunch, base_arch: DDPGModule, layers=None, ignore_embed=False, channels=None,
                      opt=torch.optim.RMSprop, loss_func=None, **kwargs):
     bs, state, action = data.bs, data.state, data.action
     nc, w, h, n_conv_blocks = -1, -1, -1, [] if state.mode == FEED_TYPE_STATE else ifnone(channels, [3, 3, 1])
     if state.mode == FEED_TYPE_IMAGE: nc, w, h = state.s.shape[3], state.s.shape[2], state.s.shape[1]
-    _layers = ifnone(layers, [400, 200])
+    _layers = ifnone(layers, [400, 200] if len(n_conv_blocks) == 0 else [200, 200])
     if ignore_embed or np.any(state.n_possible_values == np.inf) or state.mode == FEED_TYPE_IMAGE: emb_szs = []
     else: emb_szs = [(d+1, int(emb_sz_rule(d))) for d in state.n_possible_values.reshape(-1, )]
     ao = int(action.taken_action.shape[1])

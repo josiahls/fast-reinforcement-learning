@@ -8,7 +8,7 @@ from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 # def pipeline_fn(_):
 #     group_interp = GroupAgentInterpretation()
 #     data = MDPDataBunch.from_env('CartPole-v1', max_steps=40, render='rgb_array', bs=5, device='cpu')
-#     model = DQN(data, memory=ExperienceReplay(memory_size=100, reduce_ram=True))
+#     model = DQN(data, tree=ExperienceReplay(memory_size=100, reduce_ram=True))
 #     learn = AgentLearner(data, model)
 #     learn.fit(2)
 #     interp = AgentInterpretation(learn)

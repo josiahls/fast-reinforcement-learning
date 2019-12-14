@@ -23,6 +23,9 @@ class DQNLearner(AgentLearner):
         if training: self.model.train()
         return self.exploration_method.perturb(torch.argmax(pred, axis=1), self.data.action.action_space)
 
+    def interpret_q(self, xi):
+        return torch.sum(self.model(xi))
+
 
 class FixedTargetDQNTrainer(LearnerCallback):
     def __init__(self, learn, copy_over_frequency=3):
@@ -68,7 +71,7 @@ class BaseDQNTrainer(LearnerCallback):
         self.iteration = 0
 
     def on_loss_begin(self, **kwargs: Any):
-        r"""Performs memory updates, exploration updates, and model optimization."""
+        r"""Performs tree updates, exploration updates, and model optimization."""
         if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1])
         self.learn.exploration_method.update(self.episode, max_episodes=self.max_episodes, explore=self.learn.model.training)
         if not self.learn.warming_up:

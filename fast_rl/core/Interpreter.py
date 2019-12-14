@@ -355,9 +355,9 @@ class AgentInterpretationAlpha(Interpretation):
 
     def get_memory_samples(self, batch_size=None, key='reward'):
         samples = self.learn.model.memory.sample(self.learn.model.batch_size if batch_size is None else batch_size)
-        if not samples: raise IndexError('Your memory seems empty.')
+        if not samples: raise IndexError('Your tree seems empty.')
         if batch_size is not None and batch_size > len(self.learn.model.memory):
-            raise IndexError(f'Your batch size {batch_size} > the memory\'s batch size {len(self.learn.model.memory)}')
+            raise IndexError(f'Your batch size {batch_size} > the tree\'s batch size {len(self.learn.model.memory)}')
         if key not in samples[0].obj.keys(): raise ValueError(f'Key {key} not in {samples[0].obj.keys()}')
         return [s.obj[key] for s in samples]
 

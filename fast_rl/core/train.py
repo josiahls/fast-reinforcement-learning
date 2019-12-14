@@ -1,12 +1,13 @@
 import pickle
 from copy import copy
+from functools import partial
 from pathlib import Path
 
 from torch.distributions import Normal
 from dataclasses import dataclass, field
 from fastai.basic_train import *
 from fastai.sixel import plot_sixel
-from fastai.train import Interpretation, torch, DatasetType, defaults, ifnone
+from fastai.train import Interpretation, torch, DatasetType, defaults, ifnone, warn
 import matplotlib.pyplot as plt
 from fastprogress.fastprogress import IN_NOTEBOOK
 from matplotlib.axes import Axes
@@ -181,3 +182,81 @@ class GroupAgentInterpretation(object):
 
     def merge(self, other):
         return __class__(self.groups + other.groups)
+
+
+class GymMazeInterpretation(AgentInterpretation):
+    def __init__(self, learn: Learner, **kwargs):
+        super().__init__(learn, **kwargs)
+        try:
+            from gym_maze.envs import MazeEnv
+            if not issubclass(self.learn.data.env.unwrapped.__class__, MazeEnv):
+                raise NotImplemented('This learner was trained on an environment that is not a gym maze env.')
+        except ImportError as e:
+            warn(f'Could not import gym maze. Do you have it installed? Full error: {e}')
+        self.bounds = self.learn.data.state.bounds
+
+    def eval_action(self, action_raw, index=-1):
+        action_raw = action_raw[0]  # Remove batch dim
+        return torch.max(action_raw).numpy().item() if index == -1 else action_raw[index].numpy().item()
+
+    def heat_map(self, action):
+        action_eval_fn = partial(self.eval_action, index=action)
+        state_bounds = list(product(*(np.arange(r[0], r[1]) for r in zip(self.bounds.min, self.bounds.max))))
+        # if min is -1, then it is an extra dimension, so multiply by -1 so that the dim in max + 1.
+        heat_map = np.zeros(shape=tuple(self.bounds.max + -1 * self.bounds.min))
+        action_map = np.zeros(shape=tuple(self.bounds.max + -1 * self.bounds.min))
+        for state in state_bounds:
+            with torch.no_grad():
+                heat_map[state] = action_eval_fn(self.learn.model(torch.Tensor(data=state).unsqueeze(0).long()))
+                action_map[state] = self.learn.predict(torch.Tensor(data=state).unsqueeze(0).long())
+        return heat_map, action_map
+
+    def add_text_to_image(self, ax, action_map):
+        x_start, y_start, x_end, y_end, size = 0, 0, action_map.shape[0], action_map.shape[1], 1
+        # Add the text
+        jump_x = size
+        jump_y = size
+        x_positions = np.linspace(start=x_start, stop=x_end, num=x_end, endpoint=False) - 1
+        y_positions = np.linspace(start=y_start, stop=y_end, num=y_end, endpoint=False) - 1
+
+        for y_index, y in enumerate(y_positions):
+            for x_index, x in enumerate(x_positions):
+                label = action_map[y_index, x_index]
+                text_x = x + jump_x
+                text_y = y + jump_y
+                ax.text(text_x, text_y, int(label), color='black', ha='center', va='center')
+
+    def plot_heat_map(self, action=-1, figsize=(7, 7), return_fig=None):
+        exploring = self.learn.exploration_method.explore
+        self.learn.exploration_method.explore = False
+        heat_map, chosen_actions = self.heat_map(action)
+        fig, ax = plt.subplots(1, 1, figsize=figsize)  # type: Figure, Axes
+        im = ax.imshow(heat_map)
+        fig.colorbar(im)
+        title = f'Heat mapped values {"maximum" if action == -1 else "for action " + str(action)}'
+        title += '\nText: Chosen action for a given state'
+        ax.set_title(title)
+        self.add_text_to_image(ax, chosen_actions)
+        self.learn.exploration_method.explore = exploring
+
+        if ifnone(return_fig, defaults.return_fig): return fig
+        if not IN_NOTEBOOK: plot_sixel(fig)
+
+
+class QValueInterpretation(AgentInterpretation):
+    def __init__(self, learn: Learner, **kwargs):
+        super().__init__(learn, **kwargs)
+        self.items = self.learn.data.x if len(self.learn.data.x) != 0 else self.learn.memory.memory
+
+    def q(self, items):
+        actual, predicted = [], []
+        episode_partition = [[(i.s, i.reward) for i in items.items if i.episode == key] for key in items.info]
+
+        for ei in episode_partition:
+            if not ei: continue
+            actual += np.flip([np.cumsum(ei[1])[i:][0] for i in np.flip(np.arange(len(ei)))]).reshape(1, -1)
+            for item in ei: predicted.append(self.learn.model.interpret_q(item[0]))
+
+
+    def plot_q(self):
+        q_values = self.q(self.items)

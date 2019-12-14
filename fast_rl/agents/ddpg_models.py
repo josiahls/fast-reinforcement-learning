@@ -2,12 +2,13 @@ from math import ceil
 
 from fastai.callback import OptimWrapper
 from fastai.tabular import TabularModel
+from fastai.vision import cnn_learner
 from fastai.torch_core import *
 from torch.nn import MSELoss
 from torch.optim import Adam
 
 from fast_rl.agents.agents_base import Flatten
-from fast_rl.agents.dqn_models import conv_bn_lrelu
+from fast_rl.agents.dqn_models import conv_bn_lrelu, ks_stride
 
 
 class CriticTabularEmbedWrapper(Module):
@@ -52,11 +53,12 @@ class ChannelTranspose(Module):
 class CriticModule(nn.Sequential):
 	def __init__(self, ni: int, ao: int, layers: Collection[int],
 				 n_conv_blocks: Collection[int] = 0, nc=3, emb_szs: ListSizes = None,
-				 w=-1, h=-1, ks=None, stride=None):
+				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
-		self.switched, ks = False, ifnone(ks, max((w, h)) // 50)
-		stride = ifnone(stride, ceil(ks / 2))
-		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride) for self.nf in n_conv_blocks]
+		self.switched = False
+		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
+		self.action_model = nn.Sequential()
+		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self)
@@ -86,11 +88,12 @@ class CriticModule(nn.Sequential):
 class ActorModule(nn.Sequential):
 	def __init__(self, ni: int, ao: int, layers: Collection[int],
 				 n_conv_blocks: Collection[int] = 0, nc=3, emb_szs: ListSizes = None,
-				 w=-1, h=-1, ks=None, stride=None):
+				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
-		self.switched, ks = False, ifnone(ks, max((w, h)) // 50)
-		stride = ifnone(stride, ceil(ks / 2))
-		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride) for self.nf in n_conv_blocks]
+		self.switched = False
+		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
+		self.action_model = nn.Sequential()
+		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self)
@@ -134,7 +137,7 @@ class DDPGModule(Module):
 
 		Args:
 			data: Primary data object to use.
-			memory: How big the memory buffer will be for offline training.
+			memory: How big the tree buffer will be for offline training.
 			tau: Defines how "soft/hard" we will copy the target networks over to the primary networks.
 			discount: Determines the amount of discounting the existing Q reward.
 			lr: Rate that the opt will learn parameter gradients.
@@ -147,9 +150,9 @@ class DDPGModule(Module):
 		self.loss_func = None
 		self.loss = None
 
-		self.action_model = ActorModule(ni=ni, ao=ao, layers=[400, 200], nc=nc, emb_szs=emb_szs,
+		self.action_model = ActorModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,
 										w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
-		self.critic_model = CriticModule(ni=ni, ao=ao, layers=[400, 200], nc=nc, emb_szs=emb_szs,
+		self.critic_model = CriticModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,
 										 w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
 
 		self.opt = OptimWrapper.create(ifnone(opt, Adam), lr=actor_lr, layer_groups=[self.action_model])

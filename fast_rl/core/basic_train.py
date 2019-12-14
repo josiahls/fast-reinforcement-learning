@@ -1,6 +1,6 @@
 from multiprocessing.pool import Pool
 
-from fastai.basic_train import Learner, warn, ifnone, F
+from fastai.basic_train import Learner, warn, ifnone, F, List
 
 
 class WrapperLossFunc(object):
@@ -27,11 +27,14 @@ class AgentLearner(Learner):
         r"""
          Initializes the loss function wrapper for logging loss.
 
-         Since most RL models have a period of warming up such as filling memory buffers, we cannot log any loss.
+         Since most RL models have a period of warming up such as filling tree buffers, we cannot log any loss.
          By default, the learner will have a `None` loss function, and so the fit function will not try to log that
          loss.
          """
         self.loss_func = self._loss_func
+
+    def interpret_q(self, xi):
+        raise NotImplemented
 
 
 class PipeLine(object):

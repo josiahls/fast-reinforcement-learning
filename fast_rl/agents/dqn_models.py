@@ -11,10 +11,21 @@ def init_cnn(mod):
     for sub_mod in mod.children(): init_cnn(sub_mod)
 
 
-def conv_bn_lrelu(ni: int, nf: int, ks: int = 3, stride: int = 1) -> nn.Sequential:
+def ks_stride(ks, stride, w, h, n_blocks, kern_proportion=.1, stride_proportion=0.3):
+    kernels, strides, max_dim = [], [], max((w, h))
+    for i in range(len(n_blocks)):
+        kernels.append(max_dim * kern_proportion)
+        strides.append(kernels[-1] * stride_proportion)
+        max_dim = (max_dim - kernels[-1]) / strides[-1]
+        assert max_dim > 1
+
+    return ifnone(ks, map(ceil, kernels)), ifnone(stride, map(ceil, strides))
+
+
+def conv_bn_lrelu(ni: int, nf: int, ks: int = 3, stride: int = 1, pad=True) -> nn.Sequential:
     r""" Create a sequence Conv2d->BatchNorm2d->LeakyReLu layer. (from darknet.py) """
     return nn.Sequential(
-        nn.Conv2d(ni, nf, kernel_size=ks, bias=False, stride=stride, padding=ks // 2),
+        nn.Conv2d(ni, nf, kernel_size=ks, bias=False, stride=stride, padding=(ks // 2) if pad else 0),
         nn.BatchNorm2d(nf),
         nn.LeakyReLU(negative_slope=0.1, inplace=True))
 
@@ -37,7 +48,8 @@ class DQNModule(Module):
 
     def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99, lr=0.001,
                  n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
-                 w=-1, h=-1, ks=None, stride=None, grad_clip=1):
+                 w=-1, h=-1, ks: Union[None, list]=None, stride: Union[None, list]=None, grad_clip=1,
+                 conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
         r"""
         Basic DQN Module.
 
@@ -55,10 +67,10 @@ class DQNModule(Module):
         self.discount = discount
         self.gradient_clipping_norm = grad_clip
         self.lr = lr
-        self.switched, ks = False, ifnone(ks, max((w, h)) // 50)
-        stride = ifnone(stride, ceil(ks / 2))
+        self.switched = False
+        self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
         self.action_model = nn.Sequential()
-        _layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride) for self.nf in n_conv_blocks]
+        _layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 
         if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
         self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)

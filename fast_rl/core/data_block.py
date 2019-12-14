@@ -199,7 +199,9 @@ class Action(object):
         self.bounds = Bounds(self.action_space)
 
         # Fix shapes
-        self.taken_action = torch.tensor(data=self.taken_action).reshape(1, -1)
+        if not isinstance(self.taken_action, torch.Tensor):
+            self.taken_action = torch.tensor(data=self.taken_action).view(1, -1)
+        else: self.taken_action = self.taken_action.view(1, -1)
         if self.raw_action is not None: self.raw_action = torch.tensor(data=self.raw_action).reshape(1, -1)
 
     def get_single_action(self):
