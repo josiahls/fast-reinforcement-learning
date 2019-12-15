@@ -15,9 +15,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 try:
     import pybullet
-    # noinspection PyUnresolvedReferences
     import pybulletgym.envs
-    # noinspection PyUnresolvedReferences
     from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv as MujocoEnv
     from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
 
