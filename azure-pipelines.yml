@@ -11,7 +11,7 @@ pool:
 
 steps:
 
-- bash: "sudo apt-get install -y ffmpeg xvfb freeglut3-dev python-opengl"
+- bash: "sudo apt-get install -y ffmpeg xvfb freeglut3-dev python-opengl --fix-missing"
   displayName: 'Install ffmpeg, freeglut3-dev, and xvfb'
 
 - task: UsePythonVersion@0
