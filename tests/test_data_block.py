@@ -1,14 +1,6 @@
 import pytest
 from fastai.basic_train import ItemLists
 
-from fast_rl.core.Envs import Envs
-from fast_rl.core.agent_core import ExperienceReplay
-from fast_rl.core.data_block import MDPDataBunch
-from fast_rl.core.basic_train import AgentLearner
-
-ENV_NAMES = Envs.get_all_latest_envs()
-
-
 def validate_item_list(item_list: ItemLists):
     # Check items
     for i, item in enumerate(item_list.items):
