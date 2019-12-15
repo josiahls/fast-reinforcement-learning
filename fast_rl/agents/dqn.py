@@ -72,7 +72,7 @@ class BaseDQNTrainer(LearnerCallback):
 
     def on_loss_begin(self, **kwargs: Any):
         r"""Performs tree updates, exploration updates, and model optimization."""
-        if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1])
+        if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1], device=self.learn.data.device)
         self.learn.exploration_method.update(self.episode, max_episodes=self.max_episodes, explore=self.learn.model.training)
         if not self.learn.warming_up:
             samples: List[MDPStep] = self.memory.sample(self.learn.data.bs)
