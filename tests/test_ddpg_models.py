@@ -16,6 +16,7 @@ from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 p_model = [DDPGModule]
 p_exp = [ExperienceReplay, PriorityExperienceReplay]
 p_format = [FEED_TYPE_IMAGE, FEED_TYPE_STATE]
+p_full_format = [FEED_TYPE_STATE]
 p_envs = ['Walker2DPyBulletEnv-v0']
 
 config_env_expectations = {
@@ -94,7 +95,7 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(p_model, p_format, p_exp)))
+                         list(product(p_model, p_full_format, p_exp)))
 def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -121,7 +122,7 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(p_model, p_format, p_exp)))
+                         list(product(p_model, p_full_format, p_exp)))
 def test_ddpg_models_reach(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -148,7 +149,7 @@ def test_ddpg_models_reach(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(p_model, p_format, p_exp)))
+                         list(product(p_model, p_full_format, p_exp)))
 def test_ddpg_models_walker(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -176,7 +177,7 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(p_model, p_format, p_exp)))
+                         list(product(p_model, p_full_format, p_exp)))
 def test_ddpg_models_ant(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
@@ -220,7 +221,7 @@ def test_ddpg_models_ant(model_cls, s_format, experience):
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'],
-                         list(product(p_model, p_format, p_exp)))
+                         list(product(p_model, p_full_format, p_exp)))
 def test_ddpg_models_halfcheetah(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
