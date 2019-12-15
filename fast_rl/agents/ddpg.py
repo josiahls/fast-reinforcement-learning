@@ -11,10 +11,10 @@ from fast_rl.core.data_block import MDPDataBunch, MDPStep, FEED_TYPE_STATE, FEED
 
 class DDPGLearner(AgentLearner):
     def __init__(self, data: MDPDataBunch, model, memory, exploration_method, trainers,
-                 **learn_kwargs):
+                 **kwargs):
         self.memory: Experience = memory
         self.exploration_method: ExplorationStrategy = exploration_method
-        super().__init__(data=data, model=model, **learn_kwargs)
+        super().__init__(data=data, model=model, **kwargs)
         self.ddpg_trainers = listify(trainers)
         for t in self.ddpg_trainers: self.callbacks.append(t(self))
 
@@ -47,7 +47,7 @@ class BaseDDPGTrainer(LearnerCallback):
 
     def on_loss_begin(self, **kwargs: Any):
         """Performs tree updates, exploration updates, and model optimization."""
-        if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1])
+        if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1], device=self.learn.data.device)
         self.learn.exploration_method.update(self.episode, max_episodes=self.max_episodes, explore=self.learn.model.training)
         if not self.learn.warming_up:
             samples: List[MDPStep] = self.memory.sample(self.learn.data.bs)

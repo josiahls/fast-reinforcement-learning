@@ -27,6 +27,7 @@ try:
             try:
                 result = super().step(action)
             except pybullet.error as e:
+                self.__init__(env=gym.make(self.spec.id))
                 super().reset()
                 result = super().step(action)
             return result
@@ -191,6 +192,10 @@ class Action(object):
     raw_action: torch.tensor = None
     bounds: Bounds = None
 
+    def to(self, device):
+        self.taken_action = self.taken_action.to(device=device)
+        if self.raw_action is not None: self.raw_action = self.raw_action.to(device=device)
+
     @property
     def n_possible_values(self): return self.bounds.n_possible_values
 
@@ -252,6 +257,10 @@ class State(object):
     observation_space: gym.Space
     mode: int = FEED_TYPE_STATE
     bounds: Bounds = None
+
+    def to(self, device):
+        self.s = self.s.to(device=device)
+        self.s_prime = self.s_prime.to(device=device)
 
     @property
     def channels(self):
@@ -336,6 +345,12 @@ class MDPStep(object):
         self.state = deepcopy(self.state)
         self.reward = torch.tensor(data=self.reward).reshape(1, -1).float()
         self.done = torch.tensor(data=self.done).reshape(1, -1).float()
+
+    def to(self, device):
+        self.reward = self.reward.to(device=device)
+        self.done = self.done.to(device=device)
+        self.action.to(device=device)
+        self.state.to(device=device)
 
     def __str__(self):
         return ', '.join([str(self.__dict__[el]) for el in self.__dict__])

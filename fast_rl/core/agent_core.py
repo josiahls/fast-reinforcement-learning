@@ -114,8 +114,8 @@ class Experience:
 	def sample(self, **kwargs):
 		pass
 
-	def update(self, **kwargs):
-		pass
+	def update(self, item, device, **kwargs):
+		item.to(device=device)
 
 	def refresh(self, **kwargs):
 		pass
@@ -148,7 +148,8 @@ class ExperienceReplay(Experience):
 		if len(self._memory) < batch: return self._memory
 		return random.sample(self.memory, batch)
 
-	def update(self, item, **kwargs):
+	def update(self, item, device, **kwargs):
+		super().update(item, device, **kwargs)
 		if self.reduce_ram: item.clean()
 		self._memory.append(deepcopy(item))
 
@@ -216,7 +217,7 @@ class PriorityExperienceReplay(Experience):
 		self.priority_weights = self.tree.anneal_weights(weights, self.beta)
 		return samples
 
-	def update(self, item, **kwargs):
+	def update(self, item, device, **kwargs):
 		"""
 		Updates the tree of PER.
 
@@ -228,6 +229,7 @@ class PriorityExperienceReplay(Experience):
 		Returns:
 
 		"""
+		super().update(item, device, **kwargs)
 		maximal_priority = self.alpha
 		if self.reduce_ram: item.clean()
 		self.tree.add(np.abs(maximal_priority) + self.epsilon, item)
