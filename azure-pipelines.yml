@@ -22,6 +22,9 @@ steps:
 #  displayName: 'Complex Installs'
 
 - script: |
+#    pip install Bottleneck
+#    pip install moviepy
+    python setup.py install
     pip install pytest
     pip install pytest-cov
   displayName: 'Install Python Packages'
