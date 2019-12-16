@@ -1,47 +1,47 @@
-# from itertools import product
-# from time import sleep
-#
-# import pytest
-# from fastai.basic_data import DatasetType
-#
-# from fast_rl.agents.dqn import create_dqn_model, dqn_learner
-# from fast_rl.agents.dqn_models import *
-# from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
-# from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE
-# from fast_rl.core.metrics import RewardMetric, EpsilonMetric
-# from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
-#
-# p_model = [DQNModule, FixedTargetDQNModule, DoubleDuelingModule, DuelingDQNModule, DoubleDQNModule]
-# p_exp = [ExperienceReplay, PriorityExperienceReplay]
-# p_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
-# p_envs = ['CartPole-v1']
-#
-# config_env_expectations = {
-# 	'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
-# 	'maze-random-5x5-v0': {'action_shape': (1, 4), 'state_shape': (1, 2)}
-# }
-#
-#
-# def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.00001,
-# 					copy_over_frequency=300, lr: Union[float, list] = 0.001):
-# 	memory = experience(memory_size=memory_size, reduce_ram=True)
-# 	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
-# 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[2]
-# 	model = create_dqn_model(model_cls, lr=lr, layers=layers, copy_over_frequency=copy_over_frequency)
-# 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format)
-# 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore,
-# 						callback_fns=[RewardMetric, EpsilonMetric])
-# 	learn.fit(450)
-# 	return learn
-#
-#
-# @pytest.mark.usefixtures('skip_performance_check')
-# @pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
-# def test_dqn_create_dqn_model(model_cls, s_format, env):
-# 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
-# 	model = create_dqn_model(data, model_cls)
-# 	model.eval()
-# 	model(data.state.s)
+from itertools import product
+from time import sleep
+
+import pytest
+from fastai.basic_data import DatasetType
+
+from fast_rl.agents.dqn import create_dqn_model, dqn_learner
+from fast_rl.agents.dqn_models import *
+from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
+from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE
+from fast_rl.core.metrics import RewardMetric, EpsilonMetric
+from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
+
+p_model = [DQNModule, FixedTargetDQNModule, DoubleDuelingModule, DuelingDQNModule, DoubleDQNModule]
+p_exp = [ExperienceReplay, PriorityExperienceReplay]
+p_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
+p_envs = ['CartPole-v1']
+
+config_env_expectations = {
+	'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
+	'maze-random-5x5-v0': {'action_shape': (1, 4), 'state_shape': (1, 2)}
+}
+
+
+def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.00001,
+					copy_over_frequency=300, lr: Union[float, list] = 0.001):
+	memory = experience(memory_size=memory_size, reduce_ram=True)
+	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
+	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[2]
+	model = create_dqn_model(model_cls, lr=lr, layers=layers, copy_over_frequency=copy_over_frequency)
+	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format)
+	learn = dqn_learner(data, model, memory=memory, exploration_method=explore,
+						callback_fns=[RewardMetric, EpsilonMetric])
+	learn.fit(450)
+	return learn
+
+
+@pytest.mark.usefixtures('skip_performance_check')
+@pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
+def test_dqn_create_dqn_model(model_cls, s_format, env):
+	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
+	model = create_dqn_model(data, model_cls)
+	model.eval()
+	model(data.state.s)
 #
 # 	assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
 # 	if s_format == FEED_TYPE_STATE:
