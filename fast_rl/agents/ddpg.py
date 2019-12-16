@@ -25,6 +25,11 @@ class DDPGLearner(AgentLearner):
         if training: self.model.train()
         return self.exploration_method.perturb(pred.detach().cpu().numpy(), self.data.action.action_space)
 
+    def interpret_q(self, item):
+        with torch.no_grad():
+            return self.model.interpret_q(item).cpu().numpy().item()
+
+
 
 class BaseDDPGTrainer(LearnerCallback):
     def __init__(self, learn):

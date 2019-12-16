@@ -228,11 +228,6 @@ class DDPGModule(Module):
 		for target_param, local_param in zip(t_m.parameters(), f_m.parameters()):
 			target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
 
-	def interpret_q(self, items):
+	def interpret_q(self, item):
 		with torch.no_grad():
-			r = torch.from_numpy(np.array([item.reward for item in items])).float()
-			s_prime = torch.from_numpy(np.array([item.result_state for item in items])).float()
-			s = torch.from_numpy(np.array([item.current_state for item in items])).float()
-			a = torch.from_numpy(np.array([item.actions for item in items])).float()
-
-			return self.critic_model(torch.cat((s, a), 1))
+			return self.critic_model(torch.cat((item.s, item.a), 1))

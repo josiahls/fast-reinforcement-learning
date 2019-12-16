@@ -258,13 +258,13 @@ class QValueInterpretation(AgentInterpretation):
 
     def q(self, items):
         actual, predicted = [], []
-        episode_partition = [[(i.s, i.reward) for i in items.items if i.episode == key] for key in items.info]
+        episode_partition = [[i for i in items.items if i.episode == key] for key in items.info]
 
         for ei in episode_partition:
             if not ei: continue
-            raw_actual = [ei[i][1].cpu().numpy().item() for i in np.flip(np.arange(len(ei)))]
+            raw_actual = [ei[i].reward.cpu().numpy().item() for i in np.flip(np.arange(len(ei)))]
             actual += np.flip([np.cumsum(raw_actual[i:])[-1] for i in range(len(raw_actual))]).reshape(-1,).tolist()
-            for item in ei: predicted.append(self.learn.interpret_q(item[0]))
+            for item in ei: predicted.append(self.learn.interpret_q(item))
 
         return self.normalize(actual), self.normalize(predicted)
 
