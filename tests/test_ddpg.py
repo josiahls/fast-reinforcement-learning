@@ -49,6 +49,7 @@ def test_dddpg_ddpglearner(model_cls, s_format, mem, env):
         assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_ddpg_fit(model_cls, s_format, mem, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=10, max_steps=20, add_valid=False, feed_type=s_format)
