@@ -19,8 +19,6 @@ steps:
     versionSpec: '3.7'
 
 - script: |
-#    pip install Bottleneck
-#    pip install moviepy
     python setup.py install
     pip install pytest
     pip install pytest-cov
