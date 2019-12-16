@@ -26,7 +26,6 @@ steps:
     python setup.py install
     pip install pytest
     pip install pytest-cov
-    # pip install pytest-xdist
   displayName: 'Install Python Packages'
 
 - script: |
