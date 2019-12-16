@@ -24,7 +24,8 @@ class DQNLearner(AgentLearner):
         return self.exploration_method.perturb(torch.argmax(pred, axis=1), self.data.action.action_space)
 
     def interpret_q(self, xi):
-        return torch.sum(self.model(xi))
+        with torch.no_grad():
+            return torch.sum(self.model(xi)).cpu().numpy().item()
 
 
 class FixedTargetDQNTrainer(LearnerCallback):

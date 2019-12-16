@@ -3,6 +3,7 @@ from copy import copy
 from functools import partial
 from pathlib import Path
 
+import scipy.stats as st
 from torch.distributions import Normal
 from dataclasses import dataclass, field
 from fastai.basic_train import *
@@ -248,15 +249,65 @@ class QValueInterpretation(AgentInterpretation):
         super().__init__(learn, **kwargs)
         self.items = self.learn.data.x if len(self.learn.data.x) != 0 else self.learn.memory.memory
 
+    def normalize(self, item: np.array):
+        if np.max(item) - np.min(item) != 0:
+            return np.divide(item + np.min(item), np.max(item) - np.min(item))
+        else:
+            item.fill(1)
+            return item
+
     def q(self, items):
         actual, predicted = [], []
         episode_partition = [[(i.s, i.reward) for i in items.items if i.episode == key] for key in items.info]
 
         for ei in episode_partition:
             if not ei: continue
-            actual += np.flip([np.cumsum(ei[1])[i:][0] for i in np.flip(np.arange(len(ei)))]).reshape(1, -1)
-            for item in ei: predicted.append(self.learn.model.interpret_q(item[0]))
+            raw_actual = [ei[i][1].cpu().numpy().item() for i in np.flip(np.arange(len(ei)))]
+            actual += np.flip([np.cumsum(raw_actual[i:])[-1] for i in range(len(raw_actual))]).reshape(-1,).tolist()
+            for item in ei: predicted.append(self.learn.interpret_q(item[0]))
 
+        return self.normalize(actual), self.normalize(predicted)
 
-    def plot_q(self):
-        q_values = self.q(self.items)
+    def plot_q(self, figsize=(8, 8), return_fig=None):
+        r"""
+        Heat maps the density of actual vs estimated q v. Good reference for this is at [1].
+
+        References:
+            [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.
+            https://towardsdatascience.com/simple-example-of-2d-density-plots-in-python-83b83b934f67
+
+        Returns:
+
+        """
+        q_action, q_predicted = self.q(self.items)
+        # Define the borders
+        deltaX = (np.max(q_action) - np.min(q_action)) / 10
+        deltaY = (np.max(q_predicted) - np.min(q_predicted)) / 10
+        xmin = np.min(q_action) - deltaX
+        xmax = np.max(q_action) + deltaX
+        ymin = np.min(q_predicted) - deltaY
+        ymax = np.max(q_predicted) + deltaY
+        # Create meshgrid
+        xx, yy = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+
+        positions = np.vstack([xx.ravel(), yy.ravel()])
+        values = np.vstack([q_action, q_predicted])
+
+        kernel = st.gaussian_kde(values)
+
+        f = np.reshape(kernel(positions).T, xx.shape)
+
+        fig = plt.figure(figsize=figsize)
+        ax = fig.gca()
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        cfset = ax.contourf(xx, yy, f, cmap='coolwarm')
+        ax.imshow(np.rot90(f), cmap='coolwarm', extent=[xmin, xmax, ymin, ymax])
+        cset = ax.contour(xx, yy, f, colors='k')
+        ax.clabel(cset, inline=1, fontsize=10)
+        ax.set_xlabel('Actual Returns')
+        ax.set_ylabel('Estimated Q')
+        ax.set_title('2D Gaussian Kernel Q Density Estimation')
+
+        if ifnone(return_fig, defaults.return_fig): return fig
+        if not IN_NOTEBOOK: plot_sixel(fig)
