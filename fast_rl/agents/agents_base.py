@@ -8,45 +8,45 @@ from fast_rl.core.agent_core import ExplorationStrategy
 from fast_rl.core.data_block import MDPDataBunch
 
 
-class BaseAgent(nn.Module):
-    r"""
-    One of the basic differences between this model type and typical Openai models is that this will have its
-    own learner_callbacks. This is due to the often strange and beautiful methods created for training RL agents.
-    """
-    def __init__(self, data: MDPDataBunch):
-        super().__init__()
-        self.data = data
-        self.name = ''
-        # Some definition of loss needs to be implemented
-        self.loss = None
-        self.out = None
-        self.opt = None
-        self.warming_up = False
-        self.learner_callbacks = []  # type: Collection[LearnerCallback]
-        # Root model that will be accessed for action decisions
-        self.action_model = None  # type: nn.Module
-        self.exploration_strategy = ExplorationStrategy(self.training)
-
-    def forward(self, x):
-        if isinstance(x, torch.Tensor): return x.float()
-        return x
-
-    def pick_action(self, x):
-        x = self(x)
-        self.out = x
-
-        with torch.no_grad():
-            if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
-
-            if isinstance(self.data.train_ds.env.action_space, Discrete): action = x.argmax().cpu().numpy().item()
-            elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).cpu().numpy()
-
-            action = self.exploration_strategy.perturb(action, self.data.train_ds.env.action_space)
-
-            return action
-
-    def interpret_q(self, items):
-        raise NotImplementedError
+# class BaseAgent(nn.Module):
+#     r"""
+#     One of the basic differences between this model type and typical Openai models is that this will have its
+#     own learner_callbacks. This is due to the often strange and beautiful methods created for training RL agents.
+#     """
+#     def __init__(self, data: MDPDataBunch):
+#         super().__init__()
+#         self.data = data
+#         self.name = ''
+#         # Some definition of loss needs to be implemented
+#         self.loss = None
+#         self.out = None
+#         self.opt = None
+#         self.warming_up = False
+#         self.learner_callbacks = []  # type: Collection[LearnerCallback]
+#         # Root model that will be accessed for action decisions
+#         self.action_model = None  # type: nn.Module
+#         self.exploration_strategy = ExplorationStrategy(self.training)
+#
+#     def forward(self, x):
+#         if isinstance(x, torch.Tensor): return x.float()
+#         return x
+#
+#     def pick_action(self, x):
+#         x = self(x)
+#         self.out = x
+#
+#         with torch.no_grad():
+#             if len(x.shape) > 2: raise ValueError('The agent is outputting actions with more than 1 dimension...')
+#
+#             if isinstance(self.data.train_ds.env.action_space, Discrete): action = x.argmax().cpu().numpy().item()
+#             elif isinstance(self.data.train_ds.env.action_space, Box) and len(x.shape) != 1: action = x.squeeze(0).cpu().numpy()
+#
+#             action = self.exploration_strategy.perturb(action, self.data.train_ds.env.action_space)
+#
+#             return action
+#
+#     def interpret_q(self, items):
+#         raise NotImplementedError
 
 
 def get_embedded(input_size, output_size, n_embeddings, n_extra_dims):

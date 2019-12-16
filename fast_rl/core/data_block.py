@@ -1,18 +1,21 @@
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType
+from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
 from gym.spaces import Discrete, Box, MultiDiscrete, Dict
 
+from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
+import os
 
 # Some imported libraries have env wrappers that can make compatibility less messy.
 WRAP_ENV_FNS = []
+# Because concurrency errors happen from Open AI when there are multiple environments.
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 try:
     import pybullet
-    # noinspection PyUnresolvedReferences
     import pybulletgym.envs
-    # noinspection PyUnresolvedReferences
     from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv as MujocoEnv
     from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
 
@@ -22,6 +25,7 @@ try:
             try:
                 result = super().step(action)
             except pybullet.error as e:
+                self.__init__(env=gym.make(self.spec.id))
                 super().reset()
                 result = super().step(action)
             return result
@@ -39,6 +43,36 @@ except ModuleNotFoundError as e:
 try:
     # noinspection PyUnresolvedReferences
     import gym_maze
+    from gym_maze.envs.maze_env import MazeEnv
+    import pygame
+    # import importlib
+
+    class GymMazeWrapper(Wrapper):
+        #     pygame.init()
+        #
+        # def render(self, mode='human', **kwargs):
+        #     try:
+        #         return self.env.render(mode=mode, **kwargs)
+        #     except pygame.error as e:
+        #         original_id = self.env.spec.id
+        #         del self.env
+        #         pygame.init()
+        #         self.env = gym.make(original_id)
+        #         super().reset()
+        #         return self.env.render(mode=mode, **kwargs)
+
+        def close(self):
+            self.env.maze_view.quit_game()
+            self.env.unwrapped.enable_render = False
+
+
+    def gymmaze_wrap(env, render):
+        if issubclass(env.unwrapped.__class__, MazeEnv):
+            env = GymMazeWrapper(env=env)
+        return env
+
+    WRAP_ENV_FNS.append(gymmaze_wrap)
+
 except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 try:
@@ -103,7 +137,7 @@ class Bounds(object):
         This is important for doing embeddings.
         """
         if not self.discrete: return np.inf
-        else: return np.prod(np.subtract(self.max, self.min))
+        else: return np.add(*np.abs((self.max, self.min))).reshape(1, -1)
 
     def __post_init__(self):
         """Sets min and max fields then validates them."""
@@ -156,6 +190,10 @@ class Action(object):
     raw_action: torch.tensor = None
     bounds: Bounds = None
 
+    def to(self, device):
+        self.taken_action = self.taken_action.to(device=device)
+        if self.raw_action is not None: self.raw_action = self.raw_action.to(device=device)
+
     @property
     def n_possible_values(self): return self.bounds.n_possible_values
 
@@ -164,7 +202,9 @@ class Action(object):
         self.bounds = Bounds(self.action_space)
 
         # Fix shapes
-        self.taken_action = torch.tensor(data=self.taken_action).reshape(1, -1)
+        if not isinstance(self.taken_action, torch.Tensor):
+            self.taken_action = torch.tensor(data=self.taken_action).view(1, -1)
+        else: self.taken_action = self.taken_action.view(1, -1)
         if self.raw_action is not None: self.raw_action = torch.tensor(data=self.raw_action).reshape(1, -1)
 
     def get_single_action(self):
@@ -216,6 +256,14 @@ class State(object):
     mode: int = FEED_TYPE_STATE
     bounds: Bounds = None
 
+    def to(self, device):
+        self.s = self.s.to(device=device)
+        self.s_prime = self.s_prime.to(device=device)
+
+    @property
+    def channels(self):
+        return self.s.shape[3]
+
     @property
     def n_possible_values(self): return self.bounds.n_possible_values
 
@@ -238,6 +286,7 @@ class State(object):
         elif type(input_field) is torch.Tensor: input_field = input_field.clone().detach()
         else: input_field = torch.from_numpy(input_field)
 
+        input_field = input_field.long() if self.bounds.discrete and self.mode != FEED_TYPE_IMAGE else input_field.float()
         # If a non-image state missing the batch dim
         if len(input_field.shape) <= 1: return input_field.reshape(1, -1)
         # If a non-image 2+d state missing the batch dim
@@ -295,6 +344,12 @@ class MDPStep(object):
         self.reward = torch.tensor(data=self.reward).reshape(1, -1).float()
         self.done = torch.tensor(data=self.done).reshape(1, -1).float()
 
+    def to(self, device):
+        self.reward = self.reward.to(device=device)
+        self.done = self.done.to(device=device)
+        self.action.to(device=device)
+        self.state.to(device=device)
+
     def __str__(self):
         return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
 
@@ -328,8 +383,11 @@ class MDPStep(object):
 class MDPCallback(LearnerCallback):
     _order = -11  # Needs to happen before Recorder
 
+    @property
+    def learn(self) -> AgentLearner: return self._learn()
+
     def __init__(self, learn):
-        """
+        r"""
         Handles action assignment, episode naming.
 
         Args:
@@ -340,14 +398,14 @@ class MDPCallback(LearnerCallback):
         self.valid_ds: MDPDataset = None if learn.data.empty_val else learn.data.valid_ds
 
     def on_batch_begin(self, last_input, last_target, train, **kwargs: Any):
-        """ Set the Action of a dataset, determine if still warming up. """
+        r""" Set the Action of a dataset, determine if still warming up. """
         a = self.learn.predict(last_input)
         if self.learn.model.training:
             self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
-        self.train_ds.is_warming_up = self.learn.model.warming_up
-        if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.model.warming_up
-        if not self.learn.model.warming_up and self.learn.loss_func is None:
+        self.train_ds.is_warming_up = self.learn.warming_up
+        if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.warming_up
+        if not self.learn.warming_up and self.learn.loss_func is None:
             self.learn.init_loss_func()
         return {'skip_bwd': True, 'train': not self.train_ds.is_warming_up and train}
 
@@ -364,6 +422,9 @@ class MDPCallback(LearnerCallback):
         if last_metrics[0] is not None and self.valid_ds is not None:
             self.valid_ds.x.set_recent_run_episode(epoch)
             self.valid_ds.episode = epoch
+
+    def on_train_end(self, **kwargs:Any) ->None:
+        self.learn.data.close()
 
 
 class MDPMemoryManager(LearnerCallback):
@@ -436,6 +497,9 @@ class MDPDataset(Dataset):
         self.x = ifnone(x, MDPList([]))
         self.item: Union[MDPStep, None] = None
         self.new(None)
+
+    def get_emb_szs(self):
+        return [def_emb_sz(0, 0,None)]
 
     def aug_steps(self, steps):
         if self.is_warming_up and steps < self.bs: return self.bs
@@ -531,13 +595,9 @@ class MDPDataset(Dataset):
 
 class MDPDataBunch(DataBunch):
 
-    def __del__(self):
-        if hasattr(self.train_dl, 'train_ds'): del self.train_dl.train_ds
-        if hasattr(self.valid_dl, 'valid_ds'): del self.valid_dl.valid_ds
-
     def close(self):
-        if hasattr(self.train_dl, 'train_ds'): self.train_dl.env.close()
-        if hasattr(self.valid_dl, 'valid_ds'): self.valid_dl.env.close()
+        if self.train_dl is not None: self.train_dl.env.close()
+        if self.valid_dl is not None: self.valid_dl.env.close()
 
     @property
     def state_action_sample(self) -> Union[Tuple[State, Action], None]:
