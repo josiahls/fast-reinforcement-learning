@@ -24,6 +24,7 @@ config_env_expectations = {
 }
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
 def test_ddpg_create_ddpg_model(model_cls, s_format, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -36,6 +37,7 @@ def test_ddpg_create_ddpg_model(model_cls, s_format, env):
         assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dddpg_ddpglearner(model_cls, s_format, mem, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
