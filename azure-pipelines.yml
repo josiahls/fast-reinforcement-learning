@@ -18,9 +18,6 @@ steps:
   inputs:
     versionSpec: '3.7'
 
-#- script: sh ./build/azure_pipeline_helper.sh
-#  displayName: 'Complex Installs'
-
 - script: |
 #    pip install Bottleneck
 #    pip install moviepy
