@@ -88,7 +88,8 @@ def test_dqn_fit_maze_env(model_cls, s_format, mem):
 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 			memory = ExperienceReplay(10000)
 			exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
-			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+								  callback_fns=[RewardMetric, EpsilonMetric])
 			learner.fit(2)
 
 			assert config_env_expectations['maze-random-5x5-v0']['action_shape'] == (

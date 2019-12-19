@@ -58,7 +58,8 @@ def test_ddpg_fit(model_cls, s_format, mem, env):
     model = create_ddpg_model(data, model_cls, opt=torch.optim.RMSprop, layers=[20, 20])
     memory = mem(memory_size=100, reduce_ram=True)
     exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1, decay=0.001)
-    learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+    learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                           callback_fns=[RewardMetric, EpsilonMetric])
     learner.fit(2)
 
     assert config_env_expectations[env]['action_shape'] == (1, data.action.taken_action.shape[1])
@@ -82,7 +83,8 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
                                                decay=0.001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -108,7 +110,8 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -135,7 +138,8 @@ def test_ddpg_models_reach(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -163,7 +167,8 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(2000)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -219,7 +224,8 @@ def test_ddpg_models_halfcheetah(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(2000)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
