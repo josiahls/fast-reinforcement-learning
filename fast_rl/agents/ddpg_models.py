@@ -51,11 +51,11 @@ class ChannelTranspose(Module):
 
 
 class CriticModule(nn.Sequential):
-	def __init__(self, ni: int, ao: int, layers: Collection[int],
+	def __init__(self, ni: int, ao: int, layers: Collection[int], batch_norm=False,
 				 n_conv_blocks: Collection[int] = 0, nc=3, emb_szs: ListSizes = None,
 				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
-		self.switched = False
+		self.switched, self.batch_norm = False, batch_norm
 		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
 		self.action_model = nn.Sequential()
 		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
@@ -68,7 +68,8 @@ class CriticModule(nn.Sequential):
 		return int(self(torch.zeros((2, 1, w, h, nc) if self.switched else (2, 1, nc, w, h)))[0].view(-1, ).shape[0])
 
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
-		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni+ao if not emb_szs else ao, layers=layers, out_sz=1)
+		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni+ao if not emb_szs else ao, layers=layers, out_sz=1,
+									 use_bn=self.batch_norm)
 		if not emb_szs: tabular_model.embeds = None
 		self.add_module('lin_block', CriticTabularEmbedWrapper(tabular_model, exclude_cat=not emb_szs))
 
@@ -86,11 +87,11 @@ class CriticModule(nn.Sequential):
 
 
 class ActorModule(nn.Sequential):
-	def __init__(self, ni: int, ao: int, layers: Collection[int],
+	def __init__(self, ni: int, ao: int, layers: Collection[int],batch_norm = False,
 				 n_conv_blocks: Collection[int] = 0, nc=3, emb_szs: ListSizes = None,
 				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
-		self.switched = False
+		self.switched, self.batch_norm = False, batch_norm
 		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
 		self.action_model = nn.Sequential()
 		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
@@ -103,7 +104,7 @@ class ActorModule(nn.Sequential):
 		return int(self(torch.zeros((1, w, h, nc) if self.switched else (1, nc, w, h))).view(-1, ).shape[0])
 
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
-		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao)
+		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm)
 		if not emb_szs: tabular_model.embeds = None
 		self.add_module('lin_block', ActorTabularEmbedWrapper(tabular_model))
 
@@ -122,8 +123,9 @@ class ActorModule(nn.Sequential):
 class DDPGModule(Module):
 	def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99,
 				 n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
-				 w=-1, h=-1, ks=None, stride=None, grad_clip=5, tau=1e-3, lr=1e-3, actor_lr=1e-4, **kwargs):
-		"""
+				 w=-1, h=-1, ks=None, stride=None, grad_clip=5, tau=1e-3, lr=1e-3, actor_lr=1e-4,
+				 batch_norm=False, **kwargs):
+		r"""
 		Implementation of a discrete control algorithm using an actor/critic architecture.
 
 		Notes:
@@ -149,10 +151,11 @@ class DDPGModule(Module):
 		self.tau = tau
 		self.loss_func = None
 		self.loss = None
+		self.batch_norm = batch_norm
 
-		self.action_model = ActorModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,
+		self.action_model = ActorModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,batch_norm = batch_norm,
 										w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
-		self.critic_model = CriticModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,
+		self.critic_model = CriticModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs, batch_norm = batch_norm,
 										 w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
 
 		self.opt = OptimWrapper.create(ifnone(opt, Adam), lr=actor_lr, layer_groups=[self.action_model])
