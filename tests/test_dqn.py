@@ -27,8 +27,9 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[2]
-	model = create_dqn_model(model_cls, lr=lr, layers=layers, copy_over_frequency=copy_over_frequency)
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format)
+	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
+	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, copy_over_frequency=copy_over_frequency)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore,
 						callback_fns=[RewardMetric, EpsilonMetric])
 	learn.fit(450)
