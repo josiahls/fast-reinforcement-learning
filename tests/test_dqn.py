@@ -29,8 +29,8 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[2]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format)
 	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
-	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, copy_over_frequency=copy_over_frequency)
-	learn = dqn_learner(data, model, memory=memory, exploration_method=explore,
+	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
+	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
 						callback_fns=[RewardMetric, EpsilonMetric])
 	learn.fit(450)
 	return learn

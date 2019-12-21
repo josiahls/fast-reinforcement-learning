@@ -221,6 +221,8 @@ class DuelingDQNModule(FixedTargetDQNModule):
         self.name = 'Dueling DQN'
 
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
+        model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao,
+                             use_bn=self.batch_norm)
         if not emb_szs: model.embeds = None
         model.layers, removed_layer = split_model(model.layers, [last_layer(model)])
         ni = removed_layer[0].in_features
