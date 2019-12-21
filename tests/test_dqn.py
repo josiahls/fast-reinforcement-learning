@@ -35,7 +35,7 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	learn.fit(450)
 	return learn
 
-@pytest.mark.usefixtures('skip_performance_check')
+# @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
 def test_dqn_create_dqn_model(model_cls, s_format, env):
 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -48,7 +48,7 @@ def test_dqn_create_dqn_model(model_cls, s_format, env):
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
-@pytest.mark.usefixtures('skip_performance_check')
+# @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_dqn_learner(model_cls, s_format, mem, env):
 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -62,7 +62,7 @@ def test_dqn_dqn_learner(model_cls, s_format, mem, env):
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
-@pytest.mark.usefixtures('skip_performance_check')
+# @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_fit(model_cls, s_format, mem, env):
 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=5, max_steps=20, add_valid=False, feed_type=s_format)
