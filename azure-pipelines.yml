@@ -29,7 +29,7 @@ jobs:
 
   - task: Cache@2
     inputs:
-      key: 'fastai | "$(Agent.OS)" | $(VERSION)'
+      key: '$(VERSION) | "$(Agent.OS)"'
       restoreKeys: |
          fastai | "$(Agent.OS)" | "$(VERSION)"
       path: $(FASTAI_CACHE_FOLDER)
@@ -40,14 +40,12 @@ jobs:
 
   - task: Cache@2
     inputs:
-      key: 'fastai | "$(Agent.OS)" | $(VERSION)'
+      key: '$(VERSION) | "$(Agent.OS)"'
       restoreKeys: |
          fastai | "$(Agent.OS)" | "$(VERSION)"
       path: $(EXTRA_GYMS_CACHE_FOLDER)
     displayName: "Cache Complex Gym Installs"
-  - script: |
-      sh ./build/azure_pipeline_helper.sh
-    displayName: 'Install Complex Installs'
+  - script: sh ./build/azure_pipeline_helper.sh
 
   - task: UsePythonVersion@0
     inputs:
