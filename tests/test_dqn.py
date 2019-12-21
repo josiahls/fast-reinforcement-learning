@@ -11,7 +11,7 @@ from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMA
 from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
-p_model = [DQNModule, FixedTargetDQNModule, DoubleDuelingModule, DuelingDQNModule, DoubleDQNModule]
+p_model = [FixedTargetDQNModule, DQNModule, DoubleDuelingModule, DuelingDQNModule, DoubleDQNModule]
 p_exp = [ExperienceReplay, PriorityExperienceReplay]
 p_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
 p_envs = ['CartPole-v1']
