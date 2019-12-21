@@ -9,11 +9,6 @@
 trigger:
 - master
 
-variables:
-  FASTAI_CACHE_FOLDER: $(Pipeline.Workspace)/.fastai_cache
-  EXTRA_GYMS_CACHE_FOLDER: $(Pipeline.Workspace)/.extra_gyms
-  VERSION: "0.9.6"
-
 jobs:
 - job: 'Test'
   pool:
@@ -26,30 +21,18 @@ jobs:
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '$(python.version)'
+  -step:
+    caches:
+      - fastai_install
+    - script: |
+        sudo -H pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
+        python setup.py install
+      displayName: 'Install dependencies'
 
-  - task: Cache@2
-    inputs:
-      key: '$(VERSION) | "$(Agent.OS)"'
-      restoreKeys: |
-         "$(VERSION)" | "$(Agent.OS)"
-      path: $(FASTAI_CACHE_FOLDER)
-    displayName: "Cache Python Packages packages"
-  - script: sudo -H pip install --upgrade pip && \
-      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e . && \
-      python setup.py install
-
-  - task: Cache@2
-    inputs:
-      key: '$(VERSION) | "$(Agent.OS)"'
-      restoreKeys: |
-         "$(VERSION)" | "$(Agent.OS)"
-      path: $(EXTRA_GYMS_CACHE_FOLDER)
-    displayName: "Cache Complex Gym Installs"
   - script: sh ./build/azure_pipeline_helper.sh
+    displayName: 'Complex Installs'
 
-  - task: UsePythonVersion@0
-    inputs:
-      versionSpec: '$(python.version)'
   - script: |
      xvfb-run -s "-screen 0 1400x900x24" py.test -s tests --cov fast_rl --cov-report html --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
     displayName: 'Test with pytest'
