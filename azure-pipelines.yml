@@ -15,9 +15,6 @@ jobs:
       Python36:
         python.version: '3.6'
   steps:
-  - bash: "sudo apt-get install -y ffmpeg xvfb freeglut3-dev python-opengl --fix-missing"
-    displayName: 'Install ffmpeg, freeglut3-dev, and xvfb'
-
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '$(python.version)'
