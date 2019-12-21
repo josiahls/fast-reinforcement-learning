@@ -3,8 +3,16 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
+#  - bash: "sudo apt-get install -y xvfb freeglut3-dev python-opengl --fix-missing"
+#    displayName: 'Install ffmpeg, freeglut3-dev, and xvfb'
+
 trigger:
 - master
+
+variables:
+  FASTAI_CACHE_FOLDER: $(Pipeline.Workspace)/.fastai_cache
+  EXTRA_GYMS_CACHE_FOLDER: $(Pipeline.Workspace)/.extra_gyms
+  VERSION: "0.9.6"
 
 jobs:
 - job: 'Test'
@@ -18,14 +26,30 @@ jobs:
   - task: UsePythonVersion@0
     inputs:
       versionSpec: '$(python.version)'
-  - script: |
-      sudo -H pip install --upgrade pip
-      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
-      python setup.py install
-    displayName: 'Install dependencies'
 
-  - script: sh ./build/azure_pipeline_helper.sh
-    displayName: 'Complex Installs'
+  - task: Cache@2
+    inputs:
+      key: 'fastai | "$(Agent.OS)" | $(VERSION)'
+      restoreKeys: |
+         fastai | "$(Agent.OS)" | "$(VERSION)"
+      path: $(FASTAI_CACHE_FOLDER)
+    displayName: "Cache Python Packages packages"
+    - script: |
+        sudo -H pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
+        python setup.py install
+      displayName: 'Install dependencies'
+
+  - task: Cache@2
+    inputs:
+      key: 'fastai | "$(Agent.OS)" | $(VERSION)'
+      restoreKeys: |
+         fastai | "$(Agent.OS)" | "$(VERSION)"
+      path: $(EXTRA_GYMS_CACHE_FOLDER)
+    displayName: "Cache Complex Gym Installs"
+    - script: |
+        sh ./build/azure_pipeline_helper.sh
+      displayName: 'Install Complex Installs'
 
   - script: |
      xvfb-run -s "-screen 0 1400x900x24" py.test -s tests --cov fast_rl --cov-report html --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
