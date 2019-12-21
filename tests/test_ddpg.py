@@ -78,7 +78,7 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
         print('\n')
-        data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=64, add_valid=False, feed_type=s_format)
+        data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=40, add_valid=False, feed_type=s_format)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.001)
         memory = experience(memory_size=1000000, reduce_ram=True)

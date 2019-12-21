@@ -209,7 +209,7 @@ class Action(object):
 
     def get_single_action(self):
         """ OpenAI envs do not like 1x1 arrays when they are expecting scalars, so we need to unwrap them. """
-        a = self.taken_action.detach().numpy()[0]
+        a = self.taken_action.detach().cpu().numpy()[0]
         if len(self.bounds) == 1: a = a[0]
         if self.bounds.discrete and len(self.bounds) == 1: return int(a)
         elif self.bounds.discrete and len(self.bounds) != 1: return a.astype(int)

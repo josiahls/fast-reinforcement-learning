@@ -27,7 +27,7 @@ steps:
 #    xvfb-run -s "-screen 0 1400x900x24" py.test ./tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
 
 - script: |
-        py.test ./tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
+    xvfb-run -s "-screen 0 1400x900x24" pytest tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
   displayName: 'Test with pytest'
 
 - task: PublishTestResults@2

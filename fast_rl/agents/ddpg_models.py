@@ -70,6 +70,7 @@ class CriticModule(nn.Sequential):
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
 		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni+ao if not emb_szs else ao, layers=layers, out_sz=1,
 									 use_bn=self.batch_norm)
+
 		if not emb_szs: tabular_model.embeds = None
 		self.add_module('lin_block', CriticTabularEmbedWrapper(tabular_model, exclude_cat=not emb_szs))
 
@@ -105,6 +106,7 @@ class ActorModule(nn.Sequential):
 
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
 		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm)
+
 		if not emb_szs: tabular_model.embeds = None
 		self.add_module('lin_block', ActorTabularEmbedWrapper(tabular_model))
 
