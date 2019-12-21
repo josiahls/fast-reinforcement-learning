@@ -34,11 +34,9 @@ jobs:
          fastai | "$(Agent.OS)" | "$(VERSION)"
       path: $(FASTAI_CACHE_FOLDER)
     displayName: "Cache Python Packages packages"
-  - script: |
-      sudo -H pip install --upgrade pip
-      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
+  - script: sudo -H pip install --upgrade pip && \
+      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e . && \
       python setup.py install
-    displayName: 'Install dependencies'
 
   - task: Cache@2
     inputs:
