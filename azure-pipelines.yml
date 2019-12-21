@@ -31,7 +31,7 @@ jobs:
     inputs:
       key: '$(VERSION) | "$(Agent.OS)"'
       restoreKeys: |
-         fastai | "$(Agent.OS)" | "$(VERSION)"
+         "$(VERSION)" | "$(Agent.OS)"
       path: $(FASTAI_CACHE_FOLDER)
     displayName: "Cache Python Packages packages"
   - script: sudo -H pip install --upgrade pip && \
@@ -42,7 +42,7 @@ jobs:
     inputs:
       key: '$(VERSION) | "$(Agent.OS)"'
       restoreKeys: |
-         fastai | "$(Agent.OS)" | "$(VERSION)"
+         "$(VERSION)" | "$(Agent.OS)"
       path: $(EXTRA_GYMS_CACHE_FOLDER)
     displayName: "Cache Complex Gym Installs"
   - script: sh ./build/azure_pipeline_helper.sh
