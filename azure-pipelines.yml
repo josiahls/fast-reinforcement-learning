@@ -22,6 +22,9 @@ jobs:
     inputs:
       versionSpec: '$(python.version)'
 
+  - bash: "sudo apt-get install -y freeglut3-dev python-opengl"
+    displayName: 'Install freeglut3-dev'
+
   - script: |
       python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
       python setup.py install
