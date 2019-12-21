@@ -144,7 +144,8 @@ class GroupAgentInterpretation(object):
         self.groups += interp.groups
 
     def plot_reward_bounds(self, title=None, return_fig: bool = None, per_episode=False,
-                           smooth_groups: Union[None, float] = None, figsize=(5, 5)):
+                           smooth_groups: Union[None, float] = None, figsize=(5, 5), show_average=False,
+                           hide_edges=False):
         groups = self.filter_by(per_episode, 'reward')
         if smooth_groups is not None: [g.smooth(smooth_groups) for g in groups]
         unique_values = list(set([g.unique_tuple for g in groups]))
@@ -155,15 +156,20 @@ class GroupAgentInterpretation(object):
             min_len = min([len(v.values) for v in grouped])
             min_b = np.min([v.values[:min_len] for v in grouped], axis=0)
             max_b = np.max([v.values[:min_len] for v in grouped], axis=0)
+            if show_average:
+                average = np.average([v.values[:min_len] for v in grouped], axis=0)
+                ax.plot(average, c=c, linestyle=':')
             # TODO fit function sometimes does +1 more episodes...  WHY?
             overflow = [v.values for v in grouped if len(v.values) - min_len > 2]
 
-            ax.plot(min_b, c=c, label=f'{grouped[0].meta} {grouped[0].model}')
-            ax.plot(max_b, c=c)
-            for v in overflow: ax.plot(v, c=c)
-            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+            if not hide_edges:
+                ax.plot(min_b, c=c)
+                ax.plot(max_b, c=c)
+                for v in overflow: ax.plot(v, c=c)
 
-            ax.fill_between(list(range(min_len)), min_b, max_b, where=max_b > min_b, color=c, alpha=0.3)
+            ax.fill_between(list(range(min_len)), min_b, max_b, where=max_b > min_b, color=c, alpha=0.3,
+                            label=f'{grouped[0].meta} {grouped[0].model}')
+            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.set_title(ifnone(title, f'{"Per Episode" if per_episode else "Per Step"} Rewards'))

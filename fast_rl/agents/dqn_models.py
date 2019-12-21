@@ -48,8 +48,8 @@ class DQNModule(Module):
 
     def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99, lr=0.001,
                  n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
-                 w=-1, h=-1, ks: Union[None, list]=None, stride: Union[None, list]=None, grad_clip=1,
-                 conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False,):
+                 w=-1, h=-1, ks: Union[None, list]=None, stride: Union[None, list]=None, grad_clip=5,
+                 conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False):
         r"""
         Basic DQN Module.
 
@@ -63,11 +63,12 @@ class DQNModule(Module):
         """
         super().__init__()
         self.name = 'DQN'
+        self.loss = None
         self.loss_func = loss_func
         self.discount = discount
         self.gradient_clipping_norm = grad_clip
         self.lr = lr
-        self.batch_norm =batch_norm
+        self.batch_norm = batch_norm
         self.switched = False
         self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
         self.action_model = nn.Sequential()
@@ -126,11 +127,12 @@ class DQNModule(Module):
         Returns (dict): Optimization information
 
         """
-        r = torch.cat([item.reward.float() for item in sampled])#.to(self.data.device)
-        s_prime = torch.cat([item.s_prime for item in sampled])#.to(self.data.device)
-        s = torch.cat([item.s for item in sampled])#.to(self.data.device)
-        a = torch.cat([item.a.long() for item in sampled])#.to(self.data.device)
-        d = torch.cat([item.done.float() for item in sampled])#.to(self.data.device)
+        with torch.no_grad():
+            r = torch.cat([item.reward.float() for item in sampled])#.to(self.data.device)
+            s_prime = torch.cat([item.s_prime for item in sampled])#.to(self.data.device)
+            s = torch.cat([item.s for item in sampled])#.to(self.data.device)
+            a = torch.cat([item.a.long() for item in sampled])#.to(self.data.device)
+            d = torch.cat([item.done.float() for item in sampled])#.to(self.data.device)
         masking = self.sample_mask(d)
 
         y_hat = self.y_hat(s, a)

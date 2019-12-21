@@ -99,7 +99,7 @@ def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, igno
 dqn_config = {
     DQNModule: [BaseDQNTrainer],
     DoubleDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
-    DuelingDQNModule: [BaseDQNTrainer],
+    DuelingDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
     DoubleDuelingModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
     FixedTargetDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer]
 }

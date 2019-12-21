@@ -10,6 +10,7 @@ from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, 
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE
 from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
+from torch import optim
 
 p_model = [FixedTargetDQNModule, DQNModule, DoubleDuelingModule, DuelingDQNModule, DoubleDQNModule]
 p_exp = [ExperienceReplay, PriorityExperienceReplay]
@@ -22,17 +23,18 @@ config_env_expectations = {
 }
 
 
-def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.00001,
-					copy_over_frequency=300, lr: Union[float, list] = 0.001):
+def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.001,
+					copy_over_frequency=300, lr=None, epochs=450):
+	if lr is None: lr = [0.001, 0.00025]
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
-	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[2]
+	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format)
-	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
+	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSProp)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
 						callback_fns=[RewardMetric, EpsilonMetric])
-	learn.fit(450)
+	learn.fit(epochs)
 	return learn
 
 # @pytest.mark.usefixtures('skip_performance_check')
@@ -109,7 +111,7 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
 	group_interp = GroupAgentInterpretation()
 	for i in range(5):
 		learn = trained_learner(model_cls, 'MiniGrid-FourRooms-v0', s_format, experience, bs=32, layers=[64, 64],
-								memory_size=1000000, decay=0.00001)
+								memory_size=1000000, decay=0.00001, epochs=1000)
 
 		meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
 		interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
@@ -127,7 +129,7 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
 	group_interp = GroupAgentInterpretation()
 	for i in range(5):
 		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],
-								memory_size=1000000, decay=0.00001)
+								memory_size=1000000, decay=0.001)
 
 		meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
 		interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
