@@ -23,7 +23,7 @@ jobs:
       versionSpec: '$(python.version)'
 
   - script: |
-      sudo -H pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
+      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
       python setup.py install
     displayName: 'Install dependencies'
 
