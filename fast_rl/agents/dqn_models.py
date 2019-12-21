@@ -22,11 +22,17 @@ def ks_stride(ks, stride, w, h, n_blocks, kern_proportion=.1, stride_proportion=
     return ifnone(ks, map(ceil, kernels)), ifnone(stride, map(ceil, strides))
 
 
-def conv_bn_lrelu(ni: int, nf: int, ks: int = 3, stride: int = 1, pad=True) -> nn.Sequential:
+class FakeBatchNorm(Module):
+    r""" If we want all the batch norm layers gone, then we will replace the tabular batch norm with this. """
+    def forward(self, xi: Tensor, *args):
+        return xi
+
+
+def conv_bn_lrelu(ni: int, nf: int, ks: int = 3, stride: int = 1, pad=True, bn=True) -> nn.Sequential:
     r""" Create a sequence Conv2d->BatchNorm2d->LeakyReLu layer. (from darknet.py) """
     return nn.Sequential(
         nn.Conv2d(ni, nf, kernel_size=ks, bias=False, stride=stride, padding=(ks // 2) if pad else 0),
-        nn.BatchNorm2d(nf),
+        nn.BatchNorm2d(nf) if bn else FakeBatchNorm(),
         nn.LeakyReLU(negative_slope=0.1, inplace=True))
 
 
@@ -72,7 +78,7 @@ class DQNModule(Module):
         self.switched = False
         self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
         self.action_model = nn.Sequential()
-        _layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
+        _layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 
         if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
         self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
@@ -90,6 +96,7 @@ class DQNModule(Module):
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
         tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm)
         if not emb_szs: tabular_model.embeds = None
+        if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
         self.action_model.add_module('lin_block', TabularEmbedWrapper(tabular_model))
 
     def fix_switched_channels(self, current_channels, expected_channels, layers: list):
@@ -223,12 +230,13 @@ class DuelingDQNModule(FixedTargetDQNModule):
         self.name = 'Dueling DQN'
 
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
-        model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao,
+        tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao,
                              use_bn=self.batch_norm)
-        if not emb_szs: model.embeds = None
-        model.layers, removed_layer = split_model(model.layers, [last_layer(model)])
+        if not emb_szs: tabular_model.embeds = None
+        if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
+        tabular_model.layers, removed_layer = split_model(tabular_model.layers, [last_layer(tabular_model)])
         ni = removed_layer[0].in_features
-        self.action_model.add_module('lin_block', TabularEmbedWrapper(model))
+        self.action_model.add_module('lin_block', TabularEmbedWrapper(tabular_model))
         self.action_model.add_module('dueling_block', DuelingBlock(ao, ni))
 
 

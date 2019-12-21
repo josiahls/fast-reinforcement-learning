@@ -8,7 +8,7 @@ from torch.nn import MSELoss
 from torch.optim import Adam
 
 from fast_rl.agents.agents_base import Flatten
-from fast_rl.agents.dqn_models import conv_bn_lrelu, ks_stride
+from fast_rl.agents.dqn_models import conv_bn_lrelu, ks_stride, FakeBatchNorm
 
 
 class CriticTabularEmbedWrapper(Module):
@@ -58,7 +58,7 @@ class CriticModule(nn.Sequential):
 		self.switched, self.batch_norm = False, batch_norm
 		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
 		self.action_model = nn.Sequential()
-		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
+		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self)
@@ -70,8 +70,8 @@ class CriticModule(nn.Sequential):
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
 		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni+ao if not emb_szs else ao, layers=layers, out_sz=1,
 									 use_bn=self.batch_norm)
-
 		if not emb_szs: tabular_model.embeds = None
+		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
 		self.add_module('lin_block', CriticTabularEmbedWrapper(tabular_model, exclude_cat=not emb_szs))
 
 	def fix_switched_channels(self, current_channels, expected_channels, layers: list):
@@ -95,7 +95,7 @@ class ActorModule(nn.Sequential):
 		self.switched, self.batch_norm = False, batch_norm
 		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
 		self.action_model = nn.Sequential()
-		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
+		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self)
@@ -108,6 +108,7 @@ class ActorModule(nn.Sequential):
 		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm)
 
 		if not emb_szs: tabular_model.embeds = None
+		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
 		self.add_module('lin_block', ActorTabularEmbedWrapper(tabular_model))
 
 	def fix_switched_channels(self, current_channels, expected_channels, layers: list):
