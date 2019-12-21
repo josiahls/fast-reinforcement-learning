@@ -423,8 +423,8 @@ class MDPCallback(LearnerCallback):
             self.valid_ds.x.set_recent_run_episode(epoch)
             self.valid_ds.episode = epoch
 
-    def on_train_end(self, **kwargs:Any) ->None:
-        self.learn.data.close()
+    # def on_train_end(self, **kwargs:Any) ->None:
+    #     self.learn.data.close()
 
 
 class MDPMemoryManager(LearnerCallback):

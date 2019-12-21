@@ -49,7 +49,7 @@ class DQNModule(Module):
     def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99, lr=0.001,
                  n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
                  w=-1, h=-1, ks: Union[None, list]=None, stride: Union[None, list]=None, grad_clip=1,
-                 conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
+                 conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False,):
         r"""
         Basic DQN Module.
 
@@ -67,6 +67,7 @@ class DQNModule(Module):
         self.discount = discount
         self.gradient_clipping_norm = grad_clip
         self.lr = lr
+        self.batch_norm =batch_norm
         self.switched = False
         self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
         self.action_model = nn.Sequential()
@@ -86,7 +87,7 @@ class DQNModule(Module):
         return ni
 
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
-        tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao)
+        tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm)
         if not emb_szs: tabular_model.embeds = None
         self.action_model.add_module('lin_block', TabularEmbedWrapper(tabular_model))
 
@@ -220,7 +221,6 @@ class DuelingDQNModule(FixedTargetDQNModule):
         self.name = 'Dueling DQN'
 
     def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
-        model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=False)
         if not emb_szs: model.embeds = None
         model.layers, removed_layer = split_model(model.layers, [last_layer(model)])
         ni = removed_layer[0].in_features

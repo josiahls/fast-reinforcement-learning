@@ -35,7 +35,7 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	learn.fit(450)
 	return learn
 
-
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
 def test_dqn_create_dqn_model(model_cls, s_format, env):
 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -48,6 +48,7 @@ def test_dqn_create_dqn_model(model_cls, s_format, env):
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_dqn_learner(model_cls, s_format, mem, env):
 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -61,6 +62,7 @@ def test_dqn_dqn_learner(model_cls, s_format, mem, env):
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_fit(model_cls, s_format, mem, env):
 	data = MDPDataBunch.from_env(env, render='rgb_array', bs=5, max_steps=20, add_valid=False, feed_type=s_format)
@@ -75,6 +77,7 @@ def test_dqn_fit(model_cls, s_format, mem, env):
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem"], list(product(p_model, p_format, p_exp)))
 def test_dqn_fit_maze_env(model_cls, s_format, mem):
 	success = False
@@ -85,7 +88,8 @@ def test_dqn_fit_maze_env(model_cls, s_format, mem):
 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 			memory = ExperienceReplay(10000)
 			exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
-			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+								  callback_fns=[RewardMetric, EpsilonMetric])
 			learner.fit(2)
 
 			assert config_env_expectations['maze-random-5x5-v0']['action_shape'] == (

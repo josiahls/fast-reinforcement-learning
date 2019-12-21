@@ -24,6 +24,7 @@ config_env_expectations = {
 }
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
 def test_ddpg_create_ddpg_model(model_cls, s_format, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -36,6 +37,7 @@ def test_ddpg_create_ddpg_model(model_cls, s_format, env):
         assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dddpg_ddpglearner(model_cls, s_format, mem, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
@@ -49,13 +51,15 @@ def test_dddpg_ddpglearner(model_cls, s_format, mem, env):
         assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_ddpg_fit(model_cls, s_format, mem, env):
     data = MDPDataBunch.from_env(env, render='rgb_array', bs=10, max_steps=20, add_valid=False, feed_type=s_format)
     model = create_ddpg_model(data, model_cls, opt=torch.optim.RMSprop, layers=[20, 20])
     memory = mem(memory_size=100, reduce_ram=True)
     exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1, decay=0.001)
-    learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+    learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                           callback_fns=[RewardMetric, EpsilonMetric])
     learner.fit(2)
 
     assert config_env_expectations[env]['action_shape'] == (1, data.action.taken_action.shape[1])
@@ -76,10 +80,11 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
         print('\n')
         data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=40, add_valid=False, feed_type=s_format)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
-                                               decay=0.0001)
+                                               decay=0.001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -105,7 +110,8 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -132,7 +138,8 @@ def test_ddpg_models_reach(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(450)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -160,7 +167,8 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(2000)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
@@ -216,7 +224,8 @@ def test_ddpg_models_halfcheetah(model_cls, s_format, experience):
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
         model = create_ddpg_model(data=data, base_arch=model_cls)
-        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+        learner = ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                               callback_fns=[RewardMetric, EpsilonMetric])
         learner.fit(2000)
 
         meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'

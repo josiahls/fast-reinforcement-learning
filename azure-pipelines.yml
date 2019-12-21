@@ -7,7 +7,7 @@ trigger:
 - master
 
 pool:
-  vmImage: 'ubuntu-16.04'
+  vmImage: 'ubuntu-18.04'
 
 steps:
 
@@ -16,19 +16,15 @@ steps:
 
 - task: UsePythonVersion@0
   inputs:
-    versionSpec: '3.6'
-
-- script: sh ./build/azure_pipeline_helper.sh
-  displayName: 'Complex Installs'
+    versionSpec: '3.7'
 
 - script: |
-    pip install Bottleneck
-    pip install moviepy
     python setup.py install
     pip install pytest
     pip install pytest-cov
-    pip install pytest-xdist
   displayName: 'Install Python Packages'
+
+#    xvfb-run -s "-screen 0 1400x900x24" py.test ./tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
 
 - script: |
     xvfb-run -s "-screen 0 1400x900x24" pytest tests --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
