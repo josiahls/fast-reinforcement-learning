@@ -1,3 +1,5 @@
+from math import ceil, floor
+
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType
 from fastai.tabular.data import def_emb_sz
@@ -433,7 +435,8 @@ class MDPMemoryManager(LearnerCallback):
         self.strategy = strategy
         self.k = k
         self._strategy_fn_dict = {
-            'k_partitions_top': self.k_top
+            'k_top': self.k_top,
+            'k_partitions_top': self.k_partitions_top
         }
 
     def _comp_less(self, key, info, episode):
@@ -442,17 +445,45 @@ class MDPMemoryManager(LearnerCallback):
     def _comp_greater(self, key, info, episode):
         return info[key] > info[episode]
 
-    def k_top(self, info: Dict[int, List[Tuple[float, bool]]]):
+    def k_partitions_top(self, info: Dict[int, List[Tuple[float, bool]]], k):
         # If the episode -1 is defined, then clean it, this is just placeholder data
         if -1 in info and not info[-1][1]: return [-1]
         # If the number of not-clean episodes is less than k, don't do anything
-        if len([k for k in info if not info[k][1]]) <= self.k: return None
+        n_full = len([ep for ep in info if not info[ep][1]])
+        if n_full <= k: return []
+
+        partitions = np.linspace(0, len(info.keys()), num=k + 1, dtype=int)
+        # If len(info) == partitions, then do k_top
+        # If partitions starts at 0, do k_top
+        if len(partitions) == len(info.keys()) or len(partitions) == 0:
+            remove_episodes = self.k_top(info, k=k)
+        else:
+            remove_episodes = []
+            # zip(partitions, zip(l_w, list(partitions[1:])) is a sliding window
+            l_w = copy(partitions[:-1])
+            for s in [slice(*i, 1) for i in zip(l_w, list(partitions[1:]))]:
+                remove_episodes += self.k_top({key: info[key] for key in list(info)[s]}, k=1)
+
+            # We want there to still be `k` full episodes. There will always be corner cases where `remove_episodes`
+            # ends up dropping the number of full episodes < k. We want to avoid this.
+            if n_full - len(remove_episodes) <= k:
+                assert (n_full - k) <= len(remove_episodes)
+                remove_episodes = remove_episodes[:(n_full - k)]
+
+        return remove_episodes
+
+    def k_top(self, info: Dict[int, List[Tuple[float, bool]]], k):
+        # If the episode -1 is defined, then clean it, this is just placeholder data
+        if -1 in info and not info[-1][1]: return [-1]
+        # If the number of not-clean episodes is less than k, don't do anything
+        if len([ep for ep in info if not info[ep][1]]) <= k: return []
         # Collect k top episodes, then clean the rest
         k_top = []
-        for episode in [i for i in info if i != -1]:
-            # If the episode is greater than all of the other episodes that are not already in k_top
-            compared = [info[episode][0] > info[k][0] for k in info if k not in k_top and k != -1 and k != episode]
-            if all(compared) and len(compared) != 0 and len(k_top) < self.k:
+        # Sort the episodes max -> min so k_top gets full range
+        for episode in [i for i in sorted(info, key=lambda x: info[x][0], reverse=True) if i != -1]:
+            # If the episode is greater or equal to than all of the other episodes that are not already in k_top
+            compared = [info[episode][0] >= info[ep][0] for ep in info if ep not in k_top and ep != -1 and ep != episode]
+            if all(compared) and len(compared) != 0 and len(k_top) < k:
                 k_top.append(episode)
 
         return list(set([k for k in info if not info[k][1]]) - set(k_top))
@@ -460,9 +491,8 @@ class MDPMemoryManager(LearnerCallback):
     def on_epoch_end(self, **kwargs: Any):
         for ds_type in [DatasetType.Train] if self.learn.data.empty_val else [DatasetType.Train, DatasetType.Valid]:
             ds: MDPDataset = self.learn.dl(ds_type).dataset
-            episodes = self._strategy_fn_dict[self.strategy](ds.x.info)
-            if episodes is not None:
-                for e in episodes: ds.x.clean(e)
+            episodes = self._strategy_fn_dict[self.strategy](ds.x.info, self.k)
+            for e in episodes: ds.x.clean(e)
 
 
 class MDPDataset(Dataset):
@@ -606,12 +636,12 @@ class MDPDataBunch(DataBunch):
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
-                 feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_partitions_top',
-                 split_env_init=True, device: torch.device = None, no_check: bool = False, x=None, val_x=None,
+                 feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_top',
+                 split_env_init=True, device: torch.device = None, k=1, no_check: bool = False, x=None, val_x=None,
                  add_valid=True, **dl_kwargs):
 
         env = gym.make(env_name)
-        memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy)
+        memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy, k=k)
         train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
                                 memory_manager=memory_manager, x=x)
         if add_valid:
