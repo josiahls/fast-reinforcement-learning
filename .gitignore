@@ -6,7 +6,12 @@ gen
 .gitignore
 
 # Jupyter Notebook
-/fast_rl/notebooks/.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
 
 # Data Files
 #/docs_src/data/*
+
+# Build Files / Directories
+build/*
+dist/*
+fast_rl.egg-info/*
