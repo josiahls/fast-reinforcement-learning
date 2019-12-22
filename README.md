@@ -20,9 +20,6 @@ However there are also frameworks in PyTorch most notably Facebook's Horizon:
 - [Horizon](https://github.com/facebookresearch/Horizon)
 - [DeepRL](https://github.com/ShangtongZhang/DeepRL)
 
-Our motivation is that existing frameworks commonly use tensorflow, which nothing against tensorflow, but we have 
-accomplished more in shorter periods of time using PyTorch. 
-
 Fastai for computer vision and tabular learning has been amazing. One would wish that this would be the same for RL. 
 The purpose of this repo is to have a framework that is as easy as possible to start, but also designed for testing
 new agents. 
@@ -72,141 +69,28 @@ working at their best. Post 1.0.0 will be more formal feature development with C
 **Critical**
 Testable code:
 ```python
-from fast_rl.agents.DQN import DQN
-from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
+from fast_rl.agents.dqn import *
+from fast_rl.agents.dqn_models import *
+from fast_rl.core.agent_core import ExperienceReplay, GreedyEpsilon
+from fast_rl.core.data_block import MDPDataBunch
+from fast_rl.core.metrics import *
 
-data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
-model = DQN(data)
-learn = AgentLearner(data, model)
-learn.fit(450)
-``` 
-Result:
-
-| ![](res/pre_interpretation_maze_dqn.gif) |
-|:---:|
-| *Fig 1: We are now able to train an agent using some Fastai API* |
-
-
-We believe that the agent explodes after the first episode. Not to worry! We will make a RL interpreter to see whats 
-going on!
-
-- [X] 0.2.0 AgentInterpretation: First method will be heatmapping the image / state space of the 
-environment with the expected rewards for super important debugging. In the code above, we are testing with a maze for a
-good reason. Heatmapping rewards over a maze is pretty easy as opposed to other environments.
-
-Usage example:
-```python
-from fast_rl.agents.DQN import DQN
-from fast_rl.core.Interpreter import AgentInterpretationAlpha
-from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
-
-data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human')
-model = DQN(data)
-learn = AgentLearner(data, model)
-learn.fit(10)
-
-# Note that the Interpretation is broken, will be fixed with documentation in 0.9
-interp = AgentInterpretationAlpha(learn)
-interp.plot_heatmapped_episode(5)
+data = MDPDataBunch.from_env('CartPole-v1', render='rgb_array', bs=32, add_valid=False)
+model = create_dqn_model(data, FixedTargetDQNModule, opt=torch.optim.RMSprop, lr=0.00025)
+memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
+exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+learner.fit(10)
 ```
-
-| ![](res/heat_map_1.png) |
-|:---:|
-| *Fig 2: Cumulative rewards calculated over states during episode 0* |
-| ![](res/heat_map_2.png) |
-| *Fig 3: Episode 7* |
-| ![](res/heat_map_3.png) |
-| *Fig 4: Unimportant parts are excluded via reward penalization* |
-| ![](res/heat_map_4.png) |
-| *Fig 5: Finally, state space is fully explored, and the highest rewards are near the goal state* |
-
-If we change:
-```python
-interp = AgentInterpretationAlpha(learn)
-interp.plot_heatmapped_episode(epoch)
-```
-to:
-```python
-interp = AgentInterpretationAlpha(learn)
-interp.plot_episode(epoch)
-```
-We can get the following plots for specific episodes:
-
-| ![](res/reward_plot_1.png) |
-|:----:|
-| *Fig 6: Rewards estimated by the agent during episode 0* |
-
-As determined by our AgentInterpretation object, we need to either debug or improve our agent. 
-We will do this in parallel with creating our Learner fit function. 
-
-- [X] 0.3.0 Add DQNs: DQN, Dueling DQN, Double DQN, Fixed Target DQN, DDDQN.
-- [X] 0.4.0 Learner Basic: We need to convert this into a suitable object. Will be similar to the basic fasai learner
-hopefully. Possibly as add prioritize replay?
-    - Added PER.
-- [X] 0.5.0 DDPG Agent: We need to have at least one agent able to perform continuous environment execution. As a note, we 
-could give discrete agents the ability to operate in a continuous domain via binning. 
-    - [X] 0.5.0 DDPG added. let us move
-    - [X] 0.5.0 The DDPG paper contains a visualization for Q learning might prove useful. Add to interpreter.
-
-| ![](res/ddpg_balancing.gif) |
-|:----:|
-| *Fig 7: DDPG trains stably now..* |
-
-
-Added q value interpretation per explanation by Lillicrap et al., 2016. Currently both models (DQN and DDPG) have 
-unstable q value approximations. Below is an example from DQN.
-```python
-interp = AgentInterpretationAlpha(learn, ds_type=DatasetType.Train)
-interp.plot_q_density(epoch)
-```
-Can be referenced in `fast_rl/tests/test_interpretation` for usage. A good agent will have mostly a diagonal line, 
-a failing one will look globular or horizontal.
-
-| ![](res/dqn_q_estimate_1.jpg) |
-|:----:|
-| *Fig 8: Initial Q Value Estimate. Seems globular which is expected for an initial model.* |
-
-| ![](res/dqn_q_estimate_2.jpg) |
-|:----:|
-| *Fig 9: Seems like the DQN is not learning...* |
-
-| ![](res/dqn_q_estimate_3.jpg) |
-|:----:|
-| *Fig 10: Alarming later epoch results. It seems that the DQN converges to predicting a single Q value.* |
-
-- [X] 0.6.0 Single Global fit function like Fastai's. Think about the missing batch step. Noted some of the changes to 
-the existing the Fastai 
-
-| ![](res/fit_func_out.jpg) |
-|:----:|
-| *Fig 11: Resulting output of a typical fit function using ref code below.* |
-
-```python
-from fast_rl.agents.DQN import DuelingDQN
-from fast_rl.core.Learner import AgentLearner
-from fast_rl.core.MarkovDecisionProcess import MDPDataBunch
-
-
-data = MDPDataBunch.from_env('maze-random-5x5-v0', render='human', max_steps=1000)
-model = DuelingDQN(data)
-# model = DQN(data)
-learn = AgentLearner(data, model)
-
-learn.fit(5)
-```
-
-reset commit
 
 - [X] 0.7.0 Full test suite using multi-processing. Connect to CI.
 - [X] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. Also, massive refactoring will be needed.
-- [ ] **Working on** 0.9.0 Notebook demonstrations of basic model usage.
-- [ ] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
+- [X] 0.9.0 Notebook demonstrations of basic model usage.
+- [ ] **Working on** **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
-- [ ] 1.2.0 Add PyBullet Fetch Environments
-    - [ ] 1.2.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
-    - [ ] 1.2.0 Add HER
+- [ ] 1.8.0 Add PyBullet Fetch Environments
+    - [ ] 1.8.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
+    - [ ] 1.8.0 Add HER
 
 
 ## Code 

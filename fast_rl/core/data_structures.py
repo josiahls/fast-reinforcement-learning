@@ -102,7 +102,7 @@ class SumTree(object):
         return is_weight.astype(float)
 
     def batch_get(self, ss):
-        return np.array(list(zip(*list([self.get(s) for s in ss]))))
+        return np.array(list(zip(*list([self.get(s) for s in ss if self.get(s)[2] != 0]))))
 
 
 def print_tree(tree: SumTree):
@@ -129,7 +129,7 @@ def print_tree(tree: SumTree):
             display_indexes.append(local_list)
 
     for layer in display_indexes:
-        # Get the values contained in current layer d
+        # Get the v contained in current layer d
         if display_values is None:
             display_values = [[tree.tree[i] for i in layer]]
         else:

@@ -17,7 +17,7 @@ from moviepy.video.io.bindings import mplfig_to_npimage
 from torch import nn
 
 from fast_rl.core import Learner
-from fast_rl.core.MarkovDecisionProcess import MarkovDecisionProcessSliceAlpha, FEED_TYPE_IMAGE
+from fast_rl.core.data_block import MarkovDecisionProcessSliceAlpha, FEED_TYPE_IMAGE
 
 
 class AgentInterpretationAlpha(Interpretation):
@@ -204,7 +204,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def plot_agent_accuracy_density(self, episode_num=None):
         """
-        Heat maps the density of actual vs estimated q values. Good reference for this is at [1].
+        Heat maps the density of actual vs estimated q v. Good reference for this is at [1].
 
         References:
             [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.
@@ -241,7 +241,7 @@ class AgentInterpretationAlpha(Interpretation):
 
     def plot_q_density(self, episode_num=None):
         """
-        Heat maps the density of actual vs estimated q values. Good reference for this is at [1].
+        Heat maps the density of actual vs estimated q v. Good reference for this is at [1].
 
         References:
             [1] "Simple Example Of 2D Density Plots In Python." Medium. N. p., 2019. Web. 31 Aug. 2019.
@@ -355,9 +355,9 @@ class AgentInterpretationAlpha(Interpretation):
 
     def get_memory_samples(self, batch_size=None, key='reward'):
         samples = self.learn.model.memory.sample(self.learn.model.batch_size if batch_size is None else batch_size)
-        if not samples: raise IndexError('Your memory seems empty.')
+        if not samples: raise IndexError('Your tree seems empty.')
         if batch_size is not None and batch_size > len(self.learn.model.memory):
-            raise IndexError(f'Your batch size {batch_size} > the memory\'s batch size {len(self.learn.model.memory)}')
+            raise IndexError(f'Your batch size {batch_size} > the tree\'s batch size {len(self.learn.model.memory)}')
         if key not in samples[0].obj.keys(): raise ValueError(f'Key {key} not in {samples[0].obj.keys()}')
         return [s.obj[key] for s in samples]
 
