@@ -638,7 +638,7 @@ class MDPDataBunch(DataBunch):
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
                  feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_top',
                  split_env_init=True, device: torch.device = None, k=1, no_check: bool = False, x=None, val_x=None,
-                 add_valid=True, **dl_kwargs):
+                 add_valid=True, **dl_kwargs) -> 'MDPDataBunch':
 
         env = gym.make(env_name)
         memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy, k=k)
@@ -689,7 +689,7 @@ class MDPDataBunch(DataBunch):
 
     def to_pickle(self, path=None):
         if self.train_ds is not None: self.train_ds.to_pickle(ifnone(path, self.path), 'train')
-        if self.valid_ds is not None: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
+        if not self.empty_val: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
 
     @staticmethod
     def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset] = None):
@@ -718,6 +718,9 @@ class MDPList(ItemList):
         # if items is not None:
         super().__init__(items, **kwargs)
         self.info = {}
+
+    def filter_by_episode(self, episode):
+        return [i for i in self.items if i.episode == episode]
 
     def set_recent_run_episode(self, episode):
         for i, item in enumerate(reversed(self.items)):

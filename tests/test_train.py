@@ -1,10 +1,10 @@
-# import pytest
-#
-# from fast_rl.agents.dqn import *
-# from fast_rl.agents.dqn_models import FixedTargetDQNModule
-# from fast_rl.core.agent_core import *
-# from fast_rl.core.data_block import *
-# from fast_rl.core.train import *
+import pytest
+
+from fast_rl.agents.dqn import *
+from fast_rl.agents.dqn_models import FixedTargetDQNModule
+from fast_rl.core.agent_core import *
+from fast_rl.core.data_block import *
+from fast_rl.core.train import *
 #
 # p_model = [FixedTargetDQNModule]
 # p_exp = [ExperienceReplay]
@@ -14,6 +14,15 @@
 # 	'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
 # 	'maze-random-5x5-v0': {'action_shape': (1, 4), 'state_shape': (1, 2)}
 # }
+
+def test_interpretation_gif():
+    data = MDPDataBunch.from_pickle(env_name='CartPole-v0', path='./data/cartpole_10_epoch')
+    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1)
+    memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+    interp = AgentInterpretation(learner, ds_type=DatasetType.Train)
+    interp.generate_gif(-1).write('last_episode', fps=60)
 #
 #
 # @pytest.mark.parametrize(["model_cls", "s_format", "mem"], list(product(p_model, p_format, p_exp)))

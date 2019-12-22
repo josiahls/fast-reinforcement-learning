@@ -149,9 +149,10 @@ class ExperienceReplay(Experience):
 		return random.sample(self.memory, batch)
 
 	def update(self, item, device, **kwargs):
+		item = deepcopy(item)
 		super().update(item, device, **kwargs)
 		if self.reduce_ram: item.clean()
-		self._memory.append(deepcopy(item))
+		self._memory.append(item)
 
 
 class PriorityExperienceReplayCallback(LearnerCallback):
@@ -229,6 +230,7 @@ class PriorityExperienceReplay(Experience):
 		Returns:
 
 		"""
+		item = deepcopy(item)
 		super().update(item, device, **kwargs)
 		maximal_priority = self.alpha
 		if self.reduce_ram: item.clean()

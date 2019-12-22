@@ -4,6 +4,8 @@ from functools import partial
 from pathlib import Path
 
 import scipy.stats as st
+from moviepy.video.io.bindings import mplfig_to_npimage
+from moviepy.video.io.html_tools import ipython_display
 from torch.distributions import Normal
 from dataclasses import dataclass, field
 from fastai.basic_train import *
@@ -20,7 +22,7 @@ import os
 from matplotlib.ticker import MaxNLocator
 from itertools import cycle, product, permutations, combinations, combinations_with_replacement, islice
 
-from fast_rl.core.data_block import MDPList
+from fast_rl.core.data_block import MDPList, FEED_TYPE_IMAGE
 
 
 def array_flatten(array):
@@ -52,6 +54,9 @@ def group_by_episode(items: MDPList, episodes: list):
 def smooth(v, smoothing_const): return np.convolve(v, np.ones(smoothing_const), 'same') / smoothing_const
 
 
+class EpisodeNotAvailable(Exception): pass
+
+
 @dataclass
 class GroupField:
     values: list
@@ -77,6 +82,45 @@ class GroupField:
         return all([self.unique_tuple[i] == comp_tuple[i] for i in range(len(self.unique_tuple))])
 
     def smooth(self, smooth_groups): self.values = smooth(self.values, smooth_groups)
+
+
+@dataclass
+class Gif:
+    frames: np.array
+    episode: int
+    animation = None
+
+    def __post_init__(self):
+        if type(self.frames) is list: self.frames = np.concatenate(self.frames, axis=0)
+
+    def _make_frame(self, t, frames, axes, fig, title):
+        axes.clear()
+        fig.suptitle(title)
+        axes.imshow(frames[int(t)] / 255)
+        return mplfig_to_npimage(fig)
+
+    def get_gif(self, duration=None):
+        try:
+            from moviepy.video.VideoClip import VideoClip
+            fig, ax = plt.subplots()
+            duration = ifnone(duration, self.frames.shape[0])
+            return VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig,
+                                     title=f'Episode {self.episode}'), duration=duration)
+
+        except ImportError:
+            raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
+
+    def plot(self, fps=30, cache_animation=False, duration=None, return_fig=None):
+        if not cache_animation or self.animation is None: self.animation = self.get_gif(duration=duration)
+
+        if ifnone(return_fig, defaults.return_fig):
+            return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
+        if not IN_NOTEBOOK: raise NotImplemented('Please use in a jupyter notebook or instead of `plot()` \n'
+                                                 'call write("somefilename")')
+
+    def write(self, filename, cache_animation=False, fps=30, duration=None):
+        if not cache_animation or self.animation is None: self.animation = self.get_gif(duration=duration)
+        self.animation.write_gif(f"{filename}.gif", fps=fps)
 
 
 class AgentInterpretation(Interpretation):
@@ -118,6 +162,35 @@ class AgentInterpretation(Interpretation):
         interp.add_interpretation(self)
         return interp
 
+    def frames(self, items):
+        return [
+            _.s.detach().cpu().numpy() if self.ds.feed_type == FEED_TYPE_IMAGE else _.alt_s_prime.detach().cpu().numpy()
+            for _ in items]
+
+    def generate_gif(self, episode: Union[None, list, int] = None) -> Union[Gif, List[Gif]]:
+        full_episodes = list(set([k for k in self.ds.x.info if not self.ds.x.info[k][1]]) - {-1})
+        if episode is None:
+            episode = full_episodes
+        elif episode == -1:
+            episode = [full_episodes[-1]]
+        elif (type(episode) is not list and episode not in full_episodes) or \
+                (type(episode) is list and any([e not in full_episodes for e in episode])):
+            prefix = 'Some Episodes' if type(episode) is list else 'Episode'
+            raise EpisodeNotAvailable(f'{prefix} {episode} not found in {full_episodes}. \nNote that due to the\n'
+                                      f'memory manager, memory that is not related to the agent\'s training will be\n'
+                                      f'deallocated. One of the first things deallocated are the rendered images\n'
+                                      f'associated with each step since images typically take up large amounts of\n'
+                                      f'memory. This then means there are fewer episodes that you can get full\n'
+                                      f'gifs of. If this is not acceptable, make sure to change the memory management\n'
+                                      f'strategy in the MDPDataBunch. ')
+        elif type(episode) is not list and episode in full_episodes:
+            episode = list(episode)
+        else:
+            ValueError(f'Something happened that should not have happened, check your datatypes {episode}')
+
+        gifs = [Gif(frames=self.frames(self.ds.x.filter_by_episode(e)), episode=e) for e in episode]
+        return gifs[0] if len(gifs) == 1 else gifs
+
 
 @dataclass
 class GroupAgentInterpretation(object):
@@ -126,8 +199,10 @@ class GroupAgentInterpretation(object):
 
     @property
     def analysis(self):
-        if not self.in_notebook: return [g.analysis for g in self.groups]
-        else: return pd.DataFrame([{'name': g.unique_tuple, **g.analysis} for g in self.groups])
+        if not self.in_notebook:
+            return [g.analysis for g in self.groups]
+        else:
+            return pd.DataFrame([{'name': g.unique_tuple, **g.analysis} for g in self.groups])
 
     def append_meta(self, post_fix):
         r""" Useful before calling `to_pickle` if you want this set to be seen differently from future runs."""
@@ -269,7 +344,7 @@ class QValueInterpretation(AgentInterpretation):
         for ei in episode_partition:
             if not ei: continue
             raw_actual = [ei[i].reward.cpu().numpy().item() for i in np.flip(np.arange(len(ei)))]
-            actual += np.flip([np.cumsum(raw_actual[i:])[-1] for i in range(len(raw_actual))]).reshape(-1,).tolist()
+            actual += np.flip([np.cumsum(raw_actual[i:])[-1] for i in range(len(raw_actual))]).reshape(-1, ).tolist()
             for item in ei: predicted.append(self.learn.interpret_q(item))
 
         return self.normalize(actual), self.normalize(predicted)

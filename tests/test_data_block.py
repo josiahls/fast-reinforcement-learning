@@ -1,3 +1,4 @@
+import os
 from itertools import product
 
 import pytest
@@ -39,6 +40,19 @@ def test_dataset_memory_manager(memory_strategy, k):
     if memory_strategy.__contains__('top') and not memory_strategy.__contains__('both'):
         assert (np.argmax([_[0] for _ in data_info.values()])) in full_episodes
 
+
+def test_databunch_to_pickle():
+    data = MDPDataBunch.from_env('CartPole-v0', render='rgb_array', bs=5, max_steps=20, add_valid=False,
+                                 memory_management_strategy='k_partitions_top', k=3)
+    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1)
+    memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                          callback_fns=[RewardMetric, EpsilonMetric])
+    learner.fit(10)
+    data.to_pickle('./data/cartpole_10_epoch')
+    assert os.path.exists('./data/cartpole_10_epoch/train.pickle')
+    MDPDataBunch.from_pickle(env_name='CartPole-v0', path='./data/cartpole_10_epoch')
 
 
 # @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
