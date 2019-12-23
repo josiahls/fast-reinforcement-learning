@@ -498,7 +498,6 @@ class MDPMemoryManager(LearnerCallback):
     def on_epoch_end(self, **kwargs: Any):
         for ds_type in [DatasetType.Train] if self.learn.data.empty_val else [DatasetType.Train, DatasetType.Valid]:
             ds: MDPDataset = self.learn.dl(ds_type).dataset
-            print(ds.x.info)
             episodes = self._strategy_fn_dict[self.strategy](ds.x.info, self.k)
             for e in episodes: ds.x.clean(e)
 
