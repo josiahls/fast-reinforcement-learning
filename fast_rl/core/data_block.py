@@ -1,3 +1,5 @@
+import logging
+logging.basicConfig()
 from math import ceil, floor
 
 import gym
@@ -419,11 +421,11 @@ class MDPCallback(LearnerCallback):
 
     def on_epoch_end(self, last_metrics, epoch, **kwargs: Any) -> None:
         """ Updates the most recent episode number in both datasets. """
-        self.train_ds.x.set_recent_run_episode(epoch)
         self.train_ds.episode = epoch
+        self.train_ds.x.set_recent_run_episode(epoch)
         if last_metrics[0] is not None and self.valid_ds is not None:
-            self.valid_ds.x.set_recent_run_episode(epoch)
             self.valid_ds.episode = epoch
+            self.valid_ds.x.set_recent_run_episode(epoch)
 
     # def on_train_end(self, **kwargs:Any) ->None:
     #     self.learn.data.close()
@@ -434,6 +436,8 @@ class MDPMemoryManager(LearnerCallback):
         super().__init__(learn)
         self.strategy = strategy
         self.k = k
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.getLogger('root').level)
         self._strategy_fn_dict = {
             'k_top': self.k_top,
             'k_partitions_top': self.k_partitions_top
@@ -466,10 +470,13 @@ class MDPMemoryManager(LearnerCallback):
 
             # We want there to still be `k` full episodes. There will always be corner cases where `remove_episodes`
             # ends up dropping the number of full episodes < k. We want to avoid this.
-            if n_full - len(remove_episodes) <= k:
+            if n_full - len(remove_episodes) < k:
                 assert (n_full - k) <= len(remove_episodes)
+                self.logger.debug(f'Presently there are {n_full} full episodes, and {len(remove_episodes)} \n'
+                                  f'episodes to remove. (1)')
                 remove_episodes = remove_episodes[:(n_full - k)]
 
+        self.logger.debug(f'Removing episodes: {remove_episodes}. {info}')
         return remove_episodes
 
     def k_top(self, info: Dict[int, List[Tuple[float, bool]]], k):
@@ -491,6 +498,7 @@ class MDPMemoryManager(LearnerCallback):
     def on_epoch_end(self, **kwargs: Any):
         for ds_type in [DatasetType.Train] if self.learn.data.empty_val else [DatasetType.Train, DatasetType.Valid]:
             ds: MDPDataset = self.learn.dl(ds_type).dataset
+            print(ds.x.info)
             episodes = self._strategy_fn_dict[self.strategy](ds.x.info, self.k)
             for e in episodes: ds.x.clean(e)
 
@@ -737,7 +745,7 @@ class MDPList(ItemList):
         self.info[ep] = [self.info[ep], False]
 
     def add(self, items: 'ItemList'):
-        [self._update_info(item.episode, item) for item in items.items]
+        # [self._update_info(item.episode, item) for item in items.items]
         super().add(items)
 
     def to_df(self): return pd.DataFrame([i.obj for i in self.items])

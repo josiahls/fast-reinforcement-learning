@@ -4,6 +4,7 @@ from functools import partial
 from pathlib import Path
 
 import scipy.stats as st
+from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.io.bindings import mplfig_to_npimage
 from moviepy.video.io.html_tools import ipython_display
 from torch.distributions import Normal
@@ -89,37 +90,39 @@ class Gif:
     frames: np.array
     episode: int
     animation = None
+    _frame_counter = 0
 
     def __post_init__(self):
         if type(self.frames) is list: self.frames = np.concatenate(self.frames, axis=0)
 
-    def _make_frame(self, t, frames, axes, fig, title):
+    def _make_frame(self, t, frames, axes, fig, title, fps):
         axes.clear()
-        fig.suptitle(title)
-        axes.imshow(frames[int(t)] / 255)
+        fig.suptitle(title + f' frame {int(t * fps)}')
+        axes.imshow(frames[int(t * fps)] / 255)
         return mplfig_to_npimage(fig)
 
-    def get_gif(self, duration=None):
+    def get_gif(self, default_fps=15):
         try:
             from moviepy.video.VideoClip import VideoClip
             fig, ax = plt.subplots()
-            duration = ifnone(duration, self.frames.shape[0])
-            return VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig,
-                                     title=f'Episode {self.episode}'), duration=duration)
+            # duration = ifnone(duration, self.frames.shape[0] / original_fps)
+            clip = VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig, fps=default_fps,
+                             title=f'Episode {self.episode}'), duration=self.frames.shape[0] / default_fps)
+            plt.close(fig)
+            return clip
 
         except ImportError:
             raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
 
-    def plot(self, fps=30, cache_animation=False, duration=None, return_fig=None):
-        if not cache_animation or self.animation is None: self.animation = self.get_gif(duration=duration)
+    def plot(self, fps=15, original_fps=15, cache_animation=True):
+        if cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
 
-        if ifnone(return_fig, defaults.return_fig):
-            return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
         if not IN_NOTEBOOK: raise NotImplemented('Please use in a jupyter notebook or instead of `plot()` \n'
                                                  'call write("somefilename")')
+        else: return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
 
-    def write(self, filename, cache_animation=False, fps=30, duration=None):
-        if not cache_animation or self.animation is None: self.animation = self.get_gif(duration=duration)
+    def write(self, filename, cache_animation=False, fps=15, original_fps=15):
+        if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
         self.animation.write_gif(f"{filename}.gif", fps=fps)
 
 
@@ -172,7 +175,7 @@ class AgentInterpretation(Interpretation):
         if episode is None:
             episode = full_episodes
         elif episode == -1:
-            episode = [full_episodes[-1]]
+            episode = [list(sorted(full_episodes))[-1]]
         elif (type(episode) is not list and episode not in full_episodes) or \
                 (type(episode) is list and any([e not in full_episodes for e in episode])):
             prefix = 'Some Episodes' if type(episode) is list else 'Episode'
@@ -184,7 +187,7 @@ class AgentInterpretation(Interpretation):
                                       f'gifs of. If this is not acceptable, make sure to change the memory management\n'
                                       f'strategy in the MDPDataBunch. ')
         elif type(episode) is not list and episode in full_episodes:
-            episode = list(episode)
+            episode = [episode]
         else:
             ValueError(f'Something happened that should not have happened, check your datatypes {episode}')
 
