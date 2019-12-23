@@ -78,7 +78,8 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
         print('\n')
-        data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=64, add_valid=False, feed_type=s_format)
+        data = MDPDataBunch.from_env('Pendulum-v0', render='human', bs=64, add_valid=False, feed_type=s_format,
+                                     memory_management_strategy='k_partitions_top', k=3)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
@@ -92,7 +93,7 @@ def test_ddpg_models_pendulum(model_cls, s_format, experience):
         interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
         group_interp.add_interpretation(interp)
         group_interp.to_pickle(f'../docs_src/data/pendulum_{model.name.lower()}/', f'{model.name.lower()}_{meta}')
-
+        [g.write('../res/run_gifs/pendulum') for g in interp.generate_gif()]
         del learner
         del model
         del data
@@ -105,7 +106,8 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
         print('\n')
-        data = MDPDataBunch.from_env('MountainCarContinuous-v0', render='human', bs=40, add_valid=False, feed_type=s_format)
+        data = MDPDataBunch.from_env('MountainCarContinuous-v0', render='human', bs=40, add_valid=False,
+                                     feed_type=s_format, memory_management_strategy='k_partitions_top', k=3)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
@@ -120,7 +122,7 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
         group_interp.add_interpretation(interp)
         group_interp.to_pickle(f'../docs_src/data/mountaincarcontinuous_{model.name.lower()}/',
                                f'{model.name.lower()}_{meta}')
-
+        [g.write('../res/run_gifs/mountaincarcontinuous') for g in interp.generate_gif()]
         del learner
         del model
         del data
@@ -133,7 +135,8 @@ def test_ddpg_models_reach(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
         print('\n')
-        data = MDPDataBunch.from_env('ReacherPyBulletEnv-v0', render='human', bs=40, add_valid=False,feed_type=s_format)
+        data = MDPDataBunch.from_env('ReacherPyBulletEnv-v0', render='human', bs=40, add_valid=False,feed_type=s_format,
+                                     memory_management_strategy='k_partitions_top', k=3)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
@@ -148,7 +151,7 @@ def test_ddpg_models_reach(model_cls, s_format, experience):
         group_interp.add_interpretation(interp)
         group_interp.to_pickle(f'../docs_src/data/reacher_{model.name.lower()}/',
                                f'{model.name.lower()}_{meta}')
-
+        [g.write('../res/run_gifs/reacher') for g in interp.generate_gif()]
         del learner
         del model
         del data
@@ -162,7 +165,7 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
     for i in range(5):
         print('\n')
         data = MDPDataBunch.from_env('Walker2DPyBulletEnv-v0', render='human', bs=64, add_valid=False,
-                                     feed_type=s_format)
+                                     feed_type=s_format, memory_management_strategy='k_partitions_top', k=3)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
@@ -177,7 +180,7 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
         group_interp.add_interpretation(interp)
         group_interp.to_pickle(f'../docs_src/data/walker2d_{model.name.lower()}/',
                                f'{model.name.lower()}_{meta}')
-
+        [g.write('../res/run_gifs/walker2d') for g in interp.generate_gif()]
         del learner
         del model
         del data
@@ -190,7 +193,8 @@ def test_ddpg_models_ant(model_cls, s_format, experience):
     group_interp = GroupAgentInterpretation()
     for i in range(5):
         print('\n')
-        data = MDPDataBunch.from_env('AntPyBulletEnv-v0', render='human', bs=64, add_valid=False,feed_type=s_format)
+        data = MDPDataBunch.from_env('AntPyBulletEnv-v0', render='human', bs=64, add_valid=False,feed_type=s_format,
+                                     memory_management_strategy='k_partitions_top', k=3)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.00001)
         memory = experience(memory_size=1000000, reduce_ram=True)
@@ -205,7 +209,7 @@ def test_ddpg_models_ant(model_cls, s_format, experience):
         group_interp.add_interpretation(interp)
         group_interp.to_pickle(f'../docs_src/data/ant_{model.name.lower()}/',
                                f'{model.name.lower()}_{meta}')
-
+        [g.write('../res/run_gifs/ant') for g in interp.generate_gif()]
         del learner
         del model
         del data
@@ -219,7 +223,7 @@ def test_ddpg_models_halfcheetah(model_cls, s_format, experience):
     for i in range(5):
         print('\n')
         data = MDPDataBunch.from_env('HalfCheetahPyBulletEnv-v0', render='human', bs=64, add_valid=False,
-                                     feed_type=s_format)
+                                     feed_type=s_format, memory_management_strategy='k_partitions_top', k=3)
         exploration_method = OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
                                                decay=0.0001)
         memory = experience(memory_size=1000000, reduce_ram=True)
@@ -234,7 +238,7 @@ def test_ddpg_models_halfcheetah(model_cls, s_format, experience):
         group_interp.add_interpretation(interp)
         group_interp.to_pickle(f'../docs_src/data/halfcheetah_{model.name.lower()}/',
                                f'{model.name.lower()}_{meta}')
-
+        [g.write('../res/run_gifs/halfcheetah') for g in interp.generate_gif()]
         del learner
         del model
         del data

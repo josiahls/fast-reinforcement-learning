@@ -121,8 +121,10 @@ class Gif:
                                                  'call write("somefilename")')
         else: return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
 
-    def write(self, filename, cache_animation=False, fps=15, original_fps=15):
+    def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15):
         if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
+        if filename.__contains__('.gif'): filename = filename.replace('.gif', '')
+        if include_episode: filename += f'_episode_{self.episode}'
         self.animation.write_gif(f"{filename}.gif", fps=fps)
 
 

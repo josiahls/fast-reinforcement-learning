@@ -29,7 +29,8 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
-	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format)
+	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format,
+								 memory_management_strategy='k_partitions_top', k=3)
 	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSProp)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
@@ -119,6 +120,7 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
 		group_interp.add_interpretation(interp)
 		filename = f'{learn.model.name.lower()}_{meta}'
 		group_interp.to_pickle(f'../docs_src/data/minigrid_{learn.model.name.lower()}/', filename)
+		[g.write('../res/run_gifs/minigrid') for g in interp.generate_gif()]
 		del learn
 
 
@@ -137,6 +139,7 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
 		group_interp.add_interpretation(interp)
 		filename = f'{learn.model.name.lower()}_{meta}'
 		group_interp.to_pickle(f'../docs_src/data/cartpole_{learn.model.name.lower()}/', filename)
+		[g.write('../res/run_gifs/cartpole') for g in interp.generate_gif()]
 		del learn
 
 
@@ -153,6 +156,7 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
 		group_interp.add_interpretation(interp)
 		filename = f'{learn.model.name.lower()}_{meta}'
 		group_interp.to_pickle(f'../docs_src/data/lunarlander_{learn.model.name.lower()}/', filename)
+		[g.write('../res/run_gifs/lunarlander') for g in interp.generate_gif()]
 		del learn
 
 
@@ -169,5 +173,5 @@ def test_dqn_models_mountaincar(model_cls, s_format, experience):
 		group_interp.add_interpretation(interp)
 		filename = f'{learn.model.name.lower()}_{meta}'
 		group_interp.to_pickle(f'../docs_src/data/mountaincar_{learn.model.name.lower()}/', filename)
-
+		[g.write('../res/run_gifs/mountaincar') for g in interp.generate_gif()]
 		del learn
