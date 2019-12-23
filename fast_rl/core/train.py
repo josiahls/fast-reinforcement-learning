@@ -4,9 +4,6 @@ from functools import partial
 from pathlib import Path
 
 import scipy.stats as st
-from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.video.io.bindings import mplfig_to_npimage
-from moviepy.video.io.html_tools import ipython_display
 from torch.distributions import Normal
 from dataclasses import dataclass, field
 from fastai.basic_train import *
@@ -95,19 +92,24 @@ class Gif:
     def __post_init__(self):
         if type(self.frames) is list: self.frames = np.concatenate(self.frames, axis=0)
 
-    def _make_frame(self, t, frames, axes, fig, title, fps):
+    def _make_frame(self, t, frames, axes, fig, title, fps, matplot_to_np_fn):
         axes.clear()
         fig.suptitle(title + f' frame {int(t * fps)}')
         axes.imshow(frames[int(t * fps)] / 255)
-        return mplfig_to_npimage(fig)
+        return matplot_to_np_fn(fig)
 
     def get_gif(self, default_fps=15):
         try:
             from moviepy.video.VideoClip import VideoClip
+            from moviepy.video.io.VideoFileClip import VideoFileClip
+            from moviepy.video.io.bindings import mplfig_to_npimage
+            from moviepy.video.io.html_tools import ipython_display
+
             fig, ax = plt.subplots()
             # duration = ifnone(duration, self.frames.shape[0] / original_fps)
             clip = VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig, fps=default_fps,
-                             title=f'Episode {self.episode}'), duration=self.frames.shape[0] / default_fps)
+                                     matplot_to_np_fn=mplfig_to_npimage, title=f'Episode {self.episode}'),
+                                     duration=self.frames.shape[0] / default_fps)
             plt.close(fig)
             return clip
 
@@ -116,10 +118,16 @@ class Gif:
 
     def plot(self, fps=15, original_fps=15, cache_animation=True):
         if cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
+        try:
+            from moviepy.video.io.html_tools import ipython_display
 
-        if not IN_NOTEBOOK: raise NotImplemented('Please use in a jupyter notebook or instead of `plot()` \n'
-                                                 'call write("somefilename")')
-        else: return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
+            if not IN_NOTEBOOK: raise NotImplemented('Please use in a jupyter notebook or instead of `plot()` \n'
+                                                     'call write("somefilename")')
+            else: return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
+
+        except ImportError:
+            raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
+
 
     def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15):
         if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
