@@ -20,8 +20,8 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 try:
     import pybullet
     import pybulletgym.envs
-    from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv as MujocoEnv
-    from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
+    from pybulletgym.envs.mujoco.env_bases import BaseBulletEnv as MujocoEnv
+    from pybulletgym.envs.roboschool.env_bases import BaseBulletEnv as RoboschoolEnv
 
     class BulletWrapper(Wrapper):
         def step(self, action):
