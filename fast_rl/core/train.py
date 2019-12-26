@@ -1,6 +1,7 @@
 import pickle
 from copy import copy
 from functools import partial
+from math import floor
 from pathlib import Path
 
 import scipy.stats as st
@@ -94,8 +95,8 @@ class Gif:
 
     def _make_frame(self, t, frames, axes, fig, title, fps, matplot_to_np_fn):
         axes.clear()
-        fig.suptitle(title + f' frame {int(t * fps)}')
-        axes.imshow(frames[int(t * fps)] / 255)
+        fig.suptitle(title + f' frame {floor(t * fps)}')
+        axes.imshow(frames[floor(t * fps)] / 255)
         return matplot_to_np_fn(fig)
 
     def get_gif(self, default_fps=15):
