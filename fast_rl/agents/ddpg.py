@@ -1,7 +1,6 @@
-import numpy as np
-import torch
-from fastai.basic_train import LearnerCallback, Any, ifnone, listify, List
-from fastai.tabular.data import emb_sz_rule
+from fastai.basic_train import LearnerCallback
+import fastai.tabular.data
+from fastai.torch_core import *
 
 from fast_rl.agents.ddpg_models import DDPGModule
 from fast_rl.core.agent_core import ExperienceReplay, ExplorationStrategy, Experience
@@ -51,7 +50,7 @@ class BaseDDPGTrainer(LearnerCallback):
 
     def on_loss_begin(self, **kwargs: Any):
         """Performs tree updates, exploration updates, and model optimization."""
-        if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1], device=self.learn.data.device)
+        if self.learn.model.training: self.learn.memory.update(item=self.learn.data.x.items[-1])
         self.learn.exploration_method.update(self.episode, max_episodes=self.max_episodes, explore=self.learn.model.training)
         if not self.learn.warming_up:
             samples: List[MDPStep] = self.memory.sample(self.learn.data.bs)
@@ -69,7 +68,7 @@ def create_ddpg_model(data: MDPDataBunch, base_arch: DDPGModule, layers=None, ig
     if state.mode == FEED_TYPE_IMAGE: nc, w, h = state.s.shape[3], state.s.shape[2], state.s.shape[1]
     _layers = ifnone(layers, [400, 200] if len(n_conv_blocks) == 0 else [200, 200])
     if ignore_embed or np.any(state.n_possible_values == np.inf) or state.mode == FEED_TYPE_IMAGE: emb_szs = []
-    else: emb_szs = [(d+1, int(emb_sz_rule(d))) for d in state.n_possible_values.reshape(-1, )]
+    else: emb_szs = [(d+1, int(fastai.tabular.data.emb_sz_rule(d))) for d in state.n_possible_values.reshape(-1, )]
     ao = int(action.taken_action.shape[1])
     model = base_arch(ni=state.s.shape[1], ao=ao, layers=_layers, emb_szs=emb_szs, n_conv_blocks=n_conv_blocks,
                       nc=nc, w=w, h=h, opt=opt, loss_func=loss_func, **kwargs)

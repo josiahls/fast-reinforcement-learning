@@ -1,4 +1,3 @@
-import copy
 from collections import deque
 from math import ceil
 
@@ -130,21 +129,20 @@ class ExperienceReplay(Experience):
 
 	def update(self, item, **kwargs):
 		item = deepcopy(item)
-		super().update(item, defaults.device, **kwargs)
+		super().update(item, **kwargs)
 		if self.reduce_ram: item.clean()
 		self._memory.append(item)
 
 
 class PriorityExperienceReplayCallback(LearnerCallback):
 	def on_train_begin(self, **kwargs):
-		self.learn.model.loss_func = partial(self.learn.model.memory.handle_loss,
-											 base_function=self.learn.model.loss_func)
+		self.learn.model.loss_func = partial(self.learn.model.memory.handle_loss, loss_fn=self.learn.model.loss_func)
 
 
 class PriorityExperienceReplay(Experience):
 
-	def handle_loss(self, y, y_hat, base_function):
-		return (base_function(y, y_hat) * torch.from_numpy(self.p_weights).to(device=defaults.device).float()).mean()
+	def handle_loss(self, y, y_hat, loss_fn):
+		return (loss_fn(y, y_hat) * torch.from_numpy(self.p_weights).to(device=defaults.device).float()).mean()
 
 	def __init__(self, memory_size, batch_size=64, epsilon=0.01, alpha=0.6, beta=0.4, b_inc=-0.001, **kwargs):
 		"""
@@ -190,7 +188,7 @@ class PriorityExperienceReplay(Experience):
 			self._indices, weights, samples = self.tree.batch_get(uniform_ranges)
 		except ValueError:
 			warn('Too few values to unpack. Your batch size is too small, when PER queries tree, all 0 values get'
-				 ' ignored. We will retry until we can return at least one sample.')
+				' ignored. We will retry until we can return at least one sample.')
 			samples = self.sample(batch)
 			return samples
 
@@ -210,7 +208,7 @@ class PriorityExperienceReplay(Experience):
 
 		"""
 		item = deepcopy(item)
-		super().update(item, defaults.device, **kwargs)
+		super().update(item, **kwargs)
 		maximal_priority = self.alpha
 		if self.reduce_ram: item.clean()
 		self.tree.add(np.abs(maximal_priority) + self.epsilon, item)

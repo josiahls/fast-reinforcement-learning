@@ -1,12 +1,14 @@
 import logging
+
+from fastai.data_block import ItemList
+
 logging.basicConfig()
-from math import ceil, floor
 
 import gym
-from fastai.basic_train import LearnerCallback, DatasetType
+from fastai.basic_train import LearnerCallback, DatasetType, DataLoader, Dataset, Tensor
 from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
-from gym.spaces import Discrete, Box, MultiDiscrete, Dict
+from gym.spaces import Discrete, Box, MultiDiscrete
 
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
@@ -33,7 +35,7 @@ try:
             r""" In the event of a random disconnect, retry the env """
             try:
                 result = super().step(action)
-            except pybullet.error as e:
+            except pybullet.error:
                 self.__init__(env=gym.make(self.spec.id))
                 super().reset()
                 result = super().step(action)
@@ -54,28 +56,15 @@ try:
     import gym_maze
     from gym_maze.envs.maze_env import MazeEnv
     import pygame
-    # import importlib
 
     class GymMazeWrapper(Wrapper):
-        #     pygame.init()
-        #
-        # def render(self, mode='human', **kwargs):
-        #     try:
-        #         return self.env.render(mode=mode, **kwargs)
-        #     except pygame.error as e:
-        #         original_id = self.env.spec.id
-        #         del self.env
-        #         pygame.init()
-        #         self.env = gym.make(original_id)
-        #         super().reset()
-        #         return self.env.render(mode=mode, **kwargs)
 
         def close(self):
             self.env.maze_view.quit_game()
             self.env.unwrapped.enable_render = False
 
 
-    def gymmaze_wrap(env, render):
+    def gymmaze_wrap(env, _):
         if issubclass(env.unwrapped.__class__, MazeEnv):
             env = GymMazeWrapper(env=env)
         return env
@@ -92,7 +81,7 @@ try:
     # noinspection PyUnresolvedReferences
     from gym_minigrid.wrappers import FlatObsWrapper
 
-    def mini_grid_wrap(env, **kwargs):
+    def mini_grid_wrap(env, _):
         if issubclass(env.__class__, MiniGridEnv): env = FlatObsWrapper(env)
         return env
 
@@ -101,7 +90,7 @@ except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 
 from fastai.core import *
-from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, DataLoader
+from fastai.basic_data import *
 from fastai.imports import torch
 from datetime import datetime
 import pickle
@@ -518,7 +507,7 @@ class MDPDataset(Dataset):
             memory_manager: Handles how the list size will be reduced sch as removing image data.
             bs: Size of a single batch for models and the dataset to use.
         """
-        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env, render=render)
+        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env, render)
         self.env = env
         self.render = render
         self.feed_type = feed_type

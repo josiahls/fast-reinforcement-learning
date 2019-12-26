@@ -5,7 +5,7 @@ misc.xml
 modules.xml
 other.xml
 vcs.xml
-workspaces.xml
+workspace.xml
 out
 gen
 .DS_Store
