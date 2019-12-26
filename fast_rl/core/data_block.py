@@ -259,9 +259,7 @@ class State(object):
         self.s_prime = self.s_prime.to(device=device)
 
     @property
-    def channels(self):
-        return self.s.shape[3]
-
+    def channels(self): return self.s.shape[3]
     @property
     def n_possible_values(self): return self.bounds.n_possible_values
 
@@ -348,9 +346,6 @@ class MDPStep(object):
         self.action.to(device=device)
         self.state.to(device=device)
 
-    def __str__(self):
-        return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
-
     def clean(self):
         r""" Removes fields that are generally unimportant (purely debugging) """
         self.state.alt_s_prime = None
@@ -361,6 +356,7 @@ class MDPStep(object):
         self.action.action_space = None
         self.action.bounds = None
 
+    def __str__(self): return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
     @property
     def data(self): return self.s_prime[0], self.alt_s_prime[0] if self.alt_s_prime is not None else None
     @property
@@ -374,12 +370,13 @@ class MDPStep(object):
     @property
     def a(self): return self.action.taken_action
     @property
-    def d(self):
-        return bool(self.done)
+    def d(self): return bool(self.done)
 
 
 class MDPCallback(LearnerCallback):
     _order = -11  # Needs to happen before Recorder
+    def on_backward_end(self, **kwargs: Any): return {'skip_step': True}
+    def on_step_end(self, **kwargs: Any): return {'skip_zero': True}
 
     @property
     def learn(self) -> AgentLearner: return self._learn()
@@ -403,29 +400,26 @@ class MDPCallback(LearnerCallback):
         else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         self.train_ds.is_warming_up = self.learn.warming_up
         if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.warming_up
-        if not self.learn.warming_up and self.learn.loss_func is None:
-            self.learn.init_loss_func()
+        if not self.learn.warming_up and self.learn.loss_func is None: self.learn.init_loss_func()
         return {'skip_bwd': True, 'train': not self.train_ds.is_warming_up and train}
 
-    def on_backward_end(self, **kwargs: Any):
-        return {'skip_step': True}
-
-    def on_step_end(self, **kwargs: Any):
-        return {'skip_zero': True}
-
     def on_epoch_end(self, last_metrics, epoch, **kwargs: Any) -> None:
-        """ Updates the most recent episode number in both datasets. """
-        self.train_ds.episode = epoch
-        self.train_ds.x.set_recent_run_episode(epoch)
+        r""" Updates the most recent episode number in both datasets. """
+        relative_epoch = sorted(self.train_ds.x.info.keys())[-1] + 1 if self.train_ds.x.info else epoch
+        self.train_ds.episode = relative_epoch
+        self.train_ds.x.set_recent_run_episode(self.train_ds.episode)
         if last_metrics[0] is not None and self.valid_ds is not None:
-            self.valid_ds.episode = epoch
-            self.valid_ds.x.set_recent_run_episode(epoch)
+            self.valid_ds.episode = relative_epoch
+            self.valid_ds.x.set_recent_run_episode(self.valid_ds.episode)
 
     # def on_train_end(self, **kwargs:Any) ->None:
     #     self.learn.data.close()
 
 
 class MDPMemoryManager(LearnerCallback):
+    def _comp_less(self, key, info, episode): return info[key] < info[episode]
+    def _comp_greater(self, key, info, episode): return info[key] > info[episode]
+
     def __init__(self, learn, strategy, k=1):
         super().__init__(learn)
         self.strategy = strategy
@@ -436,12 +430,6 @@ class MDPMemoryManager(LearnerCallback):
             'k_top': self.k_top,
             'k_partitions_top': self.k_partitions_top
         }
-
-    def _comp_less(self, key, info, episode):
-        return info[key] < info[episode]
-
-    def _comp_greater(self, key, info, episode):
-        return info[key] > info[episode]
 
     def k_partitions_top(self, info: Dict[int, List[Tuple[float, bool]]], k):
         # If the episode -1 is defined, then clean it, this is just placeholder data
@@ -529,12 +517,14 @@ class MDPDataset(Dataset):
         self.item: Union[MDPStep, None] = None
         self.new(None)
 
-    def get_emb_szs(self):
-        return [def_emb_sz(0, 0,None)]
+    def get_emb_szs(self): return [def_emb_sz(0, 0,None)]
 
     def aug_steps(self, steps):
         if self.is_warming_up and steps < self.bs: return self.bs
         return steps
+
+    @property
+    def env_name(self): return self.env.spec.id
 
     @property
     def max_steps(self):
@@ -654,19 +644,20 @@ class MDPDataBunch(DataBunch):
         return cls.create(train_list, valid_list, path=path, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def from_pickle(cls, env_name=None, path: PathOrStr = None, **dl_kwargs):
+    def from_pickle(cls, path: PathOrStr = None, env_name=None, **dl_kwargs):
 
         if path is None:
-            path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0].lower())]
+            if env_name is None: raise IOError(f'If path is None, then env_name needs to be specified.')
+            path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0])]
             if not path: raise IOError(f'There is no pickle dirs file found in ./data/ with the env name {env_name}')
             path = Path('./data/' + path[0])
 
         path = Path(path)
+        env_name=ifnone(env_name, path.parts[-1].split('_')[-1])
 
         train_x = pickle.load(open(path / 'train.pickle', 'rb')) if (path / 'train.pickle').exists() else None
         val_x = pickle.load(open(path / 'valid.pickle', 'rb')) if (path / 'valid.pickle').exists() else None
 
-        env_name = ifnone(env_name, Path(path).parts[-1].split('_')[0])
         return cls.from_env(env_name=env_name, x=train_x, val_x=val_x, **dl_kwargs)
 
     @classmethod
@@ -688,7 +679,9 @@ class MDPDataBunch(DataBunch):
         if self.train_ds is not None: self.train_ds.to_csv(self.path, 'train')
         if self.valid_ds is not None: self.valid_ds.to_csv(self.path, 'valid')
 
-    def to_pickle(self, path=None):
+    def to_pickle(self, path=None, env_name=None):
+        env_name = ifnone(env_name, self.train_ds.env_name)
+        if not path.__contains__(env_name): path += '_' + env_name
         if self.train_ds is not None: self.train_ds.to_pickle(ifnone(path, self.path), 'train')
         if not self.empty_val: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
 
@@ -719,6 +712,7 @@ class MDPList(ItemList):
         # if items is not None:
         super().__init__(items, **kwargs)
         self.info = {}
+        self.initial = True
 
     def filter_by_episode(self, episode):
         return [i for i in self.items if i.episode == episode]
