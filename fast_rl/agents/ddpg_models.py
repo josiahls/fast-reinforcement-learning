@@ -1,53 +1,8 @@
-from math import ceil
-
 from fastai.callback import OptimWrapper
-from fastai.tabular import TabularModel
-from fastai.vision import cnn_learner
-from fastai.torch_core import *
-from torch.nn import MSELoss
 from torch.optim import Adam
 
-from fast_rl.agents.agents_base import Flatten
-from fast_rl.agents.dqn_models import conv_bn_lrelu, ks_stride, FakeBatchNorm
 
-
-class CriticTabularEmbedWrapper(Module):
-	def __init__(self, tabular_model: Module, exclude_cat):
-		super().__init__()
-		self.tabular_model = tabular_model
-		self.exclude_cat = exclude_cat
-
-	def forward(self, args):
-		if not self.exclude_cat: return self.tabular_model(*args)
-		else: return self.tabular_model(0, torch.cat(args, axis=1))
-
-
-class ActorTabularEmbedWrapper(Module):
-	def __init__(self, tabular_model: Module):
-		super().__init__()
-		self.tabular_model = tabular_model
-
-	def forward(self, xi: Tensor, *args):
-		return self.tabular_model(xi, xi)
-
-
-class StateActionSplitter(Module):
-	def forward(self, s_a_tuple):
-		return s_a_tuple[0], s_a_tuple[1]
-
-
-class StateActionPassThrough(nn.Module):
-	def __init__(self, layers):
-		super().__init__()
-		self.layers = layers
-
-	def forward(self, state_action):
-		return (self.layers(state_action[0]), state_action[1])
-
-
-class ChannelTranspose(Module):
-	def forward(self, xi: Tensor):
-		return xi.transpose(3, 1).transpose(3, 2)
+from fast_rl.core.layers import *
 
 
 class CriticModule(nn.Sequential):
@@ -69,7 +24,7 @@ class CriticModule(nn.Sequential):
 
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
 		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni+ao if not emb_szs else ao, layers=layers, out_sz=1,
-									 use_bn=self.batch_norm)
+									use_bn=self.batch_norm)
 		if not emb_szs: tabular_model.embeds = None
 		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
 		self.add_module('lin_block', CriticTabularEmbedWrapper(tabular_model, exclude_cat=not emb_szs))
@@ -109,7 +64,7 @@ class ActorModule(nn.Sequential):
 
 		if not emb_szs: tabular_model.embeds = None
 		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
-		self.add_module('lin_block', ActorTabularEmbedWrapper(tabular_model))
+		self.add_module('lin_block', TabularEmbedWrapper(tabular_model))
 
 	def fix_switched_channels(self, current_channels, expected_channels, layers: list):
 		if current_channels == expected_channels:

@@ -1,21 +1,16 @@
+import logging
+
 import pytest
 
 from fast_rl.agents.dqn import *
-from fast_rl.agents.dqn_models import FixedTargetDQNModule
 from fast_rl.core.agent_core import *
 from fast_rl.core.data_block import *
 from fast_rl.core.train import *
-import logging
-#
-# p_model = [FixedTargetDQNModule]
-# p_exp = [ExperienceReplay]
-# p_format = [FEED_TYPE_STATE]
-#
-# config_env_expectations = {
-# 	'CartPole-v1': {'action_shape': (1, 2), 'state_shape': (1, 4)},
-# 	'maze-random-5x5-v0': {'action_shape': (1, 4), 'state_shape': (1, 2)}
-# }
 
+
+
+
+@pytest.mark.usefixtures('skip_performance_check')
 def test_interpretation_gif():
     logger = logging.getLogger('root')
     logger.setLevel('DEBUG')
