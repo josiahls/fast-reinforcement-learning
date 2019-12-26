@@ -87,18 +87,10 @@ class Experience:
 		self.callbacks = []
 
 	@property
-	def memory(self):
-		return None
-
-	def sample(self, **kwargs):
-		pass
-
-	def update(self, item, **kwargs):
-		item.to(device=defaults.device)
-
-	def refresh(self, **kwargs):
-		pass
-
+	def memory(self): return None
+	def sample(self, **kwargs): pass
+	def update(self, item, **kwargs): item.to(device=defaults.device)
+	def refresh(self, **kwargs): pass
 
 class ExperienceReplay(Experience):
 	def __init__(self, memory_size, **kwargs):
