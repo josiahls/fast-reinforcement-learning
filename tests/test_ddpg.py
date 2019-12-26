@@ -1,14 +1,12 @@
-from functools import partial
 from itertools import product
 
 import pytest
-from fast_rl.agents.ddpg_models import DDPGModule
 from fastai.basic_train import torch, DatasetType
 
 from fast_rl.agents.ddpg import create_ddpg_model, ddpg_learner
+from fast_rl.agents.ddpg_models import DDPGModule
 from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, OrnsteinUhlenbeck
-from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.data_block import FEED_TYPE_STATE, MDPDataBunch, FEED_TYPE_IMAGE
+from fast_rl.core.data_block import FEED_TYPE_STATE, MDPDataBunch
 from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
@@ -16,10 +14,10 @@ p_model=[DDPGModule]
 p_exp=[ExperienceReplay, PriorityExperienceReplay]
 p_format=[FEED_TYPE_STATE]  # , FEED_TYPE_IMAGE]
 p_full_format=[FEED_TYPE_STATE]
-p_envs=['Walker2DPyBulletEnv-v0']
+p_envs=['Pendulum-v0']
 
 config_env_expectations={
-	'Walker2DPyBulletEnv-v0': {'action_shape': (1, 6), 'state_shape': (1, 22)}
+	'Pendulum-v0': {'action_shape': (1, 2), 'state_shape': (1, 1)}
 }
 
 
