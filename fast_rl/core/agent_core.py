@@ -10,10 +10,9 @@ from fast_rl.core.data_structures import SumTree
 
 
 class ExplorationStrategy:
-	def __init__(self, explore: bool = True):
-		self.explore = explore
-
-	def perturb(self, action, action_space):
+	def __init__(self, explore: bool = True): self.explore = explore
+	def update(self, max_episodes, explore, **kwargs): self.explore = explore
+	def perturb(self, action, action_space) -> np.ndarray:
 		"""
 		Base method just returns the action. Subclass, and change to return randomly / augmented actions.
 
@@ -21,18 +20,12 @@ class ExplorationStrategy:
 		to completely bypass these actions.
 
 		Args:
-			action:
-			action_space (gym.Space): The original gym space. Should contain information on the action type, and
-			possible convenience methods for random action selection.
-
-		Returns:
-
+			action (np.array): 			Action input as a regular numpy array.
+			action_space (gym.Space): 	The original gym space. Should contain information on the action type, and
+										possible convenience methods for random action selection.
 		"""
 		_ = action_space
 		return action
-
-	def update(self, max_episodes, explore, **kwargs):
-		self.explore = explore
 
 
 class GreedyEpsilon(ExplorationStrategy):
@@ -41,33 +34,20 @@ class GreedyEpsilon(ExplorationStrategy):
 		self.end_episode = end_episode
 		self.start_episode = start_episode
 		self.decay = decay
-		self.epsilon_end = epsilon_end
-		self.epsilon_start = epsilon_start
-		self.epsilon = self.epsilon_start
-		self.steps_done = 0
+		self.e_end = epsilon_end
+		self.e_start = epsilon_start
+		self.epsilon = self.e_start
+		self.steps = 0
 
 	def perturb(self, action, action_space: gym.Space):
-		"""
-		TODO for now does random discrete selection. Move to discrete soon.
-
-		Args:
-			action:
-			action_space:
-
-		Returns:
-		"""
-		if np.random.random() < self.epsilon and self.explore:
-			return action_space.sample()
-		else:
-			return action
+		return action_space.sample() if np.random.random() < self.epsilon and self.explore else action
 
 	def update(self, episode, end_episode=0, **kwargs):
 		super(GreedyEpsilon, self).update(**kwargs)
 		if self.explore:
 			self.end_episode = end_episode
-			self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
-						   math.exp(-1. * (self.steps_done * self.decay))
-			self.steps_done += 1
+			self.epsilon = self.e_end + (self.e_start - self.e_end) * math.exp(-1. * (self.steps * self.decay))
+			self.steps += 1
 
 
 class OrnsteinUhlenbeck(GreedyEpsilon):
@@ -114,8 +94,8 @@ class Experience:
 	def sample(self, **kwargs):
 		pass
 
-	def update(self, item, device, **kwargs):
-		item.to(device=device)
+	def update(self, item, **kwargs):
+		item.to(device=defaults.device)
 
 	def refresh(self, **kwargs):
 		pass
@@ -148,9 +128,9 @@ class ExperienceReplay(Experience):
 		if len(self._memory) < batch: return self._memory
 		return random.sample(self.memory, batch)
 
-	def update(self, item, device, **kwargs):
+	def update(self, item, **kwargs):
 		item = deepcopy(item)
-		super().update(item, device, **kwargs)
+		super().update(item, defaults.device, **kwargs)
 		if self.reduce_ram: item.clean()
 		self._memory.append(item)
 
@@ -158,14 +138,13 @@ class ExperienceReplay(Experience):
 class PriorityExperienceReplayCallback(LearnerCallback):
 	def on_train_begin(self, **kwargs):
 		self.learn.model.loss_func = partial(self.learn.model.memory.handle_loss,
-											 base_function=self.learn.model.loss_func,
-											 device=self.learn.data.device)
+											 base_function=self.learn.model.loss_func)
 
 
 class PriorityExperienceReplay(Experience):
 
-	def handle_loss(self, y, y_hat, base_function, device):
-		return (base_function(y, y_hat) * torch.from_numpy(self.priority_weights).to(device=device).float()).mean()
+	def handle_loss(self, y, y_hat, base_function):
+		return (base_function(y, y_hat) * torch.from_numpy(self.p_weights).to(device=defaults.device).float()).mean()
 
 	def __init__(self, memory_size, batch_size=64, epsilon=0.01, alpha=0.6, beta=0.4, b_inc=-0.001, **kwargs):
 		"""
@@ -185,7 +164,7 @@ class PriorityExperienceReplay(Experience):
 		self.alpha = alpha
 		self.beta = beta
 		self.b_inc = b_inc
-		self.priority_weights = None  # np.zeros(self.batch_size, dtype=float)
+		self.p_weights = None  # np.zeros(self.batch_size, dtype=float)
 		self.epsilon = epsilon
 		self.tree = SumTree(self.max_size)
 		self.callbacks = [PriorityExperienceReplayCallback]
@@ -205,7 +184,6 @@ class PriorityExperienceReplay(Experience):
 
 	def sample(self, batch, **kwargs):
 		self.beta = np.min([1., self.beta + self.b_inc])
-		# ranges = np.linspace(0, self.tree.total(), num=ceil(self.tree.total() / self.batch_size))
 		ranges = np.linspace(0, ceil(self.tree.total() / batch), num=batch + 1)
 		uniform_ranges = [np.random.uniform(ranges[i], ranges[i + 1]) for i in range(len(ranges) - 1)]
 		try:
@@ -214,11 +192,12 @@ class PriorityExperienceReplay(Experience):
 			warn('Too few values to unpack. Your batch size is too small, when PER queries tree, all 0 values get'
 				 ' ignored. We will retry until we can return at least one sample.')
 			samples = self.sample(batch)
+			return samples
 
-		self.priority_weights = self.tree.anneal_weights(weights, self.beta)
+		self.p_weights = self.tree.anneal_weights(weights, self.beta)
 		return samples
 
-	def update(self, item, device, **kwargs):
+	def update(self, item, **kwargs):
 		"""
 		Updates the tree of PER.
 
@@ -231,7 +210,7 @@ class PriorityExperienceReplay(Experience):
 
 		"""
 		item = deepcopy(item)
-		super().update(item, device, **kwargs)
+		super().update(item, defaults.device, **kwargs)
 		maximal_priority = self.alpha
 		if self.reduce_ram: item.clean()
 		self.tree.add(np.abs(maximal_priority) + self.epsilon, item)

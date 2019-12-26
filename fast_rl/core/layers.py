@@ -5,7 +5,7 @@ from fastai.torch_core import *
 from fastai.tabular import TabularModel
 
 
-def init_cnn(mod):
+def init_cnn(mod: Any):
 	r""" Utility for initializing cnn Modules. """
 	if getattr(mod, 'bias', None) is not None: nn.init.constant_(mod.bias, 0)
 	if isinstance(mod, (nn.Conv2d, nn.Linear)): nn.init.kaiming_normal_(mod.weight)
@@ -25,8 +25,8 @@ def ks_stride(ks, stride, w, h, n_blocks, kern_proportion=.1, stride_proportion=
 
 
 class Flatten(nn.Module):
-	def forward(self, x):
-		return x.view(x.size(0), -1)
+	def forward(self, y):
+		return y.view(y.size(0), -1)
 
 
 class FakeBatchNorm(Module):
@@ -50,6 +50,7 @@ class ChannelTranspose(Module):
 
 class StateActionSplitter(Module):
 	r""" `Actor / Critic` models require breaking the state and action into 2 streams. """
+
 	def forward(self, s_a_tuple: Tuple[Tensor]):
 		r""" Returns tensors as -> (State Tensor, Action Tensor) """
 		return s_a_tuple[0], s_a_tuple[1]

@@ -1,25 +1,24 @@
+import os
 import pickle
 from copy import copy
+from dataclasses import dataclass, field
 from functools import partial
+from itertools import cycle, product, islice
 from math import floor
 from pathlib import Path
+from typing import Union, List
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import scipy.stats as st
-from torch.distributions import Normal
-from dataclasses import dataclass, field
 from fastai.basic_train import *
 from fastai.sixel import plot_sixel
 from fastai.train import Interpretation, torch, DatasetType, defaults, ifnone, warn
-import matplotlib.pyplot as plt
 from fastprogress.fastprogress import IN_NOTEBOOK
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from typing import Tuple, Union, List
-import pandas as pd
-import numpy as np
-import os
 from matplotlib.ticker import MaxNLocator
-from itertools import cycle, product, permutations, combinations, combinations_with_replacement, islice
 
 from fast_rl.core.data_block import MDPList, FEED_TYPE_IMAGE
 

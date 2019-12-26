@@ -1,5 +1,11 @@
 # IntelliJ project files
-.idea
+*.iml
+.idea/inspectionProfiles/*
+misc.xml
+modules.xml
+other.xml
+vcs.xml
+workspaces.xml
 out
 gen
 .DS_Store

@@ -30,7 +30,6 @@ class DDPGLearner(AgentLearner):
             return self.model.interpret_q(item).cpu().numpy().item()
 
 
-
 class BaseDDPGTrainer(LearnerCallback):
     def __init__(self, learn):
         super().__init__(learn)

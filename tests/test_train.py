@@ -35,7 +35,7 @@ def test_interpretation_gif():
 # 										 add_valid=False, feed_type=s_format)
 # 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 # 			memory = mem(10000)
-# 			exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+# 			exploration_method = GreedyEpsilon(e_start=1, e_end=0.1, decay=0.001)
 # 			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
 # 			learner.fit(1)
 #
@@ -57,7 +57,7 @@ def test_interpretation_gif():
 # 										 add_valid=False, feed_type=s_format)
 # 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 # 			memory = mem(10000)
-# 			exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+# 			exploration_method = GreedyEpsilon(e_start=1, e_end=0.1, decay=0.001)
 # 			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
 # 			learner.fit(1)
 #

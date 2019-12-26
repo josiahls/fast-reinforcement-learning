@@ -1,7 +1,4 @@
-from math import ceil
-
-from fastai.layers import Flatten
-from fastai.tabular import TabularModel, OptimWrapper
+from fastai.tabular import OptimWrapper
 
 from fast_rl.core.layers import *
 
