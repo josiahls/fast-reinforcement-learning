@@ -66,7 +66,7 @@ def test_resolution_wrapper():
     learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
                           callback_fns=[RewardMetric, EpsilonMetric])
     learner.fit(2)
-    assert data.env.render(mode='rgb_array').shape == (400, 600, 3)
     temp = gym.make('CartPole-v0')
     temp.reset()
     assert temp.render(mode='rgb_array').shape==(800, 1200, 3)
+    assert data.env.render(mode='rgb_array').shape == (400, 600, 3)
