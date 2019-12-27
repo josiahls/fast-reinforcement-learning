@@ -8,13 +8,13 @@ from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMA
 
 
 class DQNLearner(AgentLearner):
-    def __init__(self, data: MDPDataBunch, model, memory, exploration_method, trainers,
+    def __init__(self, data: MDPDataBunch, model, memory, exploration_method, trainers, opt=torch.optim.RMSprop,
                  **learn_kwargs):
         self.memory: Experience = memory
         self.exploration_method: ExplorationStrategy = exploration_method
-        super().__init__(data=data, model=model, **learn_kwargs)
-        self.dqn_trainers = listify(trainers)
-        for t in self.dqn_trainers: self.callbacks.append(t(self))
+        super().__init__(data=data, model=model, opt=opt, **learn_kwargs)
+        self.trainers = listify(trainers)
+        for t in self.trainers: self.callbacks.append(t(self))
 
     def predict(self, element, **kwargs):
         training = self.model.training

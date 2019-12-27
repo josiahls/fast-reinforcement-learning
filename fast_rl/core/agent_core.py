@@ -3,9 +3,12 @@ from math import ceil
 
 import gym
 from fastai.basic_train import *
+from fastai.basic_train import load_callback
 from fastai.torch_core import *
 
+from fast_rl.core.data_block import MDPList
 from fast_rl.core.data_structures import SumTree
+
 
 
 class ExplorationStrategy:

@@ -17,7 +17,7 @@ p_full_format=[FEED_TYPE_STATE]
 p_envs=['Pendulum-v0']
 
 config_env_expectations={
-	'Pendulum-v0': {'action_shape': (1, 2), 'state_shape': (1, 1)}
+	'Pendulum-v0': {'action_shape': (1, 1), 'state_shape': (1, 3)}
 }
 
 

@@ -36,7 +36,11 @@ class DQNModule(Module):
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self.action_model)
-		self.opt = OptimWrapper.create(ifnone(optim.Adam, opt), lr=self.lr, layer_groups=[self.action_model])
+		self.opt = None
+		self.set_opt(opt)
+
+	def set_opt(self, opt):
+		self.opt=OptimWrapper.create(ifnone(optim.Adam, opt), lr=self.lr, layer_groups=[self.action_model])
 
 	def setup_conv_block(self, _layers, ni, nc, w, h):
 		self.action_model.add_module('conv_block', nn.Sequential(*(self.fix_switched_channels(ni, nc, _layers) + [Flatten()])))

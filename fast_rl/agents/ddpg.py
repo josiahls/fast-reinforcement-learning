@@ -9,11 +9,11 @@ from fast_rl.core.data_block import MDPDataBunch, MDPStep, FEED_TYPE_STATE, FEED
 
 
 class DDPGLearner(AgentLearner):
-    def __init__(self, data: MDPDataBunch, model, memory, exploration_method, trainers,
+    def __init__(self, data: MDPDataBunch, model, memory, exploration_method, trainers, opt=optim.Adam,
                  **kwargs):
         self.memory: Experience = memory
         self.exploration_method: ExplorationStrategy = exploration_method
-        super().__init__(data=data, model=model, **kwargs)
+        super().__init__(data=data, model=model, opt=opt, **kwargs)
         self.ddpg_trainers = listify(trainers)
         for t in self.ddpg_trainers: self.callbacks.append(t(self))
 

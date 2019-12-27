@@ -109,21 +109,27 @@ class DDPGModule(Module):
 		self.tau = tau
 		self.loss_func = None
 		self.loss = None
+		self.opt = None
+		self.critic_optimizer = None
 		self.batch_norm = batch_norm
+		self.actor_lr = actor_lr
 
 		self.action_model = ActorModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,batch_norm = batch_norm,
 										w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
 		self.critic_model = CriticModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs, batch_norm = batch_norm,
 										 w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
 
-		self.opt = OptimWrapper.create(ifnone(opt, Adam), lr=actor_lr, layer_groups=[self.action_model])
-		self.critic_optimizer = OptimWrapper.create(ifnone(opt, Adam), lr=lr, layer_groups=[self.critic_model])
+		self.set_opt(opt)
 
 		self.t_action_model = deepcopy(self.action_model)
 		self.t_critic_model = deepcopy(self.critic_model)
 
 		self.target_copy_over()
 		self.tau = tau
+
+	def set_opt(self, opt):
+		self.opt=OptimWrapper.create(ifnone(optim.Adam, opt), lr=self.actor_lr, layer_groups=[self.action_model])
+		self.critic_optimizer=OptimWrapper.create(ifnone(optim.Adam, opt), lr=self.lr, layer_groups=[self.critic_model])
 
 	def optimize(self, sampled):
 		r"""

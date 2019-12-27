@@ -10,7 +10,7 @@ from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
 from gym.spaces import Discrete, Box, MultiDiscrete
 
-from fast_rl.core.basic_train import AgentLearner
+# from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 import os
 
@@ -378,9 +378,6 @@ class MDPCallback(LearnerCallback):
     def on_backward_end(self, **kwargs: Any): return {'skip_step': True}
     def on_step_end(self, **kwargs: Any): return {'skip_zero': True}
 
-    @property
-    def learn(self) -> AgentLearner: return self._learn()
-
     def __init__(self, learn):
         r"""
         Handles action assignment, episode naming.
@@ -523,6 +520,10 @@ class MDPDataset(Dataset):
         if self.is_warming_up and steps < self.bs: return self.bs
         return steps
 
+    def get_state(self, **extra):
+        return {'env_name': self.env_name, 'max_steps': self.max_steps, 'render': self.render, 'bs': self.bs,
+                'feed_type': self.feed_type}
+
     @property
     def env_name(self): return self.env.spec.id
 
@@ -616,6 +617,10 @@ class MDPDataset(Dataset):
 
 class MDPDataBunch(DataBunch):
 
+    @classmethod
+    def load_state(cls, path, kwargs):
+        return MDPDataBunch.from_pickle(path, **kwargs)
+
     def close(self):
         if self.train_dl is not None: self.train_dl.env.close()
         if self.valid_dl is not None: self.valid_dl.env.close()
@@ -640,11 +645,12 @@ class MDPDataBunch(DataBunch):
                                     render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
-        path = './data/' + env_name + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
+        path = './data/' + datetime.now().strftime('%Y%m%d%H%M%S') + '_' + env_name
+        if not os.path.exists(path): os.makedirs(path)
         return cls.create(train_list, valid_list, path=path, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def from_pickle(cls, path: PathOrStr = None, env_name=None, **dl_kwargs):
+    def from_pickle(cls, path: PathOrStr = None, env_name=None, **kwargs):
 
         if path is None:
             if env_name is None: raise IOError(f'If path is None, then env_name needs to be specified.')
@@ -658,7 +664,7 @@ class MDPDataBunch(DataBunch):
         train_x = pickle.load(open(path / 'train.pickle', 'rb')) if (path / 'train.pickle').exists() else None
         val_x = pickle.load(open(path / 'valid.pickle', 'rb')) if (path / 'valid.pickle').exists() else None
 
-        return cls.from_env(env_name=env_name, x=train_x, val_x=val_x, **dl_kwargs)
+        return cls.from_env(env_name=env_name, x=train_x, val_x=val_x, **kwargs)
 
     @classmethod
     def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1, path='.',
@@ -681,7 +687,7 @@ class MDPDataBunch(DataBunch):
 
     def to_pickle(self, path=None, env_name=None):
         env_name = ifnone(env_name, self.train_ds.env_name)
-        if not path.__contains__(env_name): path += '_' + env_name
+        if not str(path).__contains__(env_name): path += '_' + env_name
         if self.train_ds is not None: self.train_ds.to_pickle(ifnone(path, self.path), 'train')
         if not self.empty_val: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
 
