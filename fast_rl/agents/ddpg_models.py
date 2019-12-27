@@ -80,9 +80,9 @@ class ActorModule(nn.Sequential):
 
 class DDPGModule(Module):
 	def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99,
-				 n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
-				 w=-1, h=-1, ks=None, stride=None, grad_clip=5, tau=1e-3, lr=1e-3, actor_lr=1e-4,
-				 batch_norm=False, **kwargs):
+				n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
+				w=-1, h=-1, ks=None, stride=None, grad_clip=5, tau=1e-3, lr=1e-3, actor_lr=1e-4,
+				batch_norm=False, **kwargs):
 		r"""
 		Implementation of a discrete control algorithm using an actor/critic architecture.
 
@@ -117,7 +117,7 @@ class DDPGModule(Module):
 		self.action_model = ActorModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs,batch_norm = batch_norm,
 										w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
 		self.critic_model = CriticModule(ni=ni, ao=ao, layers=layers, nc=nc, emb_szs=emb_szs, batch_norm = batch_norm,
-										 w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
+										w=w, h=h, ks=ks, n_conv_blocks=n_conv_blocks, stride=stride)
 
 		self.set_opt(opt)
 
@@ -152,8 +152,8 @@ class DDPGModule(Module):
 			a = torch.cat([item.a.float() for item in sampled])#.to(self.data.device)
 			# d = torch.cat([item.done.float() for item in sampled]) # Do we need a mask??
 
-		with torch.no_grad():
-			y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))
+		# with torch.no_grad():
+		y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))
 
 		y_hat = self.critic_model((s, a))
 

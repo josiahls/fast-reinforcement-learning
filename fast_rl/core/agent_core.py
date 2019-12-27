@@ -3,12 +3,9 @@ from math import ceil
 
 import gym
 from fastai.basic_train import *
-from fastai.basic_train import load_callback
 from fastai.torch_core import *
 
-from fast_rl.core.data_block import MDPList
 from fast_rl.core.data_structures import SumTree
-
 
 
 class ExplorationStrategy:
@@ -73,11 +70,9 @@ class OrnsteinUhlenbeck(GreedyEpsilon):
 		self.x=np.ones(size)
 
 	def perturb(self, action, action_space):
+		dx=np.zeros(self.x.shape)
 		if self.explore:
-			dx=self.theta*(self.mu-self.x)+self.sigma*np.array(
-				[np.random.normal() for _ in range(len(self.x))])
-		else:
-			dx=np.zeros(self.x.shape)
+			dx=self.theta*(self.mu-self.x)+self.sigma*np.array([np.random.normal() for _ in range(len(self.x))])
 
 		self.x+=dx
 		return self.epsilon*self.x+action
@@ -184,7 +179,7 @@ class PriorityExperienceReplay(Experience):
 			self._indices, weights, samples=self.tree.batch_get(uniform_ranges)
 		except ValueError:
 			warn('Too few values to unpack. Your batch size is too small, when PER queries tree, all 0 values get'
-				' ignored. We will retry until we can return at least one sample.')
+				 ' ignored. We will retry until we can return at least one sample.')
 			samples=self.sample(batch)
 			return samples
 
