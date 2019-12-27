@@ -101,6 +101,17 @@ FEED_TYPE_IMAGE = 0
 FEED_TYPE_STATE = 1
 
 
+class ResolutionWrapper(Wrapper):
+    def __init__(self, env, w_step: int, h_step: int):
+        super().__init__(env)
+        self.h_step=h_step
+        self.w_step=w_step
+
+    def render(self, mode='human', **kwargs):
+        image = super(ResolutionWrapper, self).render(mode=mode, **kwargs)
+        image = image[::self.w_step, ::self.h_step, :]
+        return image
+
 @dataclass
 class Bounds(object):
     r"""
@@ -634,14 +645,16 @@ class MDPDataBunch(DataBunch):
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
                  feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_top',
                  split_env_init=True, device: torch.device = None, k=1, no_check: bool = False, x=None, val_x=None,
-                 add_valid=True, **dl_kwargs) -> 'MDPDataBunch':
+                 add_valid=True, res_wrap=None, **dl_kwargs) -> 'MDPDataBunch':
 
-        env = gym.make(env_name)
+        env=gym.make(env_name)
+        if res_wrap is not None: env=res_wrap(env)
         memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy, k=k)
         train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
                                 memory_manager=memory_manager, x=x)
         if add_valid:
-            valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps, x=val_x,
+            if not split_env_init: env=(gym.make(env_name) if res_wrap is not None else res_wrap(gym.make(env_name)))
+            valid_list = MDPDataset(env, max_steps=max_steps, x=val_x,
                                     render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
