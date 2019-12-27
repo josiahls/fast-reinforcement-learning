@@ -109,7 +109,7 @@ class Gif:
             # duration = ifnone(duration, self.frames.shape[0] / original_fps)
             clip = VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig, fps=default_fps,
                                      matplot_to_np_fn=mplfig_to_npimage, title=f'Episode {self.episode}'),
-                                     duration=self.frames.shape[0] / default_fps)
+                                     duration=(self.frames.shape[0] / default_fps)-1)
             plt.close(fig)
             return clip
 
