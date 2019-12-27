@@ -645,7 +645,7 @@ class MDPDataBunch(DataBunch):
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
                  feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_top',
                  split_env_init=True, device: torch.device = None, k=1, no_check: bool = False, x=None, val_x=None,
-                 add_valid=True, res_wrap=None, **dl_kwargs) -> 'MDPDataBunch':
+                 add_valid=True, res_wrap=None, make_dir=True, **dl_kwargs) -> 'MDPDataBunch':
 
         env=gym.make(env_name)
         if res_wrap is not None: env=res_wrap(env)
@@ -659,7 +659,7 @@ class MDPDataBunch(DataBunch):
         else:
             valid_list = None
         path = './data/' + datetime.now().strftime('%Y%m%d%H%M%S') + '_' + env_name
-        if not os.path.exists(path): os.makedirs(path)
+        if not os.path.exists(path) and make_dir: os.makedirs(path)
         return cls.create(train_list, valid_list, path=path, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod

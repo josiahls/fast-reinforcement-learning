@@ -68,5 +68,5 @@ def test_resolution_wrapper():
     learner.fit(2)
     temp = gym.make('CartPole-v0')
     temp.reset()
-    assert temp.render(mode='rgb_array').shape==(800, 1200, 3)
-    assert data.env.render(mode='rgb_array').shape == (400, 600, 3)
+    original_shape = temp.render(mode='rgb_array').shape
+    assert data.env.render(mode='rgb_array').shape == (original_shape[0] // 2, original_shape[0] // 2, 3)
