@@ -25,8 +25,7 @@ def ks_stride(ks, stride, w, h, n_blocks, kern_proportion=.1, stride_proportion=
 
 
 class Flatten(nn.Module):
-	def forward(self, y):
-		return y.view(y.size(0), -1)
+	def forward(self, y): return y.view(y.size(0), -1)
 
 
 class FakeBatchNorm(Module):

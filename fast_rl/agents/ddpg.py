@@ -18,10 +18,11 @@ class DDPGLearner(AgentLearner):
         for t in self.ddpg_trainers: self.callbacks.append(t(self))
 
     def predict(self, element, **kwargs):
-        training = self.model.training
-        if element.shape[0] == 1: self.model.eval()
-        pred = self.model(element)
-        if training: self.model.train()
+        with torch.no_grad():
+            training = self.model.training
+            if element.shape[0] == 1: self.model.eval()
+            pred = self.model(element)
+            if training: self.model.train()
         return self.exploration_method.perturb(pred.detach().cpu().numpy(), self.data.action.action_space)
 
     def interpret_q(self, item):

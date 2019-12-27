@@ -6,7 +6,7 @@ from fast_rl.core.layers import *
 
 
 class CriticModule(nn.Sequential):
-	def __init__(self, ni: int, ao: int, layers: Collection[int], batch_norm=False,
+	def __init__(self, ni: int, ao: int, layers: List[int], batch_norm=False,
 				 n_conv_blocks: Collection[int] = 0, nc=3, emb_szs: ListSizes = None,
 				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
@@ -15,6 +15,9 @@ class CriticModule(nn.Sequential):
 		self.action_model = nn.Sequential()
 		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
+		else:
+			self.add_module('lin_state_block', StateActionPassThrough(nn.Linear(ni, layers[0])))
+			ni, layers = layers[0], layers[1:]
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self)
 
@@ -65,6 +68,7 @@ class ActorModule(nn.Sequential):
 		if not emb_szs: tabular_model.embeds = None
 		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
 		self.add_module('lin_block', TabularEmbedWrapper(tabular_model))
+		self.add_module('tanh', nn.Tanh())
 
 	def fix_switched_channels(self, current_channels, expected_channels, layers: list):
 		if current_channels == expected_channels:
