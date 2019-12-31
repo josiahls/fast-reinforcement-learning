@@ -100,6 +100,8 @@ class Gif:
 
     def get_gif(self, default_fps=15):
         try:
+            import imageio
+            imageio.plugins.ffmpeg.download()
             from moviepy.video.VideoClip import VideoClip
             from moviepy.video.io.VideoFileClip import VideoFileClip
             from moviepy.video.io.bindings import mplfig_to_npimage

@@ -30,16 +30,16 @@ try:
         from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
 
 
-    class BulletWrapper(Wrapper):
-        def step(self, action):
-            r""" In the event of a random disconnect, retry the env """
-            try:
-                result = super().step(action)
-            except pybullet.error:
-                self.__init__(env=gym.make(self.spec.id))
-                super().reset()
-                result = super().step(action)
-            return result
+    class BulletWrapper(Wrapper):pass
+        # def step(self, action):
+        #     r""" In the event of a random disconnect, retry the env """
+        #     try:
+        #         result = super().step(action)
+        #     except pybullet.error:
+        #         self.__init__(env=gym.make(self.spec.id))
+        #         super().reset()
+        #         result = super().step(action)
+        #     return result
 
     def pybullet_wrap(env, render):
         if issubclass(env.unwrapped.__class__, (MujocoEnv, RoboschoolEnv)):
