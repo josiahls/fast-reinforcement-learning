@@ -29,7 +29,7 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
-	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, feed_type=s_format,
+	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
 								 memory_management_strategy='k_partitions_top', k=3)
 	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSProp)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
@@ -54,7 +54,7 @@ def test_dqn_create_dqn_model(model_cls, s_format, env):
 # @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_dqn_learner(model_cls, s_format, mem, env):
-	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, feed_type=s_format)
+	data = MDPDataBunch.from_env(env, render='rgb_array', bs=32, add_valid=False, keep_env_open=False, feed_type=s_format)
 	model = create_dqn_model(data, model_cls)
 	memory = mem(memory_size=1000, reduce_ram=True)
 	exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
@@ -68,7 +68,7 @@ def test_dqn_dqn_learner(model_cls, s_format, mem, env):
 # @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format, p_exp, p_envs)))
 def test_dqn_fit(model_cls, s_format, mem, env):
-	data = MDPDataBunch.from_env(env, render='rgb_array', bs=5, max_steps=20, add_valid=False, feed_type=s_format)
+	data = MDPDataBunch.from_env(env, render='rgb_array', bs=5, max_steps=20, add_valid=False, keep_env_open=False, feed_type=s_format)
 	model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 	memory = mem(memory_size=1000, reduce_ram=True)
 	exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
@@ -87,7 +87,7 @@ def test_dqn_fit_maze_env(model_cls, s_format, mem):
 	while not success:
 		try:
 			data = MDPDataBunch.from_env('maze-random-5x5-v0', render='rgb_array', bs=5, max_steps=20,
-										 add_valid=False, feed_type=s_format)
+										 add_valid=False, keep_env_open=False, feed_type=s_format)
 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 			memory = ExperienceReplay(10000)
 			exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)

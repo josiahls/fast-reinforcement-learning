@@ -100,8 +100,6 @@ class Gif:
 
     def get_gif(self, default_fps=15):
         try:
-            import imageio
-            imageio.plugins.ffmpeg.download()
             from moviepy.video.VideoClip import VideoClip
             from moviepy.video.io.VideoFileClip import VideoFileClip
             from moviepy.video.io.bindings import mplfig_to_npimage
@@ -131,7 +129,7 @@ class Gif:
             raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
 
 
-    def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15):
+    def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15, frame_skip=None):
         if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
         if filename.__contains__('.gif'): filename = filename.replace('.gif', '')
         if include_episode: filename += f'_episode_{self.episode}'

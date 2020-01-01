@@ -9,6 +9,7 @@ from fastai.basic_train import LearnerCallback, DatasetType, DataLoader, Dataset
 from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
 from gym.spaces import Discrete, Box, MultiDiscrete
+import gc
 
 # from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
@@ -30,16 +31,9 @@ try:
         from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
 
 
-    class BulletWrapper(Wrapper):pass
-        # def step(self, action):
-        #     r""" In the event of a random disconnect, retry the env """
-        #     try:
-        #         result = super().step(action)
-        #     except pybullet.error:
-        #         self.__init__(env=gym.make(self.spec.id))
-        #         super().reset()
-        #         result = super().step(action)
-        #     return result
+    class BulletWrapper(Wrapper):
+        def close(self):
+            self.env.close()
 
     def pybullet_wrap(env, render):
         if issubclass(env.unwrapped.__class__, (MujocoEnv, RoboschoolEnv)):
@@ -389,7 +383,7 @@ class MDPCallback(LearnerCallback):
     def on_backward_end(self, **kwargs: Any): return {'skip_step': True}
     def on_step_end(self, **kwargs: Any): return {'skip_zero': True}
 
-    def __init__(self, learn):
+    def __init__(self, learn, keep_env_open=True):
         r"""
         Handles action assignment, episode naming.
 
@@ -397,6 +391,7 @@ class MDPCallback(LearnerCallback):
             learn:
         """
         super().__init__(learn)
+        self.keep_env_open=keep_env_open
         self.train_ds: MDPDataset = learn.data.train_ds
         self.valid_ds: MDPDataset = None if learn.data.empty_val else learn.data.valid_ds
 
@@ -420,8 +415,10 @@ class MDPCallback(LearnerCallback):
             self.valid_ds.episode = relative_epoch
             self.valid_ds.x.set_recent_run_episode(self.valid_ds.episode)
 
-    # def on_train_end(self, **kwargs:Any) ->None:
-    #     self.learn.data.close()
+    def on_train_end(self, **kwargs: Any) ->None:
+        if not self.keep_env_open:
+            self.learn.data.close()
+            gc.collect()
 
 
 class MDPMemoryManager(LearnerCallback):
@@ -494,7 +491,7 @@ class MDPMemoryManager(LearnerCallback):
 
 class MDPDataset(Dataset):
     def __init__(self, env: gym.Env, memory_manager, bs, render='rgb_array', feed_type=FEED_TYPE_STATE, max_steps=None,
-                 x=None):
+                 x=None, keep_env_open=True):
         r"""
         Handles env execution and ItemList building.
 
@@ -512,7 +509,7 @@ class MDPDataset(Dataset):
         self.action = Action(taken_action=self.env.action_space.sample(), action_space=self.env.action_space)
         self.state = None
         self.s_prime, self.alt_s_prime = None, None
-        self.callback = [MDPCallback, memory_manager]
+        self.callback = [partial(MDPCallback, keep_env_open=keep_env_open), memory_manager]
         # Tracking fields
         self.episode = -1 if x is None else max([i.episode + 1 for i in x.items])
         self.counter = 0
@@ -645,16 +642,16 @@ class MDPDataBunch(DataBunch):
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
                  feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_top',
                  split_env_init=True, device: torch.device = None, k=1, no_check: bool = False, x=None, val_x=None,
-                 add_valid=True, res_wrap=None, make_dir=True, **dl_kwargs) -> 'MDPDataBunch':
+                 add_valid=True, res_wrap=None, make_dir=True, keep_env_open=True, **dl_kwargs) -> 'MDPDataBunch':
 
         env=gym.make(env_name)
         if res_wrap is not None: env=res_wrap(env)
         memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy, k=k)
         train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
-                                memory_manager=memory_manager, x=x)
+                                memory_manager=memory_manager, x=x, keep_env_open=keep_env_open)
         if add_valid:
             if not split_env_init: env=(gym.make(env_name) if res_wrap is not None else res_wrap(gym.make(env_name)))
-            valid_list = MDPDataset(env, max_steps=max_steps, x=val_x,
+            valid_list = MDPDataset(env, max_steps=max_steps, x=val_x, keep_env_open=keep_env_open,
                                     render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
