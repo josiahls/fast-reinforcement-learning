@@ -98,7 +98,8 @@ class Gif:
         axes.imshow(frames[floor(t * fps)] / 255)
         return matplot_to_np_fn(fig)
 
-    def get_gif(self, default_fps=15):
+    def get_gif(self, default_fps=15, frame_skip=None):
+        if frame_skip is not None: self.frames = self.frames[::frame_skip]
         try:
             from moviepy.video.VideoClip import VideoClip
             from moviepy.video.io.VideoFileClip import VideoFileClip
@@ -130,7 +131,7 @@ class Gif:
 
 
     def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15, frame_skip=None):
-        if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
+        if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps, frame_skip)
         if filename.__contains__('.gif'): filename = filename.replace('.gif', '')
         if include_episode: filename += f'_episode_{self.episode}'
         self.animation.write_gif(f"{filename}.gif", fps=fps)
