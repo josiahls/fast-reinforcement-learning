@@ -27,6 +27,29 @@ def array_flatten(array):
     return [item for sublist in array for item in sublist]
 
 
+def mplfig_to_npimage(fig):
+    """
+    Note, as of moviepy 1.0.1 there is an ugly depreciation warning when called the native binding in:
+    `from moviepy.video.io.bindings import mplfig_to_npimage`
+
+    This fixes the warning. Will hopefully be able to remove in a future datte.
+
+    Converts a matplotlib figure to a RGB frame after updating the canvas"""
+    #  only the Agg backend now supports the tostring_rgb function
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw() # update/draw the elements
+
+    # get the width and the height to resize the matrix
+    l,b,w,h = canvas.figure.bbox.bounds
+    w, h = int(w), int(h)
+
+    #  exports the canvas to a string buffer and then to a numpy nd.array
+    buf = canvas.tostring_rgb()
+    image= np.frombuffer(buf,dtype=np.uint8)
+    return image.reshape(h,w,3)
+
+
 def cumulate_squash(values: Union[list, List[list]], squash_episodes=False, cumulative=False):
     if isinstance(values[0], list):
         if squash_episodes:
@@ -103,11 +126,9 @@ class Gif:
         try:
             from moviepy.video.VideoClip import VideoClip
             from moviepy.video.io.VideoFileClip import VideoFileClip
-            from moviepy.video.io.bindings import mplfig_to_npimage
             from moviepy.video.io.html_tools import ipython_display
 
             fig, ax = plt.subplots()
-            # duration = ifnone(duration, self.frames.shape[0] / original_fps)
             clip = VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig, fps=default_fps,
                                      matplot_to_np_fn=mplfig_to_npimage, title=f'Episode {self.episode}'),
                                      duration=(self.frames.shape[0] / default_fps)-1)
