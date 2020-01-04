@@ -139,8 +139,11 @@ We recommend squashing commits / keep pointless ones to a minimum.
 
 
 ## Style
-Fastai does not follow closely with [google python style guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#3164-guidelines-derived-from-guidos-recommendations),
-however in this repo we will use this guide.  
-Some exceptions however (typically found in Fastai):
-- "PEP 8 Multiple statements per line violation" is allowed in the case of if statements as long as they are still 
-within the column limit.
+Since fastai uses a different style from traditional PEP-8, we will be following [Style](https://docs.fast.ai/dev/style.html) 
+and [Abbreviations](https://docs.fast.ai/dev/abbr.html). Also we will use RL specific abbr.
+
+|        | Concept | Abbr. | Combination Examples |
+|:------:|:-------:|:-----:|:--------------------:|
+| **RL** |  State  |  st   |                      |
+|        | Action  |  acn  |                      |
+|        | Bounds  |  bb   | Same as Bounding Box |

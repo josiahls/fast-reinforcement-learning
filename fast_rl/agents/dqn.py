@@ -84,7 +84,7 @@ class BaseDQNTrainer(LearnerCallback):
 
 def create_dqn_model(data: MDPDataBunch, base_arch: DQNModule, layers=None, ignore_embed=False, channels=None,
                      opt=torch.optim.RMSprop, loss_func=None, lr=0.001, **kwargs):
-    bs, state, action = data.bs, data.state, data.action
+    bs,state,action=data.bs,data.state,data.action
     nc, w, h, n_conv_blocks = -1, -1, -1, [] if state.mode == FEED_TYPE_STATE else ifnone(channels, [3, 3, 1])
     if state.mode == FEED_TYPE_IMAGE: nc, w, h = state.s.shape[3], state.s.shape[2], state.s.shape[1]
     _layers = ifnone(layers, [64, 64])

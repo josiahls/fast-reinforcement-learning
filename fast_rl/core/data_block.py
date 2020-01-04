@@ -118,15 +118,13 @@ FEED_TYPE_STATE = 1
 
 
 class ResolutionWrapper(Wrapper):
-    def __init__(self, env, w_step: int, h_step: int):
+    def __init__(self,env,w_step:int,h_step:int):
         super().__init__(env)
-        self.h_step=h_step
-        self.w_step=w_step
+        self.h_step,self.w_step=h_step,w_step
 
-    def render(self, mode='human', **kwargs):
-        image = super(ResolutionWrapper, self).render(mode=mode, **kwargs)
-        if len(image)!=0: image=image[::self.w_step, ::self.h_step, :]
-        return image
+    def render(self,mode='human',**kwargs):
+        img = super(ResolutionWrapper,self).render(mode=mode,**kwargs)
+        return img if len(img)==0 else img[::self.w_step,::self.h_step,:]
 
 @dataclass
 class Bounds(object):
