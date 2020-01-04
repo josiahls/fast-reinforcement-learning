@@ -120,6 +120,7 @@ def test_ddpg_models_mountain_car_continuous(model_cls, s_format, experience):
 		group_interp.to_pickle(f'../docs_src/data/mountaincarcontinuous_{model.name.lower()}/',
 			f'{model.name.lower()}_{meta}')
 		[g.write('../res/run_gifs/mountaincarcontinuous') for g in interp.generate_gif()]
+		data.close()
 		del learner
 		del model
 		del data
@@ -170,7 +171,7 @@ def test_ddpg_models_walker(model_cls, s_format, experience):
 		model=create_ddpg_model(data=data, base_arch=model_cls)
 		learner=ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
 			callback_fns=[RewardMetric, EpsilonMetric])
-		learner.fit(5)
+		learner.fit(1500)
 
 		meta=f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format==FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
 		interp=AgentInterpretation(learner, ds_type=DatasetType.Train)
@@ -209,9 +210,10 @@ def test_ddpg_models_ant(model_cls, s_format, experience):
 		group_interp.to_pickle(f'../docs_src/data/ant_{model.name.lower()}/',
 			f'{model.name.lower()}_{meta}')
 		[g.write('../res/run_gifs/ant', frame_skip=3) for g in interp.generate_gif()]
-	del learner
-	del model
-	del data
+		data.close()
+		del learner
+		del model
+		del data
 
 
 @pytest.mark.usefixtures('skip_performance_check')
