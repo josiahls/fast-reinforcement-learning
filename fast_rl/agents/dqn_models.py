@@ -92,11 +92,11 @@ class DQNModule(Module):
 
 		"""
 		with torch.no_grad():
-			r = torch.cat([item.reward.float() for item in sampled])#.to(self.data.device)
-			s_prime = torch.cat([item.s_prime for item in sampled])#.to(self.data.device)
-			s = torch.cat([item.s for item in sampled])#.to(self.data.device)
-			a = torch.cat([item.a.long() for item in sampled])#.to(self.data.device)
-			d = torch.cat([item.done.float() for item in sampled])#.to(self.data.device)
+			r = torch.cat([item.reward.float() for item in sampled])
+			s_prime = torch.cat([item.s_prime for item in sampled])
+			s = torch.cat([item.s for item in sampled])
+			a = torch.cat([item.a.long() for item in sampled])
+			d = torch.cat([item.done.float() for item in sampled])
 		masking = self.sample_mask(d)
 
 		y_hat = self.y_hat(s, a)

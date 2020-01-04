@@ -32,12 +32,34 @@ try:
 
 
     class BulletWrapper(Wrapper):
+        def __init__(self, render, **kwargs):
+            super(BulletWrapper, self).__init__(**kwargs)
+            # Test Env integrity
+            if render=='human': self.env.render(mode='human')
+            self.env.reset()
+            try:
+                self.env.step(self.env.action_space.sample())
+            except pybullet.error as err:
+                print(err)
+
         def close(self):
-            self.env.close()
+            r""" pybullet crashes if the env is already closed. We want to ignore this.  """
+            try:
+                # The regular close method seems to have been decrecated.
+                self.env.env._close()
+            except pybullet.error as err:
+                if not str(err).__contains__('Not connected to physics server'):
+                    raise pybullet.error(err)
+
+        def render(self, mode='human', **kwargs):
+            r""" If human is used as a mode, the returned image is blank. Get image regardless of mode. """
+            out=super(BulletWrapper, self).render(mode=mode)
+            if mode=='human': out=super(BulletWrapper, self).render(mode='rdb_array')
+            return out
 
     def pybullet_wrap(env, render):
         if issubclass(env.unwrapped.__class__, (MujocoEnv, RoboschoolEnv)):
-            env = BulletWrapper(env=env)
+            env = BulletWrapper(env=env, render=render)
             if render == 'human': env.render()
         return env
 
@@ -103,7 +125,7 @@ class ResolutionWrapper(Wrapper):
 
     def render(self, mode='human', **kwargs):
         image = super(ResolutionWrapper, self).render(mode=mode, **kwargs)
-        image = image[::self.w_step, ::self.h_step, :]
+        if len(image)!=0: image=image[::self.w_step, ::self.h_step, :]
         return image
 
 @dataclass

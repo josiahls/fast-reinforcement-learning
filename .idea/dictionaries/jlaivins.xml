@@ -16,6 +16,7 @@
       <w>groupable</w>
       <w>moviepy</w>
       <w>ornstein</w>
+      <w>pybullet</w>
       <w>uhlenbeck</w>
     </words>
   </dictionary>

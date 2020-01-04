@@ -1,6 +1,4 @@
 from fastai.callback import OptimWrapper
-from torch.optim import Adam
-
 
 from fast_rl.core.layers import *
 
@@ -150,13 +148,11 @@ class DDPGModule(Module):
 
 		"""
 		with torch.no_grad():
-			r = torch.cat([item.reward.float() for item in sampled])#.to(self.data.device)
-			s_prime = torch.cat([item.s_prime for item in sampled])#.to(self.data.device)
-			s = torch.cat([item.s for item in sampled])#.to(self.data.device)
-			a = torch.cat([item.a.float() for item in sampled])#.to(self.data.device)
-			# d = torch.cat([item.done.float() for item in sampled]) # Do we need a mask??
+			r = torch.cat([item.reward.float() for item in sampled])
+			s_prime = torch.cat([item.s_prime for item in sampled])
+			s = torch.cat([item.s for item in sampled])
+			a = torch.cat([item.a.float() for item in sampled])
 
-		# with torch.no_grad():
 		y = r + self.discount * self.t_critic_model((s_prime, self.t_action_model(s_prime)))
 
 		y_hat = self.critic_model((s, a))
@@ -164,7 +160,6 @@ class DDPGModule(Module):
 		critic_loss = self.loss_func(y_hat, y)
 
 		if self.training:
-			# Optimize critic network
 			self.critic_optimizer.zero_grad()
 			critic_loss.backward()
 			self.critic_optimizer.step()
@@ -174,7 +169,6 @@ class DDPGModule(Module):
 		self.loss = critic_loss.cpu().detach()
 
 		if self.training:
-			# Optimize actor network
 			self.opt.zero_grad()
 			actor_loss.backward()
 			self.opt.step()
