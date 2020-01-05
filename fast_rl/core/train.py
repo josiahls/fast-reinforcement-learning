@@ -111,6 +111,7 @@ class Gif:
     episode: int
     animation = None
     _frame_counter = 0
+    _write_counter=0
 
     def __post_init__(self):
         if type(self.frames) is list: self.frames = np.concatenate(self.frames, axis=0)
@@ -151,11 +152,19 @@ class Gif:
             raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
 
 
-    def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15, frame_skip=None):
-        if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps, frame_skip)
-        if filename.__contains__('.gif'): filename = filename.replace('.gif', '')
-        if include_episode: filename += f'_episode_{self.episode}'
-        self.animation.write_gif(f"{filename}.gif", fps=fps)
+    def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15,frame_skip=None):
+        if self._write_counter>5:self._write_counter=0
+        else:                    self._write_counter+=1
+        try:
+            if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps, frame_skip)
+            if filename.__contains__('.gif'): filename = filename.replace('.gif', '')
+            if include_episode: filename += f'_episode_{self.episode}'
+            self.animation.write_gif(f"{filename}.gif", fps=fps)
+        except RuntimeError as e:
+            if self._write_counter>=5:
+                warn(f'After 5 attempts, was unable to create gif: {str(e)}')
+            self.write(filename=filename,include_episode=include_episode,cache_animation=cache_animation,fps=fps,
+                original_fps=original_fps,frame_skip=frame_skip)
 
 
 class AgentInterpretation(Interpretation):
