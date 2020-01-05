@@ -36,10 +36,10 @@ def test_interpretation_gif():
 # 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 # 			memory = mem(10000)
 # 			exploration_method = GreedyEpsilon(e_start=1, e_end=0.1, decay=0.001)
-# 			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
-# 			learner.fit(1)
+# 			lnr = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+# 			lnr.fit(1)
 #
-# 			interp = GymMazeInterpretation(learner, ds_type=DatasetType.Train)
+# 			interp = GymMazeInterpretation(lnr, ds_type=DatasetType.Train)
 # 			for i in range(-1, 4): interp.plot_heat_map(action=i)
 #
 # 			success = True
@@ -58,10 +58,10 @@ def test_interpretation_gif():
 # 			model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
 # 			memory = mem(10000)
 # 			exploration_method = GreedyEpsilon(e_start=1, e_end=0.1, decay=0.001)
-# 			learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
-# 			learner.fit(1)
+# 			lnr = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
+# 			lnr.fit(1)
 #
-# 			interp = QValueInterpretation(learner, ds_type=DatasetType.Train)
+# 			interp = QValueInterpretation(lnr, ds_type=DatasetType.Train)
 # 			interp.plot_q()
 #
 # 			success = True
