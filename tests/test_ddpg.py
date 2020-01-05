@@ -58,6 +58,7 @@ def test_ddpg_create_ddpg_model(model_cls, s_format, env):
 	model.eval()
 	model(data.state.s.float())
 	check_shape(env,data,s_format)
+	data.close()
 
 	# assert config_env_expectations[env]['action_shape']==(1, data.action.taken_action.shape[1])
 	# if s_format==FEED_TYPE_STATE:
@@ -73,6 +74,7 @@ def test_ddpg_ddpglearner(model_cls, s_format, mem, env):
 		decay=0.001)
 	ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
 	check_shape(env,data,s_format)
+	data.close()
 	# assert config_env_expectations[env]['action_shape']==(1, data.action.taken_action.shape[1])
 	# if s_format==FEED_TYPE_STATE:
 	# 	assert config_env_expectations[env]['state_shape']==data.state.s.shape
