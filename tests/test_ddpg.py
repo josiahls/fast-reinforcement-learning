@@ -230,15 +230,15 @@ def test_ddpg_models_ant(model_cls, s_format, experience):
 	group_interp=GroupAgentInterpretation()
 	for i in range(5):
 		print('\n')
-		data=MDPDataBunch.from_env('AntPyBulletEnv-v0', render='rgb_array', bs=64, add_valid=False, keep_env_open=False, feed_type=s_format,
-			memory_management_strategy='k_partitions_top', k=3, res_wrap=partial(ResolutionWrapper, w_step=2, h_step=2))
+		data=MDPDataBunch.from_env('AntPyBulletEnv-v0', render='rgb_array', bs=64, add_valid=False, keep_env_open=False,
+			feed_type=s_format, memory_management_strategy='k_partitions_top', k=3)
 		exploration_method=OrnsteinUhlenbeck(size=data.action.taken_action.shape, epsilon_start=1, epsilon_end=0.1,
 			decay=0.00001)
 		memory=experience(memory_size=1000000, reduce_ram=True)
 		model=create_ddpg_model(data=data, base_arch=model_cls, lr=1e-3, actor_lr=1e-4)
 		learner=ddpg_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
 			opt_func=torch.optim.Adam, callback_fns=[RewardMetric, EpsilonMetric])
-		learner.fit(10)
+		learner.fit(4)
 
 		meta=f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format==FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
 		interp=AgentInterpretation(learner, ds_type=DatasetType.Train)
