@@ -88,9 +88,40 @@ learner.fit(10)
 - [X] 0.9.0 Notebook demonstrations of basic model usage.
 - [ ] **Working on** **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
-- [ ] 1.8.0 Add PyBullet Fetch Environments
-    - [ ] 1.8.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
-    - [ ] 1.8.0 Add HER
+- [ ] 1.1.0 More Traditional RL models
+    - [ ] Add PPO
+    - [ ] Add TRPO
+    - [ ] Add D4PG
+    - [ ] Add A3C
+- [ ] 1.2.0 HRL models *Possibly might change version to 2.0 depending on SMDP issues*
+    - [ ] Add SMDP
+    - [ ] Add Goal oriented MDPs. Will Require a new "Step"
+    - [ ] Add FeUdal Network
+    - [ ] Add HAC
+    - [ ] Add MAXQ
+    - [ ] Add HIRO
+    - [ ] Add h-DQN
+    - [ ] Add Modulated Policy Hierarchies
+    - [ ] Add Meta Learning Shared Hierarchies
+    - [ ] Add STRategic Attentive Writer (STRAW)
+    - [ ] Add H-DRLN
+    - [ ] Add Abstract Markov Decision Process (AMDP)
+- [ ] 1.3.0 HRL Options models *Possibly will already be implemented in a previous model*
+    - [ ] Options augmentation to DQN based models
+    - [ ] Options augmentation to actor critic models
+    - [ ] Options augmentation to async actor critic models
+- [ ] 1.4.0 HRL Skills
+    - [ ] Skills augmentation to DQN based models
+    - [ ] Skills augmentation to actor critic models
+    - [ ] Skills augmentation to async actor critic models
+- [ ] 1.5.0
+- [ ] 1.6.0
+- [ ] 1.7.0
+- [ ] 1.8.0
+- [ ] 1.9.0
+- [ ] 2.0.0 Add PyBullet Fetch Environments
+    - [ ] 2.0.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
+    - [ ] 2.0.0 Add HER
 
 
 ## Code 
