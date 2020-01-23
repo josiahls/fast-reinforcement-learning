@@ -30,7 +30,7 @@ jobs:
     displayName: 'Install freeglut3-dev'
 
   - script: |
-      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov -e .
+      python -m pip install --upgrade pip setuptools wheel pytest pytest-cov python-xlib -e .
       python setup.py install
     displayName: 'Install dependencies'
 
