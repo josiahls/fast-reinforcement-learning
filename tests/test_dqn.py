@@ -89,12 +89,12 @@ def test_dqn_fit(model_cls, s_format, mem, env):
 	if s_format == FEED_TYPE_STATE:
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
 
-
-p_format_list=[FEED_TYPE_IMAGE]
-@pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format_list, p_exp, p_envs)))
-def test_dqn_fit_image(model_cls, s_format, mem, env):
-	learner=trained_learner(model_cls,env,s_format,mem,3,[20,20],epochs=2,max_steps=10)
-	del learner
+#
+# p_format_list=[FEED_TYPE_IMAGE]
+# @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, p_format_list, p_exp, p_envs)))
+# def test_dqn_fit_image(model_cls, s_format, mem, env):
+# 	learner=trained_learner(model_cls,env,s_format,mem,3,[20,20],epochs=2,max_steps=10)
+# 	del learner
 
 
 
