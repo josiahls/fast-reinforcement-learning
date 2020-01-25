@@ -17,8 +17,8 @@ jobs:
     matrix:
       Python36:
         python.version: '3.6'
-      Python37:
-        python.version: '3.7.5'
+#      Python37:  # Pyglet and gym do not working here
+#        python.version: '3.7.5'
     maxParallel: 4
 
   steps:
