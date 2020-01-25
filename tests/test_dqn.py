@@ -93,7 +93,7 @@ def test_dqn_fit(model_cls, s_format, mem, env):
 def test_dqn_fit_image():
 	data=MDPDataBunch.from_env('CartPole-v0', render='rgb_array', bs=5, max_steps=20, add_valid=False, keep_env_open=False,
 		feed_type=FEED_TYPE_IMAGE)
-	model=create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
+	model=create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop)
 	memory=ExperienceReplay(memory_size=100, reduce_ram=True)
 	exploration_method=GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
 	learner=dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method)
