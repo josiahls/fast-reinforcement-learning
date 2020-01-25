@@ -14,7 +14,7 @@ from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 p_model=[DDPGModule]
 p_exp=[ExperienceReplay, PriorityExperienceReplay]
-p_format=[FEED_TYPE_STATE, FEED_TYPE_IMAGE]
+p_format=[FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
 p_full_format=[FEED_TYPE_STATE]
 p_envs=['Pendulum-v0']
 
