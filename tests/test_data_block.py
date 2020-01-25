@@ -60,7 +60,7 @@ def test_resolution_wrapper():
     data = MDPDataBunch.from_env('CartPole-v0', render='rgb_array', bs=5, max_steps=10, add_valid=False,
                                 memory_management_strategy='k_top', k=1, feed_type=FEED_TYPE_IMAGE,
                                 res_wrap=partial(ResolutionWrapper, w_step=2, h_step=2))
-    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1)
+    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1,channels=[32,32,32],ks=[5,5,5],stride=[2,2,2])
     memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
     exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
     learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
