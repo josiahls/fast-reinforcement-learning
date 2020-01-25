@@ -24,13 +24,13 @@ config_env_expectations = {
 
 
 def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.001,
-					copy_over_frequency=300, lr=None, epochs=450):
+					copy_over_frequency=300, lr=None,max_steps=None, epochs=450):
 	if lr is None: lr = [0.001, 0.00025]
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
-								 memory_management_strategy='k_partitions_top', k=3)
+								 memory_management_strategy='k_partitions_top', k=3,max_steps=max_steps)
 	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
@@ -92,7 +92,7 @@ def test_dqn_fit(model_cls, s_format, mem, env):
 
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, [FEED_TYPE_IMAGE], p_exp, p_envs)))
 def test_dqn_fit_image(model_cls, s_format, mem, env):
-	learner=trained_learner(model_cls,env,s_format,mem,5,[20,20],epochs=5)
+	learner=trained_learner(model_cls,env,s_format,mem,3,[20,20],epochs=2,max_steps=10)
 	del learner
 
 

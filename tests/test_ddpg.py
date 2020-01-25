@@ -103,8 +103,8 @@ def test_ddpg_fit(model_cls, s_format, mem, env):
 
 @pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, [FEED_TYPE_IMAGE], p_exp, p_envs)))
 def test_ddpg_fit_image(model_cls, s_format, mem, env):
-	learner=trained_learner(env=env, bs=10,opt=torch.optim.RMSprop,model_cls=model_cls,layers=[20, 20],memory_size=100,
-							max_steps=20,render='rgb_array',decay=0.001,s_format=s_format,experience=mem,epochs=5)
+	learner=trained_learner(env=env, bs=4,opt=torch.optim.RMSprop,model_cls=model_cls,layers=[20, 20],memory_size=100,
+							max_steps=10,render='rgb_array',decay=0.001,s_format=s_format,experience=mem,epochs=2)
 
 	check_shape(env,learner.data,s_format)
 	del learner
