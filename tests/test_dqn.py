@@ -4,7 +4,7 @@ from time import sleep
 import pytest
 from fastai.basic_data import DatasetType
 
-from fast_rl.agents.dqn import create_dqn_model, dqn_learner
+from fast_rl.agents.dqn import create_dqn_model, dqn_learner, DQNLearner
 from fast_rl.agents.dqn_models import *
 from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE
@@ -31,12 +31,22 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
 								 memory_management_strategy='k_partitions_top', k=3)
-	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSProp)
+	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
 						callback_fns=[RewardMetric, EpsilonMetric])
 	learn.fit(epochs)
 	return learn
+
+
+def learner2gif(lnr:DQNLearner,s_format,group_interp:GroupAgentInterpretation,name:str):
+	meta=f'{lnr.memory.__name__}_{"FEED_TYPE_STATE" if s_format==FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
+	interp=AgentInterpretation(lnr, ds_type=DatasetType.Train)
+	interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
+	group_interp.add_interpretation(interp)
+	group_interp.to_pickle(f'../docs_src/data/{name}_{lnr.model.name.lower()}/', f'{lnr.model.name.lower()}_{meta}')
+	[g.write(f'../res/run_gifs/{name}') for g in interp.generate_gif()]
+
 
 # @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", "env"], list(product(p_model, p_format, p_envs)))
@@ -78,6 +88,13 @@ def test_dqn_fit(model_cls, s_format, mem, env):
 	assert config_env_expectations[env]['action_shape'] == (1, data.action.n_possible_values.item())
 	if s_format == FEED_TYPE_STATE:
 		assert config_env_expectations[env]['state_shape'] == data.state.s.shape
+
+
+@pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, [FEED_TYPE_IMAGE], p_exp, p_envs)))
+def test_dqn_fit_image(model_cls, s_format, mem, env):
+	learner=trained_learner(model_cls,env,s_format,mem,5,[20,20],epochs=5)
+	del learner
+
 
 
 @pytest.mark.usefixtures('skip_performance_check')

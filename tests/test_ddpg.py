@@ -8,13 +8,13 @@ from fastai.core import ifnone
 from fast_rl.agents.ddpg import create_ddpg_model, ddpg_learner, DDPGLearner
 from fast_rl.agents.ddpg_models import DDPGModule
 from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, OrnsteinUhlenbeck
-from fast_rl.core.data_block import FEED_TYPE_STATE, MDPDataBunch, ResolutionWrapper
+from fast_rl.core.data_block import FEED_TYPE_STATE, MDPDataBunch, ResolutionWrapper, FEED_TYPE_IMAGE
 from fast_rl.core.metrics import RewardMetric, EpsilonMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 
 p_model=[DDPGModule]
 p_exp=[ExperienceReplay, PriorityExperienceReplay]
-p_format=[FEED_TYPE_STATE]  # , FEED_TYPE_IMAGE]
+p_format=[FEED_TYPE_STATE, FEED_TYPE_IMAGE]
 p_full_format=[FEED_TYPE_STATE]
 p_envs=['Pendulum-v0']
 
@@ -91,7 +91,7 @@ def test_ddpg_fit(model_cls, s_format, mem, env):
 	# 	callback_fns=[RewardMetric, EpsilonMetric])
 	# lnr.fit(2)
 	learner=trained_learner(env=env, bs=10,opt=torch.optim.RMSprop,model_cls=model_cls,layers=[20, 20],memory_size=100,
-							max_steps=20,render='rgb_array',decay=0.001,s_format=s_format,experience=mem,epochs=2)
+							max_steps=20,render='rgb_array',decay=0.001,s_format=s_format,experience=mem,epochs=5)
 
 	check_shape(env,learner.data,s_format)
 	del learner
@@ -100,6 +100,14 @@ def test_ddpg_fit(model_cls, s_format, mem, env):
 	# 	assert config_env_expectations[env]['state_shape']==lnr.data.state.s.shape
 	#
 	# del lnr
+
+@pytest.mark.parametrize(["model_cls", "s_format", "mem", "env"], list(product(p_model, [FEED_TYPE_IMAGE], p_exp, p_envs)))
+def test_ddpg_fit_image(model_cls, s_format, mem, env):
+	learner=trained_learner(env=env, bs=10,opt=torch.optim.RMSprop,model_cls=model_cls,layers=[20, 20],memory_size=100,
+							max_steps=20,render='rgb_array',decay=0.001,s_format=s_format,experience=mem,epochs=5)
+
+	check_shape(env,learner.data,s_format)
+	del learner
 
 
 @pytest.mark.usefixtures('skip_performance_check')
