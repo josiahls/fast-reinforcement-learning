@@ -100,7 +100,7 @@ def test_dqn_fit_maze_env(model_cls, s_format, mem):
 	extra_s=f'{mem.__name__}_{model_cls.__name__}_{s_format}'
 	for i in range(5):
 		learn = trained_learner(model_cls, 'maze-random-5x5-v0', s_format, mem, bs=32, layers=[32, 32],
-								memory_size=1000000, decay=0.001, res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
+								memory_size=1000000, decay=0.00001, res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
 
 		learner2gif(learn,s_format,group_interp,'maze_5x5',extra_s)
 	# success = False
