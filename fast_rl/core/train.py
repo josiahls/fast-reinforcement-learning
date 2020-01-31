@@ -163,6 +163,7 @@ class Gif:
         except RuntimeError as e:
             if self._write_counter>=5:
                 warn(f'After 5 attempts, was unable to create gif: {str(e)}')
+                return
             self.write(filename=filename,include_episode=include_episode,cache_animation=cache_animation,fps=fps,
                 original_fps=original_fps,frame_skip=frame_skip)
 

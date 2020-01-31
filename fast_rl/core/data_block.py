@@ -34,8 +34,11 @@ try:
     class BulletWrapper(Wrapper):
         def __init__(self, render, **kwargs):
             super(BulletWrapper, self).__init__(**kwargs)
-            # Test Env integrity
-            if render=='human': self.env.render(mode='human')
+            self.render_mode=render
+            self._env_init()
+
+        def _env_init(self):
+            if self.render_mode=='human': self.env.render(mode='human')
             self.env.reset()
             try:
                 self.env.step(self.env.action_space.sample())
@@ -56,6 +59,17 @@ try:
             out=super(BulletWrapper, self).render(mode=mode)
             if mode=='human': out=super(BulletWrapper, self).render(mode='rdb_array')
             return out
+
+        def step(self, action):
+            try:
+                return super(BulletWrapper, self).step(action)
+            except pybullet.error as err:
+                if not str(err).__contains__('Not connected to physics server'):
+                    raise pybullet.error(err)
+                warn('Gyn Env engine failed, attempting to reinitialize.')
+                self.env=gym.make(self.env.spec.id)
+                self._env_init()
+                return super(BulletWrapper, self).step(action)
 
     def pybullet_wrap(env, render):
         if issubclass(env.unwrapped.__class__, (MujocoEnv, RoboschoolEnv)):
@@ -578,8 +592,9 @@ class MDPDataset(Dataset):
             current_image = None
         return current_image
 
-    def __del__(self):
-        self.env.close()
+    # Needs to be explicitly closed
+    # def __del__(self):
+    #     self.env.close()
 
     def __len__(self):
         return self.aug_steps(self.max_steps)
@@ -620,7 +635,7 @@ class MDPDataset(Dataset):
         s, alt_s = self.stage_1_env_reset()
         self.s_prime, reward, done, _, self.alt_s_prime = self.stage_2_env_step()
         # If both the current item and the done are both true, then we need to retry the env
-        if self.item is not None and self.item.d and done: return self.new()
+        if self.item is not None and self.item.d and done: return self.new(_)
 
         self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
         self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
