@@ -66,6 +66,7 @@ stages:
           TWINE_USERNAME: $(SECRET_TWINE_USERNAME)
       # Install python distributions like wheel, twine etc
       - script: |
+          echo $env:TWINE_USERNAME
           pip install wheel setuptools twine
           python setup.py sdist bdist_wheel
           python -m twine upload -u $env:TWINE_USERNAME -p $env:TWINE_PASSWORD --repository-url 'https://upload.pypi.org/legacy/' dist/*
