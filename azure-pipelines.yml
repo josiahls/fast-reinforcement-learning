@@ -62,8 +62,8 @@ stages:
         inputs:
           versionSpec: '$(python.version)'
         env:
-          TWINE_PASSWORD: $(SECRET_TWINE_PASSWORD)
-          TWINE_USERNAME: $(SECRET_TWINE_USERNAME)
+          SECRET_TWINE_PASSWORD: $(TWINE_PASSWORD)
+          SECRET_TWINE_USERNAME: $(TWINE_USERNAME)
       # Install python distributions like wheel, twine etc
       - script: |
           pip install wheel setuptools twine
