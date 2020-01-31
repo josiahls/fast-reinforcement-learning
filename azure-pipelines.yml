@@ -6,9 +6,6 @@
 #  - bash: "sudo apt-get install -y xvfb freeglut3-dev python-opengl --fix-missing"
 #    displayName: 'Install ffmpeg, freeglut3-dev, and xvfb'
 
-trigger:
-- master
-
 jobs:
 - job: 'Test'
   pool:
