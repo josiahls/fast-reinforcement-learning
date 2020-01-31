@@ -14,6 +14,9 @@ gen
 # Jupyter Notebook
 */.ipynb_checkpoints/*
 
+# Secure Files
+.pypirc
+
 # Data Files
 #/docs_src/data/*
 
