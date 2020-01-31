@@ -65,7 +65,7 @@ class BaseDDPGTrainer(LearnerCallback):
 def create_ddpg_model(data: MDPDataBunch, base_arch: DDPGModule, layers=None, ignore_embed=False, channels=None,
                      opt=torch.optim.RMSprop, loss_func=None, **kwargs):
     bs, state, action = data.bs, data.state, data.action
-    nc, w, h, n_conv_blocks = -1, -1, -1, [] if state.mode == FEED_TYPE_STATE else ifnone(channels, [3, 3, 1])
+    nc, w, h, n_conv_blocks = -1, -1, -1, [] if state.mode == FEED_TYPE_STATE else ifnone(channels, [32, 32, 32])
     if state.mode == FEED_TYPE_IMAGE: nc, w, h = state.s.shape[3], state.s.shape[2], state.s.shape[1]
     _layers = ifnone(layers, [400, 200] if len(n_conv_blocks) == 0 else [200, 200])
     if ignore_embed or np.any(state.n_possible_values == np.inf) or state.mode == FEED_TYPE_IMAGE: emb_szs = []

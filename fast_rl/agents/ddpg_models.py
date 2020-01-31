@@ -9,9 +9,10 @@ class CriticModule(nn.Sequential):
 				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
 		self.switched, self.batch_norm = False, batch_norm
-		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
+		# self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
+		self.ks, self.stride=([], []) if len(n_conv_blocks)==0 else (ifnone(ks,[10,10,10]),ifnone(stride,[5,5,5]))
 		self.action_model = nn.Sequential()
-		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
+		_layers = [conv_bn_lrelu(ch, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for ch, self.nf, ks, stride in zip([nc]+n_conv_blocks[:-1],n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		else:
 			self.add_module('lin_state_block', StateActionPassThrough(nn.Linear(ni, layers[0])))
@@ -49,9 +50,10 @@ class ActorModule(nn.Sequential):
 				 w=-1, h=-1, ks=None, stride=None, conv_kern_proportion=0.1, stride_proportion=0.1, pad=False):
 		super().__init__()
 		self.switched, self.batch_norm = False, batch_norm
-		self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
+		# self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
+		self.ks, self.stride=([], []) if len(n_conv_blocks)==0 else (ifnone(ks,[10,10,10]),ifnone(stride,[5,5,5]))
 		self.action_model = nn.Sequential()
-		_layers = [conv_bn_lrelu(nc, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for self.nf, ks, stride in zip(n_conv_blocks, self.ks, self.stride)]
+		_layers = [conv_bn_lrelu(ch, self.nf, ks=ks, stride=stride, pad=pad, bn=self.batch_norm) for ch, self.nf, ks, stride in zip([nc]+n_conv_blocks[:-1],n_conv_blocks, self.ks, self.stride)]
 		if _layers: ni = self.setup_conv_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h)
 		self.setup_linear_block(_layers=_layers, ni=ni, nc=nc, w=w, h=h, emb_szs=emb_szs, layers=layers, ao=ao)
 		self.init_weights(self)
