@@ -58,6 +58,9 @@ stages:
           Python36:
             python.version: '3.6'
       steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
       # Install python distributions like wheel, twine etc
       - script: |
           pip install wheel setuptools twine
