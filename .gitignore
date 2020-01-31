@@ -9,7 +9,6 @@ workspace.xml
 out
 gen
 .DS_Store
-.gitignore
 
 # Jupyter Notebook
 */.ipynb_checkpoints/*
