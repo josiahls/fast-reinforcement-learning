@@ -58,13 +58,13 @@ stages:
           Python36:
             python.version: '3.6'
       steps:
+      env:
+        TWINE_PASSWORD: $(SECRET_TWINE_PASSWORD)
+        TWINE_USERNAME: $(SECRET_TWINE_USERNAME)
       - task: UsePythonVersion@0
         inputs:
           versionSpec: '$(python.version)'
       # Install python distributions like wheel, twine etc
-      env:
-        TWINE_PASSWORD: $(SECRET_TWINE_PASSWORD)
-        TWINE_USERNAME: $(SECRET_TWINE_USERNAME)
       - script: |
           pip install wheel setuptools twine
           python setup.py sdist bdist_wheel
