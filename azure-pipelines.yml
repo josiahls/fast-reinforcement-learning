@@ -62,10 +62,10 @@ stages:
         inputs:
           versionSpec: '$(python.version)'
         env:
-          SECRET_TWINE_PASSWORD: $(TWINE_PASSWORD)
-          SECRET_TWINE_USERNAME: $(TWINE_USERNAME)
+          TWINE_PASSWORD: $(SECRET_TWINE_PASSWORD)
+          TWINE_USERNAME: $(SECRET_TWINE_USERNAME)
       # Install python distributions like wheel, twine etc
       - script: |
           pip install wheel setuptools twine
           python setup.py sdist bdist_wheel
-          python -m twine upload -u $(TWINE_USERNAME) --non-interactive dist/*
+          python -m twine upload -u $(env:TWINE_USERNAME) -p $(env:TWINE_PASSWORD) dist/*
