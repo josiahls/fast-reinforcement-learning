@@ -58,8 +58,7 @@ stages:
       steps:
       # Install python distributions like wheel, twine etc
       - script: |
-          pip install wheel
-          pip install twine
+          pip install wheel setuptools twine
       - script: |
           python3 setup.py sdist bdist_wheel
       - script: |
