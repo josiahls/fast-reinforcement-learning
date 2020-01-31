@@ -8,58 +8,59 @@
 
 stages:
   - stage: Test
-  jobs:
-  - job: 'Test'
-    pool:
-      vmImage: 'ubuntu-16.04' # other options: 'macOS-10.13', 'vs2017-win2016'
-    strategy:
-      matrix:
-        Python36:
-          python.version: '3.6'
-  #      Python37:  # Pyglet and gym do not working here
-  #        python.version: '3.7.5'
-      maxParallel: 4
+    jobs:
+    - job: 'Test'
+      pool:
+        vmImage: 'ubuntu-16.04' # other options: 'macOS-10.13', 'vs2017-win2016'
+      strategy:
+        matrix:
+          Python36:
+            python.version: '3.6'
+    #      Python37:  # Pyglet and gym do not working here
+    #        python.version: '3.7.5'
+        maxParallel: 4
 
-    steps:
-    - task: UsePythonVersion@0
-      inputs:
-        versionSpec: '$(python.version)'
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '$(python.version)'
 
-    - bash: "sudo apt-get install -y freeglut3-dev python-opengl"
-      displayName: 'Install freeglut3-dev'
+      - bash: "sudo apt-get install -y freeglut3-dev python-opengl"
+        displayName: 'Install freeglut3-dev'
 
-    - script: |
-        python -m pip install --upgrade pip setuptools wheel pytest pytest-cov python-xlib -e .
-        python setup.py install
-      displayName: 'Install dependencies'
+      - script: |
+          python -m pip install --upgrade pip setuptools wheel pytest pytest-cov python-xlib -e .
+          python setup.py install
+        displayName: 'Install dependencies'
 
-    - script: sh ./build/azure_pipeline_helper.sh
-      displayName: 'Complex Installs'
+      - script: sh ./build/azure_pipeline_helper.sh
+        displayName: 'Complex Installs'
 
-    - script: |
-       xvfb-run -s "-screen 0 1400x900x24" py.test tests --cov fast_rl --cov-report html --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
-      displayName: 'Test with pytest'
+      - script: |
+          xvfb-run -s "-screen 0 1400x900x24" py.test tests --cov fast_rl --cov-report html --doctest-modules --junitxml=junit/test-results.xml --cov=./ --cov-report=xml --cov-report=html
+        displayName: 'Test with pytest'
 
-    - task: PublishTestResults@2
-      condition: succeededOrFailed()
-      inputs:
-        testResultsFiles: '**/test-*.xml'
-        testRunTitle: 'Publish test results for Python $(python.version)'
+      - task: PublishTestResults@2
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFiles: '**/test-*.xml'
+          testRunTitle: 'Publish test results for Python $(python.version)'
 
   - stage: Deploy
-  jobs:
-    - job: "Deploy to twine"
-    pool:
-      vmImage: 'ubuntu-16.04' # other options: 'macOS-10.13', 'vs2017-win2016'
-    Python36:
-      python.version: '3.6'
-    steps:
-    # Install python distributions like wheel, twine etc
-    - script: |
-     pip install wheel
-     pip install twine
-    # Build the python distribution from source
-    - script: |
-       python3 setup.py sdist bdist_wheel
-    - script: |
-       python3 -m twine upload --non-interactive dist/*
+    jobs:
+    - job: "TwineDeploy"
+      pool:
+        vmImage: 'ubuntu-16.04' # other options: 'macOS-10.13', 'vs2017-win2016'
+      strategy:
+        matrix:
+          Python36:
+            python.version: '3.6'
+      steps:
+      # Install python distributions like wheel, twine etc
+      - script: |
+          pip install wheel
+          pip install twine
+      - script: |
+          python3 setup.py sdist bdist_wheel
+      - script: |
+          python3 -m twine upload --non-interactive dist/*
