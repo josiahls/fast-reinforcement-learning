@@ -68,4 +68,4 @@ stages:
       - script: |
           pip install wheel setuptools twine
           python setup.py sdist bdist_wheel
-          python -m twine upload -u $(env:TWINE_USERNAME) -p $(env:TWINE_PASSWORD) dist/*
+          python -m twine upload -u $env:TWINE_USERNAME -p $env:TWINE_PASSWORD dist/*
