@@ -8,6 +8,7 @@
 
 stages:
   - stage: Test
+    condition: and(always(), eq(variables['Build.Reason'], 'PullRequest'))
     jobs:
     - job: 'Test'
       pool:
@@ -47,6 +48,7 @@ stages:
           testRunTitle: 'Publish test results for Python $(python.version)'
 
   - stage: Deploy
+    condition: and(always(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
     jobs:
     - job: "TwineDeploy"
       pool:
