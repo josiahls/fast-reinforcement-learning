@@ -1,4 +1,4 @@
-from fastai.tabular import OptimWrapper
+from fastai.callback import OptimWrapper
 
 from fast_rl.core.layers import *
 

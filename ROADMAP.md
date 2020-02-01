@@ -1,0 +1,41 @@
+- [X] 0.7.0 Full test suite using multi-processing. Connect to CI.
+- [X] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. Also, massive refactoring will be needed.
+- [X] 0.9.0 Notebook demonstrations of basic model usage.
+- [ ] **Working on** **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
+this point, all models should have guaranteed environments they should succeed in. 
+- [ ] 1.1.0 More Traditional RL models
+    - [ ] Add PPO
+    - [ ] Add TRPO
+    - [ ] Add D4PG
+    - [ ] Add A2C
+    - [ ] Add A3C
+- [ ] 1.2.0 HRL models *Possibly might change version to 2.0 depending on SMDP issues*
+    - [ ] Add SMDP
+    - [ ] Add Goal oriented MDPs. Will Require a new "Step"
+    - [ ] Add FeUdal Network
+    - [ ] Add storage based DataBunch memory management. This can prevent RAM from being used up by episode image frames
+    that may or may not serve any use to the agent, but only for logging.
+- [ ] 1.3.0
+    - [ ] Add HAC
+    - [ ] Add MAXQ
+    - [ ] Add HIRO
+- [ ] 1.4.0
+    - [ ] Add h-DQN
+    - [ ] Add Modulated Policy Hierarchies
+    - [ ] Add Meta Learning Shared Hierarchies
+- [ ] 1.5.0
+    - [ ] Add STRategic Attentive Writer (STRAW)
+    - [ ] Add H-DRLN
+    - [ ] Add Abstract Markov Decision Process (AMDP)
+- [ ] 1.6.0 HRL Options models *Possibly will already be implemented in a previous model*
+    - [ ] Options augmentation to DQN based models
+    - [ ] Options augmentation to actor critic models
+    - [ ] Options augmentation to async actor critic models
+- [ ] 1.8.0 HRL Skills
+    - [ ] Skills augmentation to DQN based models
+    - [ ] Skills augmentation to actor critic models
+    - [ ] Skills augmentation to async actor critic models
+- [ ] 1.9.0
+- [ ] 2.0.0 Add PyBullet Fetch Environments
+    - [ ] 2.0.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
+    - [ ] 2.0.0 Add HER
