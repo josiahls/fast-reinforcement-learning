@@ -5,6 +5,7 @@ with open("README.md", "r") as fh:
 
 VERSION = "0.9.92"
 
+
 setup(name='fast_rl',
       version=VERSION,
       description='Fastai for computer vision and tabular learning has been amazing. One would wish that this would '
