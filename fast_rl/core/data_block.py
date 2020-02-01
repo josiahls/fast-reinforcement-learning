@@ -1,10 +1,17 @@
+import logging
+
+from fastai.data_block import ItemList
+
+logging.basicConfig()
+
 import gym
-from fastai.basic_train import LearnerCallback, DatasetType
+from fastai.basic_train import LearnerCallback, DatasetType, DataLoader, Dataset, Tensor
 from fastai.tabular.data import def_emb_sz
 from gym import Wrapper
-from gym.spaces import Discrete, Box, MultiDiscrete, Dict
+from gym.spaces import Discrete, Box, MultiDiscrete
+import gc
 
-from fast_rl.core.basic_train import AgentLearner
+# from fast_rl.core.basic_train import AgentLearner
 from fast_rl.util.exceptions import MaxEpisodeStepsMissingError
 import os
 
@@ -16,23 +23,57 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 try:
     import pybullet
     import pybulletgym.envs
-    from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv as MujocoEnv
-    from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
+    try:
+        from pybulletgym.envs.mujoco.env_bases import BaseBulletEnv as MujocoEnv
+        from pybulletgym.envs.roboschool.env_bases import BaseBulletEnv as RoboschoolEnv
+    except ImportError:
+        from pybulletgym.envs.mujoco.envs.env_bases import BaseBulletEnv as MujocoEnv
+        from pybulletgym.envs.roboschool.envs.env_bases import BaseBulletEnv as RoboschoolEnv
+
 
     class BulletWrapper(Wrapper):
-        def step(self, action):
-            r""" In the event of a random disconnect, retry the env """
+        def __init__(self, render, **kwargs):
+            super(BulletWrapper, self).__init__(**kwargs)
+            self.render_mode=render
+            self._env_init()
+
+        def _env_init(self):
+            if self.render_mode=='human': self.env.render(mode='human')
+            self.env.reset()
             try:
-                result = super().step(action)
-            except pybullet.error as e:
-                self.__init__(env=gym.make(self.spec.id))
-                super().reset()
-                result = super().step(action)
-            return result
+                self.env.step(self.env.action_space.sample())
+            except pybullet.error as err:
+                print(err)
+
+        def close(self):
+            r""" pybullet crashes if the env is already closed. We want to ignore this.  """
+            try:
+                # The regular close method seems to have been decrecated.
+                self.env.env._close()
+            except pybullet.error as err:
+                if not str(err).__contains__('Not connected to physics server'):
+                    raise pybullet.error(err)
+
+        def render(self, mode='human', **kwargs):
+            r""" If human is used as a mode, the returned image is blank. Get image regardless of mode. """
+            out=super(BulletWrapper, self).render(mode=mode)
+            if mode=='human': out=super(BulletWrapper, self).render(mode='rdb_array')
+            return out
+
+        def step(self, action):
+            try:
+                return super(BulletWrapper, self).step(action)
+            except pybullet.error as err:
+                if not str(err).__contains__('Not connected to physics server'):
+                    raise pybullet.error(err)
+                warn('Gyn Env engine failed, attempting to reinitialize.')
+                self.env=gym.make(self.env.spec.id)
+                self._env_init()
+                return super(BulletWrapper, self).step(action)
 
     def pybullet_wrap(env, render):
         if issubclass(env.unwrapped.__class__, (MujocoEnv, RoboschoolEnv)):
-            env = BulletWrapper(env=env)
+            env = BulletWrapper(env=env, render=render)
             if render == 'human': env.render()
         return env
 
@@ -45,28 +86,15 @@ try:
     import gym_maze
     from gym_maze.envs.maze_env import MazeEnv
     import pygame
-    # import importlib
 
     class GymMazeWrapper(Wrapper):
-        #     pygame.init()
-        #
-        # def render(self, mode='human', **kwargs):
-        #     try:
-        #         return self.env.render(mode=mode, **kwargs)
-        #     except pygame.error as e:
-        #         original_id = self.env.spec.id
-        #         del self.env
-        #         pygame.init()
-        #         self.env = gym.make(original_id)
-        #         super().reset()
-        #         return self.env.render(mode=mode, **kwargs)
 
         def close(self):
             self.env.maze_view.quit_game()
             self.env.unwrapped.enable_render = False
 
 
-    def gymmaze_wrap(env, render):
+    def gymmaze_wrap(env, _):
         if issubclass(env.unwrapped.__class__, MazeEnv):
             env = GymMazeWrapper(env=env)
         return env
@@ -83,7 +111,7 @@ try:
     # noinspection PyUnresolvedReferences
     from gym_minigrid.wrappers import FlatObsWrapper
 
-    def mini_grid_wrap(env, **kwargs):
+    def mini_grid_wrap(env, _):
         if issubclass(env.__class__, MiniGridEnv): env = FlatObsWrapper(env)
         return env
 
@@ -92,7 +120,7 @@ except ModuleNotFoundError as e:
     print(f'Can\'t import one of these: {e}')
 
 from fastai.core import *
-from fastai.data_block import ItemList, Tensor, Dataset, DataBunch, DataLoader
+from fastai.basic_data import *
 from fastai.imports import torch
 from datetime import datetime
 import pickle
@@ -102,6 +130,15 @@ from fast_rl.util.misc import b_colors, list_in_str
 FEED_TYPE_IMAGE = 0
 FEED_TYPE_STATE = 1
 
+
+class ResolutionWrapper(Wrapper):
+    def __init__(self,env,w_step:int,h_step:int):
+        super().__init__(env)
+        self.h_step,self.w_step=h_step,w_step
+
+    def render(self,mode='human',**kwargs):
+        img = super(ResolutionWrapper,self).render(mode=mode,**kwargs)
+        return img if len(img)==0 else img[::self.w_step,::self.h_step,:]
 
 @dataclass
 class Bounds(object):
@@ -261,9 +298,7 @@ class State(object):
         self.s_prime = self.s_prime.to(device=device)
 
     @property
-    def channels(self):
-        return self.s.shape[3]
-
+    def channels(self): return self.s.shape[3]
     @property
     def n_possible_values(self): return self.bounds.n_possible_values
 
@@ -350,9 +385,6 @@ class MDPStep(object):
         self.action.to(device=device)
         self.state.to(device=device)
 
-    def __str__(self):
-        return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
-
     def clean(self):
         r""" Removes fields that are generally unimportant (purely debugging) """
         self.state.alt_s_prime = None
@@ -363,6 +395,7 @@ class MDPStep(object):
         self.action.action_space = None
         self.action.bounds = None
 
+    def __str__(self): return ', '.join([str(self.__dict__[el]) for el in self.__dict__])
     @property
     def data(self): return self.s_prime[0], self.alt_s_prime[0] if self.alt_s_prime is not None else None
     @property
@@ -376,17 +409,15 @@ class MDPStep(object):
     @property
     def a(self): return self.action.taken_action
     @property
-    def d(self):
-        return bool(self.done)
+    def d(self): return bool(self.done)
 
 
 class MDPCallback(LearnerCallback):
     _order = -11  # Needs to happen before Recorder
+    def on_backward_end(self, **kwargs: Any): return {'skip_step': True}
+    def on_step_end(self, **kwargs: Any): return {'skip_zero': True}
 
-    @property
-    def learn(self) -> AgentLearner: return self._learn()
-
-    def __init__(self, learn):
+    def __init__(self, learn, keep_env_open=True):
         r"""
         Handles action assignment, episode naming.
 
@@ -394,6 +425,7 @@ class MDPCallback(LearnerCallback):
             learn:
         """
         super().__init__(learn)
+        self.keep_env_open=keep_env_open
         self.train_ds: MDPDataset = learn.data.train_ds
         self.valid_ds: MDPDataset = None if learn.data.empty_val else learn.data.valid_ds
 
@@ -405,54 +437,81 @@ class MDPCallback(LearnerCallback):
         else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         self.train_ds.is_warming_up = self.learn.warming_up
         if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.warming_up
-        if not self.learn.warming_up and self.learn.loss_func is None:
-            self.learn.init_loss_func()
+        if not self.learn.warming_up and self.learn.loss_func is None: self.learn.init_loss_func()
         return {'skip_bwd': True, 'train': not self.train_ds.is_warming_up and train}
 
-    def on_backward_end(self, **kwargs: Any):
-        return {'skip_step': True}
-
-    def on_step_end(self, **kwargs: Any):
-        return {'skip_zero': True}
-
     def on_epoch_end(self, last_metrics, epoch, **kwargs: Any) -> None:
-        """ Updates the most recent episode number in both datasets. """
-        self.train_ds.x.set_recent_run_episode(epoch)
-        self.train_ds.episode = epoch
+        r""" Updates the most recent episode number in both datasets. """
+        relative_epoch = sorted(self.train_ds.x.info.keys())[-1] + 1 if self.train_ds.x.info else epoch
+        self.train_ds.episode = relative_epoch
+        self.train_ds.x.set_recent_run_episode(self.train_ds.episode)
         if last_metrics[0] is not None and self.valid_ds is not None:
-            self.valid_ds.x.set_recent_run_episode(epoch)
-            self.valid_ds.episode = epoch
+            self.valid_ds.episode = relative_epoch
+            self.valid_ds.x.set_recent_run_episode(self.valid_ds.episode)
 
-    # def on_train_end(self, **kwargs:Any) ->None:
-    #     self.learn.data.close()
+    def on_train_end(self, **kwargs: Any) ->None:
+        if not self.keep_env_open:
+            self.learn.data.close()
+            gc.collect()
 
 
 class MDPMemoryManager(LearnerCallback):
+    def _comp_less(self, key, info, episode): return info[key] < info[episode]
+    def _comp_greater(self, key, info, episode): return info[key] > info[episode]
+
     def __init__(self, learn, strategy, k=1):
         super().__init__(learn)
         self.strategy = strategy
         self.k = k
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.getLogger('root').level)
         self._strategy_fn_dict = {
-            'k_partitions_top': self.k_top
+            'k_top': self.k_top,
+            'k_partitions_top': self.k_partitions_top
         }
 
-    def _comp_less(self, key, info, episode):
-        return info[key] < info[episode]
-
-    def _comp_greater(self, key, info, episode):
-        return info[key] > info[episode]
-
-    def k_top(self, info: Dict[int, List[Tuple[float, bool]]]):
+    def k_partitions_top(self, info: Dict[int, List[Tuple[float, bool]]], k):
         # If the episode -1 is defined, then clean it, this is just placeholder data
         if -1 in info and not info[-1][1]: return [-1]
         # If the number of not-clean episodes is less than k, don't do anything
-        if len([k for k in info if not info[k][1]]) <= self.k: return None
+        n_full = len([ep for ep in info if not info[ep][1]])
+        if n_full <= k: return []
+
+        partitions = np.linspace(0, len(info.keys()), num=k + 1, dtype=int)
+        # If len(info) == partitions, then do k_top
+        # If partitions starts at 0, do k_top
+        if len(partitions) == len(info.keys()) or len(partitions) == 0:
+            remove_episodes = self.k_top(info, k=k)
+        else:
+            remove_episodes = []
+            # zip(partitions, zip(l_w, list(partitions[1:])) is a sliding window
+            l_w = copy(partitions[:-1])
+            for s in [slice(*i, 1) for i in zip(l_w, list(partitions[1:]))]:
+                remove_episodes += self.k_top({key: info[key] for key in list(info)[s]}, k=1)
+
+            # We want there to still be `k` full episodes. There will always be corner cases where `remove_episodes`
+            # ends up dropping the number of full episodes < k. We want to avoid this.
+            if n_full - len(remove_episodes) < k:
+                assert (n_full - k) <= len(remove_episodes)
+                self.logger.debug(f'Presently there are {n_full} full episodes, and {len(remove_episodes)} \n'
+                                  f'episodes to remove. (1)')
+                remove_episodes = remove_episodes[:(n_full - k)]
+
+        self.logger.debug(f'Removing episodes: {remove_episodes}. {info}')
+        return remove_episodes
+
+    def k_top(self, info: Dict[int, List[Tuple[float, bool]]], k):
+        # If the episode -1 is defined, then clean it, this is just placeholder data
+        if -1 in info and not info[-1][1]: return [-1]
+        # If the number of not-clean episodes is less than k, don't do anything
+        if len([ep for ep in info if not info[ep][1]]) <= k: return []
         # Collect k top episodes, then clean the rest
         k_top = []
-        for episode in [i for i in info if i != -1]:
-            # If the episode is greater than all of the other episodes that are not already in k_top
-            compared = [info[episode][0] > info[k][0] for k in info if k not in k_top and k != -1 and k != episode]
-            if all(compared) and len(compared) != 0 and len(k_top) < self.k:
+        # Sort the episodes max -> min so k_top gets full range
+        for episode in [i for i in sorted(info, key=lambda x: info[x][0], reverse=True) if i != -1]:
+            # If the episode is greater or equal to than all of the other episodes that are not already in k_top
+            compared = [info[episode][0] >= info[ep][0] for ep in info if ep not in k_top and ep != -1 and ep != episode]
+            if all(compared) and len(compared) != 0 and len(k_top) < k:
                 k_top.append(episode)
 
         return list(set([k for k in info if not info[k][1]]) - set(k_top))
@@ -460,14 +519,13 @@ class MDPMemoryManager(LearnerCallback):
     def on_epoch_end(self, **kwargs: Any):
         for ds_type in [DatasetType.Train] if self.learn.data.empty_val else [DatasetType.Train, DatasetType.Valid]:
             ds: MDPDataset = self.learn.dl(ds_type).dataset
-            episodes = self._strategy_fn_dict[self.strategy](ds.x.info)
-            if episodes is not None:
-                for e in episodes: ds.x.clean(e)
+            episodes = self._strategy_fn_dict[self.strategy](ds.x.info, self.k)
+            for e in episodes: ds.x.clean(e)
 
 
 class MDPDataset(Dataset):
     def __init__(self, env: gym.Env, memory_manager, bs, render='rgb_array', feed_type=FEED_TYPE_STATE, max_steps=None,
-                 x=None):
+                 x=None, keep_env_open=True):
         r"""
         Handles env execution and ItemList building.
 
@@ -476,7 +534,7 @@ class MDPDataset(Dataset):
             memory_manager: Handles how the list size will be reduced sch as removing image data.
             bs: Size of a single batch for models and the dataset to use.
         """
-        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env, render=render)
+        for wrapper_fn in WRAP_ENV_FNS: env = wrapper_fn(env, render)
         self.env = env
         self.render = render
         self.feed_type = feed_type
@@ -485,7 +543,7 @@ class MDPDataset(Dataset):
         self.action = Action(taken_action=self.env.action_space.sample(), action_space=self.env.action_space)
         self.state = None
         self.s_prime, self.alt_s_prime = None, None
-        self.callback = [MDPCallback, memory_manager]
+        self.callback = [partial(MDPCallback, keep_env_open=keep_env_open), memory_manager]
         # Tracking fields
         self.episode = -1 if x is None else max([i.episode + 1 for i in x.items])
         self.counter = 0
@@ -498,12 +556,18 @@ class MDPDataset(Dataset):
         self.item: Union[MDPStep, None] = None
         self.new(None)
 
-    def get_emb_szs(self):
-        return [def_emb_sz(0, 0,None)]
+    def get_emb_szs(self): return [def_emb_sz(0, 0,None)]
 
     def aug_steps(self, steps):
         if self.is_warming_up and steps < self.bs: return self.bs
         return steps
+
+    def get_state(self, **extra):
+        return {'env_name': self.env_name, 'max_steps': self.max_steps, 'render': self.render, 'bs': self.bs,
+                'feed_type': self.feed_type}
+
+    @property
+    def env_name(self): return self.env.spec.id
 
     @property
     def max_steps(self):
@@ -528,8 +592,9 @@ class MDPDataset(Dataset):
             current_image = None
         return current_image
 
-    def __del__(self):
-        self.env.close()
+    # Needs to be explicitly closed
+    # def __del__(self):
+    #     self.env.close()
 
     def __len__(self):
         return self.aug_steps(self.max_steps)
@@ -570,7 +635,7 @@ class MDPDataset(Dataset):
         s, alt_s = self.stage_1_env_reset()
         self.s_prime, reward, done, _, self.alt_s_prime = self.stage_2_env_step()
         # If both the current item and the done are both true, then we need to retry the env
-        if self.item is not None and self.item.d and done: return self.new()
+        if self.item is not None and self.item.d and done: return self.new(_)
 
         self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
         self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
@@ -595,6 +660,10 @@ class MDPDataset(Dataset):
 
 class MDPDataBunch(DataBunch):
 
+    @classmethod
+    def load_state(cls, path, kwargs):
+        return MDPDataBunch.from_pickle(path, **kwargs)
+
     def close(self):
         if self.train_dl is not None: self.train_dl.env.close()
         if self.valid_dl is not None: self.valid_dl.env.close()
@@ -606,37 +675,41 @@ class MDPDataBunch(DataBunch):
 
     @classmethod
     def from_env(cls, env_name='CartPole-v1', max_steps=None, render='rgb_array', bs: int = 64,
-                 feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_partitions_top',
-                 split_env_init=True, device: torch.device = None, no_check: bool = False, x=None, val_x=None,
-                 add_valid=True, **dl_kwargs):
+                 feed_type=FEED_TYPE_STATE, num_workers: int = 0, memory_management_strategy='k_top',
+                 split_env_init=True, device: torch.device = None, k=1, no_check: bool = False, x=None, val_x=None,
+                 add_valid=True, res_wrap=None, make_dir=True, keep_env_open=True, **dl_kwargs) -> 'MDPDataBunch':
 
-        env = gym.make(env_name)
-        memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy)
+        env=gym.make(env_name)
+        if res_wrap is not None: env=res_wrap(env)
+        memory_manager = partial(MDPMemoryManager, strategy=memory_management_strategy, k=k)
         train_list = MDPDataset(env, max_steps=max_steps, feed_type=feed_type, render=render, bs=bs,
-                                memory_manager=memory_manager, x=x)
+                                memory_manager=memory_manager, x=x, keep_env_open=keep_env_open)
         if add_valid:
-            valid_list = MDPDataset(env if split_env_init else gym.make(env_name), max_steps=max_steps, x=val_x,
+            if not split_env_init: env=(gym.make(env_name) if res_wrap is not None else res_wrap(gym.make(env_name)))
+            valid_list = MDPDataset(env, max_steps=max_steps, x=val_x, keep_env_open=keep_env_open,
                                     render=render, bs=bs,  feed_type=feed_type, memory_manager=memory_manager)
         else:
             valid_list = None
-        path = './data/' + env_name + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
+        path = './data/' + datetime.now().strftime('%Y%m%d%H%M%S') + '_' + env_name
+        if not os.path.exists(path) and make_dir: os.makedirs(path)
         return cls.create(train_list, valid_list, path=path, num_workers=num_workers, bs=1, device=device, **dl_kwargs)
 
     @classmethod
-    def from_pickle(cls, env_name=None, path: PathOrStr = None, **dl_kwargs):
+    def from_pickle(cls, path: PathOrStr = None, env_name=None, **kwargs):
 
         if path is None:
-            path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0].lower())]
+            if env_name is None: raise IOError(f'If path is None, then env_name needs to be specified.')
+            path = [_ for _ in os.listdir('./data/') if _.__contains__(env_name.split('-v')[0])]
             if not path: raise IOError(f'There is no pickle dirs file found in ./data/ with the env name {env_name}')
             path = Path('./data/' + path[0])
 
         path = Path(path)
+        env_name=ifnone(env_name, path.parts[-1].split('_')[-1])
 
         train_x = pickle.load(open(path / 'train.pickle', 'rb')) if (path / 'train.pickle').exists() else None
         val_x = pickle.load(open(path / 'valid.pickle', 'rb')) if (path / 'valid.pickle').exists() else None
 
-        env_name = ifnone(env_name, Path(path).parts[-1].split('_')[0])
-        return cls.from_env(env_name=env_name, x=train_x, val_x=val_x, **dl_kwargs)
+        return cls.from_env(env_name=env_name, x=train_x, val_x=val_x, **kwargs)
 
     @classmethod
     def create(cls, train_ds: MDPDataset, valid_ds: MDPDataset = None, bs: int = 1, path='.',
@@ -657,9 +730,11 @@ class MDPDataBunch(DataBunch):
         if self.train_ds is not None: self.train_ds.to_csv(self.path, 'train')
         if self.valid_ds is not None: self.valid_ds.to_csv(self.path, 'valid')
 
-    def to_pickle(self, path=None):
+    def to_pickle(self, path=None, env_name=None):
+        env_name = ifnone(env_name, self.train_ds.env_name)
+        if not str(path).__contains__(env_name): path += '_' + env_name
         if self.train_ds is not None: self.train_ds.to_pickle(ifnone(path, self.path), 'train')
-        if self.valid_ds is not None: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
+        if not self.empty_val: self.valid_ds.to_pickle(ifnone(path, self.path), 'valid')
 
     @staticmethod
     def _init_ds(train_ds: Dataset, valid_ds: Dataset, test_ds: Optional[Dataset] = None):
@@ -688,6 +763,10 @@ class MDPList(ItemList):
         # if items is not None:
         super().__init__(items, **kwargs)
         self.info = {}
+        self.initial = True
+
+    def filter_by_episode(self, episode):
+        return [i for i in self.items if i.episode == episode]
 
     def set_recent_run_episode(self, episode):
         for i, item in enumerate(reversed(self.items)):
@@ -704,7 +783,7 @@ class MDPList(ItemList):
         self.info[ep] = [self.info[ep], False]
 
     def add(self, items: 'ItemList'):
-        [self._update_info(item.episode, item) for item in items.items]
+        # [self._update_info(item.episode, item) for item in items.items]
         super().add(items)
 
     def to_df(self): return pd.DataFrame([i.obj for i in self.items])

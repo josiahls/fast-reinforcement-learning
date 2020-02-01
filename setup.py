@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-VERSION = "0.9.7"
+VERSION = "0.9.91"
 
 setup(name='fast_rl',
       version=VERSION,
@@ -22,6 +22,7 @@ setup(name='fast_rl',
       install_requires=['fastai>=1.0.59', 'gym[box2d, atari]', 'jupyter'],
       extras_require={'all': [
           'gym-minigrid',
+          'moviepy'
           # 'gym_maze @ git+https://github.com/MattChanTK/gym-maze.git',
           # 'pybullet-gym @ git+https://github.com/benelot/pybullet-gym.git'
       ]},

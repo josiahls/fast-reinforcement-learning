@@ -1,30 +1,53 @@
+import os
 import pickle
 from copy import copy
-from functools import partial
-from pathlib import Path
-
-import scipy.stats as st
-from torch.distributions import Normal
 from dataclasses import dataclass, field
+from functools import partial
+from itertools import cycle, product, islice
+from math import floor
+from pathlib import Path
+from typing import Union, List
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scipy.stats as st
 from fastai.basic_train import *
 from fastai.sixel import plot_sixel
 from fastai.train import Interpretation, torch, DatasetType, defaults, ifnone, warn
-import matplotlib.pyplot as plt
 from fastprogress.fastprogress import IN_NOTEBOOK
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from typing import Tuple, Union, List
-import pandas as pd
-import numpy as np
-import os
 from matplotlib.ticker import MaxNLocator
-from itertools import cycle, product, permutations, combinations, combinations_with_replacement, islice
 
-from fast_rl.core.data_block import MDPList
+from fast_rl.core.data_block import MDPList, FEED_TYPE_IMAGE
 
 
 def array_flatten(array):
     return [item for sublist in array for item in sublist]
+
+
+def mplfig_to_npimage(fig):
+    """
+    Note, as of moviepy 1.0.1 there is an ugly depreciation warning when called the native binding in:
+    `from moviepy.video.io.bindings import mplfig_to_npimage`
+
+    This fixes the warning. Will hopefully be able to remove in a future datte.
+
+    Converts a matplotlib figure to a RGB frame after updating the canvas"""
+    #  only the Agg backend now supports the tostring_rgb function
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw() # update/draw the elements
+
+    # get the width and the height to resize the matrix
+    l,b,w,h = canvas.figure.bbox.bounds
+    w, h = int(w), int(h)
+
+    #  exports the canvas to a string buffer and then to a numpy nd.array
+    buf = canvas.tostring_rgb()
+    image= np.frombuffer(buf,dtype=np.uint8)
+    return image.reshape(h,w,3)
 
 
 def cumulate_squash(values: Union[list, List[list]], squash_episodes=False, cumulative=False):
@@ -52,6 +75,9 @@ def group_by_episode(items: MDPList, episodes: list):
 def smooth(v, smoothing_const): return np.convolve(v, np.ones(smoothing_const), 'same') / smoothing_const
 
 
+class EpisodeNotAvailable(Exception): pass
+
+
 @dataclass
 class GroupField:
     values: list
@@ -77,6 +103,69 @@ class GroupField:
         return all([self.unique_tuple[i] == comp_tuple[i] for i in range(len(self.unique_tuple))])
 
     def smooth(self, smooth_groups): self.values = smooth(self.values, smooth_groups)
+
+
+@dataclass
+class Gif:
+    frames: np.array
+    episode: int
+    animation = None
+    _frame_counter = 0
+    _write_counter=0
+
+    def __post_init__(self):
+        if type(self.frames) is list: self.frames = np.concatenate(self.frames, axis=0)
+
+    def _make_frame(self, t, frames, axes, fig, title, fps, matplot_to_np_fn):
+        axes.clear()
+        fig.suptitle(title + f' frame {floor(t * fps)}')
+        axes.imshow(frames[floor(t * fps)] / 255)
+        return matplot_to_np_fn(fig)
+
+    def get_gif(self, default_fps=15, frame_skip=None):
+        if frame_skip is not None: self.frames = self.frames[::frame_skip]
+        try:
+            from moviepy.video.VideoClip import VideoClip
+            from moviepy.video.io.VideoFileClip import VideoFileClip
+            from moviepy.video.io.html_tools import ipython_display
+
+            fig, ax = plt.subplots()
+            clip = VideoClip(partial(self._make_frame, frames=self.frames, axes=ax, fig=fig, fps=default_fps,
+                                     matplot_to_np_fn=mplfig_to_npimage, title=f'Episode {self.episode}'),
+                                     duration=(self.frames.shape[0] / default_fps)-1)
+            plt.close(fig)
+            return clip
+
+        except ImportError:
+            raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
+
+    def plot(self, fps=15, original_fps=15, cache_animation=True):
+        if cache_animation or self.animation is None: self.animation = self.get_gif(original_fps)
+        try:
+            from moviepy.video.io.html_tools import ipython_display
+
+            if not IN_NOTEBOOK: raise NotImplemented('Please use in a jupyter notebook or instead of `plot()` \n'
+                                                     'call write("somefilename")')
+            else: return ipython_display(self.animation, loop=True, autoplay=True, fps=fps)
+
+        except ImportError:
+            raise ImportError('Package: `moviepy` is not installed. You can install it via: `pip install moviepy`')
+
+
+    def write(self, filename: str, include_episode=True, cache_animation=False, fps=15, original_fps=15,frame_skip=None):
+        if self._write_counter>5:self._write_counter=0
+        else:                    self._write_counter+=1
+        try:
+            if not cache_animation or self.animation is None: self.animation = self.get_gif(original_fps, frame_skip)
+            if filename.__contains__('.gif'): filename = filename.replace('.gif', '')
+            if include_episode: filename += f'_episode_{self.episode}'
+            self.animation.write_gif(f"{filename}.gif", fps=fps)
+        except RuntimeError as e:
+            if self._write_counter>=5:
+                warn(f'After 5 attempts, was unable to create gif: {str(e)}')
+                return
+            self.write(filename=filename,include_episode=include_episode,cache_animation=cache_animation,fps=fps,
+                original_fps=original_fps,frame_skip=frame_skip)
 
 
 class AgentInterpretation(Interpretation):
@@ -118,6 +207,35 @@ class AgentInterpretation(Interpretation):
         interp.add_interpretation(self)
         return interp
 
+    def frames(self, items):
+        return [
+            _.s.detach().cpu().numpy() if self.ds.feed_type == FEED_TYPE_IMAGE else _.alt_s_prime.detach().cpu().numpy()
+            for _ in items]
+
+    def generate_gif(self, episode: Union[None, list, int] = None) -> Union[Gif, List[Gif]]:
+        full_episodes = list(set([k for k in self.ds.x.info if not self.ds.x.info[k][1]]) - {-1})
+        if episode is None:
+            episode = full_episodes
+        elif episode == -1:
+            episode = [list(sorted(full_episodes))[-1]]
+        elif (type(episode) is not list and episode not in full_episodes) or \
+                (type(episode) is list and any([e not in full_episodes for e in episode])):
+            prefix = 'Some Episodes' if type(episode) is list else 'Episode'
+            raise EpisodeNotAvailable(f'{prefix} {episode} not found in {full_episodes}. \nNote that due to the\n'
+                                      f'memory manager, memory that is not related to the agent\'s training will be\n'
+                                      f'deallocated. One of the first things deallocated are the rendered images\n'
+                                      f'associated with each step since images typically take up large amounts of\n'
+                                      f'memory. This then means there are fewer episodes that you can get full\n'
+                                      f'gifs of. If this is not acceptable, make sure to change the memory management\n'
+                                      f'strategy in the MDPDataBunch. ')
+        elif type(episode) is not list and episode in full_episodes:
+            episode = [episode]
+        else:
+            ValueError(f'Something happened that should not have happened, check your datatypes {episode}')
+
+        gifs = [Gif(frames=self.frames(self.ds.x.filter_by_episode(e)), episode=e) for e in episode]
+        return gifs[0] if len(gifs) == 1 else gifs
+
 
 @dataclass
 class GroupAgentInterpretation(object):
@@ -126,8 +244,10 @@ class GroupAgentInterpretation(object):
 
     @property
     def analysis(self):
-        if not self.in_notebook: return [g.analysis for g in self.groups]
-        else: return pd.DataFrame([{'name': g.unique_tuple, **g.analysis} for g in self.groups])
+        if not self.in_notebook:
+            return [g.analysis for g in self.groups]
+        else:
+            return pd.DataFrame([{'name': g.unique_tuple, **g.analysis} for g in self.groups])
 
     def append_meta(self, post_fix):
         r""" Useful before calling `to_pickle` if you want this set to be seen differently from future runs."""
@@ -269,7 +389,7 @@ class QValueInterpretation(AgentInterpretation):
         for ei in episode_partition:
             if not ei: continue
             raw_actual = [ei[i].reward.cpu().numpy().item() for i in np.flip(np.arange(len(ei)))]
-            actual += np.flip([np.cumsum(raw_actual[i:])[-1] for i in range(len(raw_actual))]).reshape(-1,).tolist()
+            actual += np.flip([np.cumsum(raw_actual[i:])[-1] for i in range(len(raw_actual))]).reshape(-1, ).tolist()
             for item in ei: predicted.append(self.learn.interpret_q(item))
 
         return self.normalize(actual), self.normalize(predicted)

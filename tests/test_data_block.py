@@ -1,5 +1,19 @@
+import os
+from functools import partial
+from itertools import product
+
+import gym
 import pytest
+import numpy as np
+import torch
 from fastai.basic_train import ItemLists
+
+from fast_rl.agents.dqn import create_dqn_model, dqn_learner
+from fast_rl.agents.dqn_models import DQNModule
+from fast_rl.core.agent_core import GreedyEpsilon, ExperienceReplay
+from fast_rl.core.data_block import MDPDataBunch, ResolutionWrapper, FEED_TYPE_IMAGE
+from fast_rl.core.metrics import RewardMetric, EpsilonMetric
+
 
 def validate_item_list(item_list: ItemLists):
     # Check items
@@ -10,207 +24,49 @@ def validate_item_list(item_list: ItemLists):
         assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
 
 
+@pytest.mark.parametrize(["memory_strategy", "k"], list(product(['k_top', 'k_partitions_top'], [1, 3, 5])))
+def test_dataset_memory_manager(memory_strategy, k):
+    data = MDPDataBunch.from_env('CartPole-v0', render='rgb_array', bs=5, max_steps=20, add_valid=False,
+                                 memory_management_strategy=memory_strategy, k=k)
+    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1)
+    memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                          callback_fns=[RewardMetric, EpsilonMetric])
+    learner.fit(10)
 
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdp_from_pickle(env):
-#     data = MDPDataBunch.from_env(env, render='rgb_array')
-#     model = DQN(data)
-#     learner = AgentLearner(data, model)
-#     learner.fit(2)
-#     data.to_pickle(path='data/CartPole-v0_testing')
-#     data = MDPDataBunch.from_pickle(path='data/CartPole-v0_testing')
-#     del data
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdp_to_csv(env):
-#     data = MDPDataBunch.from_env(env, render='rgb_array')
-#     model = DQN(data)
-#     learner = AgentLearner(data, model)
-#     learner.fit(2)
-#     data.to_csv()
-#     data.train_ds.env.close()
-#     data.valid_ds.env.close()
-#     del learner
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdp_to_pickle(env):
-#     data = MDPDataBunch.from_env(env, render='rgb_array')
-#     model = DQN(data)
-#     learner = AgentLearner(data, model)
-#     learner.fit(2)
-#     data.to_pickle()
-#     data.train_ds.env.close()
-#     data.valid_ds.env.close()
-#     del learner
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdp_clean_callback(env):
-#     data = MDPDataBunch.from_env(env, render='rgb_array')
-#     model = DQN(data)
-#     learner = AgentLearner(data, model)
-#     learner.fit(15)
-#     data.train_ds.env.close()
-#     data.valid_ds.env.close()
-#     del learner
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdp_databunch(env):
-#     data = MDPDataBunch.from_env(env, add_valid=False, render='rgb_array')
-#     for i in range(5):
-#         for _ in data.train_ds:
-#             data.train_ds.action = Action(taken_action=data.train_ds.action.action_space.sample(),
-#                                           action_space=data.train_ds.action.action_space)
-#
-#     validate_item_list(data.train_ds.x)
-#     del data
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdp_dataset_iter(env):
-#     dataset = MDPDataset(gym.make(env), memory_manager = partial(MDPMemoryManager, strategy='k_partition_top'), bs=8,
-#                          render='rgb_array')
-#
-#     for epoch in range(5):
-#         for el in dataset:
-#             dataset.action.set_single_action(dataset.env.action_space.sample())
-#
-#     # Check items
-#     for i, item in enumerate(dataset.x.items):
-#         if item.done: assert not dataset.x.items[
-#             i - 1].done, f'The dataset has duplicate "done\'s" that are consecutive.'
-#         assert item.state.s is not None, f'The item: {item}\'s state is None'
-#         assert item.state.s_prime is not None, f'The item: {item}\'s state prime is None'
-#     del dataset
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_mdpdataset_init(env):
-#     try:
-#         init_env = gym.make(env)
-#     except error.DependencyNotInstalled as e:
-#         print(e)
-#         return
-#
-#     data = MDPDataset(init_env, None, 64, 'rgb_array')
-#
-#     try:
-#         max_steps = data.max_steps
-#         assert max_steps is not None, f'Max steps is None for env {env}'
-#     except MaxEpisodeStepsMissingError as e:
-#         return
-#
-#     envs_to_test = {
-#         'CartPole-v0': 200,
-#         'MountainCar-v0': 200,
-#         'maze-v0': 2000
-#     }
-#
-#     if env in envs_to_test:
-#         assert envs_to_test[env] == max_steps, f'Env {env} is the wrong step amount'
-#     del data
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_bound_init(env):
-#     try:
-#         init_env = gym.make(env)
-#     except error.DependencyNotInstalled as e:
-#         print(e)
-#         return
-#
-#     for bound in (Bounds(init_env.action_space), Bounds(init_env.observation_space)):
-#         if env.lower().__contains__('continuous'):
-#             assert bound.n_possible_values == np.inf, f'Env {env} is continuous, should have inf v.'
-#         if env.lower().__contains__('deterministic'):
-#             assert bound.n_possible_values != np.inf, f'Env {env} is deterministic, should have discrete v.'
-#     init_env.close()
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_action_init(env):
-#     try:
-#         init_env = gym.make(env)
-#     except error.DependencyNotInstalled as e:
-#         print(e)
-#         return
-#
-#     taken_action = init_env.action_space.sample()
-#     raw_action = np.random.rand(len(Bounds(init_env.action_space).max))
-#     init_env.reset()
-#     _ = init_env.step(taken_action)
-#
-#     action = Action(taken_action=taken_action, raw_action=raw_action, action_space=init_env.action_space)
-#
-#     if list_in_str(env, ['mountaincar-', 'cartpole', 'pong']):
-#         assert any([action.taken_action.dtype in (int, torch.int, torch.int64)]), f'Action is wrong dtype {action}'
-#         assert any([action.raw_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
-#     if list_in_str(env, ['carracing', 'pendulum']):
-#         assert any([action.taken_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
-#         assert any([action.raw_action.dtype in (float, torch.float32, torch.float64)]), f'Action is wrong dtype {action}'
-#     init_env.close()
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_state_init(env):
-#     try:
-#         init_env = gym.make(env)
-#     except error.DependencyNotInstalled as e:
-#         print(e)
-#         return
-#
-#     taken_action = init_env.action_space.sample()
-#     state = init_env.reset()
-#     state_prime, reward, done, info = init_env.step(taken_action)
-#     State(state, state_prime, init_env.observation_space)
-#     init_env.close()
-#
-#
-# @pytest.mark.parametrize("env", sorted(['CartPole-v0']))
-# def test_state_str(env):
-#     try:
-#         init_env = gym.make(env)
-#     except error.DependencyNotInstalled as e:
-#         print(e)
-#         return
-#
-#     render = 'rgb_array'
-#     if isinstance(init_env, TimeLimit) and isinstance(init_env.unwrapped, (AlgorithmicEnv, discrete.DiscreteEnv)):
-#         render = 'ansi' if render == 'rgb_array' else render
-#
-#     taken_action = init_env.action_space.sample()
-#     state = init_env.reset()
-#
-#     try:
-#         alt_s = init_env.render(render)
-#     except NotImplementedError:
-#         return
-#
-#     state_prime, reward, done, info = init_env.step(taken_action)
-#     alt_s_prime = init_env.render(render)
-#     State(state, state_prime, alt_s, alt_s_prime, init_env.observation_space).__str__()
-#     init_env.close()
-#
-#
-# # @pytest.mark.parametrize("env", sorted(['CartPole-v0', 'maze-random-5x5-v0']))
-# # def test_state_full_episode(env):
-# #     try:
-# #         init_env = gym.make(env)
-# #     except error.DependencyNotInstalled as e:
-# #         print(e)
-# #         return
-# #
-# #     done = False
-# #     state = init_env.reset()
-# #     while not done:
-# #         taken_action = init_env.action_space.sample()
-# #         alt_state = init_env.render('rgb_array')
-# #         state_prime, reward, done, info = init_env.step(taken_action)
-# #         alt_s_prime = init_env.render('rgb_array')
-# #         State(state, state_prime, alt_state, alt_s_prime, init_env.observation_space)
-# #         state = state_prime
-# #         if done:
-# #             assert state_prime is not None, 'State prime is None, this should not have happened.'
-# #     init_env.close()
+    data_info = {episode: data.train_ds.x.info[episode] for episode in data.train_ds.x.info if episode != -1}
+    full_episodes = [episode for episode in data_info if not data_info[episode][1]]
+
+    assert sum([not _[1] for _ in data_info.values()]) == k, 'There should be k episodes but there is not.'
+    if memory_strategy.__contains__('top') and not memory_strategy.__contains__('both'):
+        assert (np.argmax([_[0] for _ in data_info.values()])) in full_episodes
+
+
+def test_databunch_to_pickle():
+    data = MDPDataBunch.from_env('CartPole-v0', render='rgb_array', bs=5, max_steps=20, add_valid=False,
+                                 memory_management_strategy='k_partitions_top', k=3)
+    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1)
+    memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                          callback_fns=[RewardMetric, EpsilonMetric])
+    learner.fit(10)
+    data.to_pickle('./data/cartpole_10_epoch')
+    MDPDataBunch.from_pickle(env_name='CartPole-v0', path='./data/cartpole_10_epoch')
+
+
+def test_resolution_wrapper():
+    data = MDPDataBunch.from_env('CartPole-v0', render='rgb_array', bs=5, max_steps=10, add_valid=False,
+                                memory_management_strategy='k_top', k=1, feed_type=FEED_TYPE_IMAGE,
+                                res_wrap=partial(ResolutionWrapper, w_step=2, h_step=2))
+    model = create_dqn_model(data, DQNModule, opt=torch.optim.RMSprop, lr=0.1,channels=[32,32,32],ks=[5,5,5],stride=[2,2,2])
+    memory = ExperienceReplay(memory_size=1000, reduce_ram=True)
+    exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
+    learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
+                          callback_fns=[RewardMetric, EpsilonMetric])
+    learner.fit(2)
+    temp = gym.make('CartPole-v0')
+    temp.reset()
+    original_shape = temp.render(mode='rgb_array').shape
+    assert data.env.render(mode='rgb_array').shape == (original_shape[0] // 2, original_shape[1] // 2, 3)

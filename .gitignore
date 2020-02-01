@@ -1,12 +1,20 @@
 # IntelliJ project files
-.idea
+*.iml
+.idea/inspectionProfiles/*
+misc.xml
+modules.xml
+other.xml
+vcs.xml
+workspace.xml
 out
 gen
 .DS_Store
-.gitignore
 
 # Jupyter Notebook
 */.ipynb_checkpoints/*
+
+# Secure Files
+.pypirc
 
 # Data Files
 #/docs_src/data/*
