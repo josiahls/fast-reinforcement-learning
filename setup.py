@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-VERSION = "0.9.91"
+VERSION = "0.9.92"
+
 
 setup(name='fast_rl',
       version=VERSION,
