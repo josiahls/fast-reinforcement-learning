@@ -29,7 +29,8 @@ RUN rm -rf /var/lib/apt/lists/* \
     && apt-get -y autoremove
 
 COPY /fast_rl /fast-reinforcement-learning/fast_rl
-COPY /setup.py /fast-reinforcement-learning/fast_rl/setup.py
+COPY /setup.py /fast-reinforcement-learning/setup.py
+COPY /README.md /fast-reinforcement-learning/README.md
 WORKDIR /fast-reinforcement-learning
 RUN /bin/bash -c "source activate fastrl && pip install -e ."
 
