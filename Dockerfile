@@ -5,7 +5,7 @@ LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git curl vim ca-certificates python-qt4 libjpeg-dev \
-        zip nano unzip libpng-dev strace && \
+        zip nano unzip libpng-dev strace python-opengl xvfb && \
         rm -rf /var/lib/apt/lists/*
 
 ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64
@@ -28,10 +28,7 @@ RUN conda env create -f environment.yaml
 RUN rm -rf /var/lib/apt/lists/* \
     && apt-get -y autoremove
 
-COPY /fast_rl /fast-reinforcement-learning/fast_rl
-COPY /setup.py /fast-reinforcement-learning/setup.py
-COPY /README.md /fast-reinforcement-learning/README.md
-WORKDIR /fast-reinforcement-learning
-RUN /bin/bash -c "source activate fastrl && pip install -e ."
+EXPOSE 8888
+ENV CONDA_DEFAULT_ENV fastrl
 
 CMD ["/bin/bash -c"]
