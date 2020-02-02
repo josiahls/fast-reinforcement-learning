@@ -27,3 +27,4 @@ dependencies:
       - easydict
       - matplotlib
       - jupyter_console
+      - moviepy
