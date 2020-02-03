@@ -11,6 +11,8 @@ Our goal is for fast_rl to be make benchmarking easier, inference more efficient
 as decoupled as much as possible. This being version 1.0, we still have a lot of work to make RL training itself faster 
 and more efficient. The goals for this repo can be seen in the [RoadMap](#roadmap).
 
+**An important note is that training can use up a lot of RAM. This will likely be resolved as more models are being added. Likely will be resolved by off loading to storage in the next few versions.**
+
 A simple example:
 ```python
 from fast_rl.agents.dqn import create_dqn_model, dqn_learner
@@ -166,3 +168,20 @@ and [Abbreviations](https://docs.fast.ai/dev/abbr.html). Also we will use RL spe
 
 ## Examples
 
+### Reward Graphs
+
+|                                          |  Model  |      Gif(Early)      |       Gif(Mid)       |         Gif(Late)    | 
+|:----------------------------------------:|:-------:|:--------------------:|:--------------------:|:--------------------:|
+| ![](./res/reward_plots/cartpole_dqn.png) |   DQN   |  ![](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_31.gif)  |    ![](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_207.gif) |     ![](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_447.gif)     |
+|                                          |  acn    |                      |                      |                      | 
+
+
+
+
+|      Gif(Early)      |       Gif(Mid)       |         Gif(Late)    | 
+|:--------------------:|:--------------------:|:--------------------:|
+|  ![1](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_31.gif)  |    ![2](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_207.gif) |     ![3](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_447.gif)     |
+|                      |                      |                      | 
+
+ ![2](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_207.gif)
+ ![3](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_447.gif)
