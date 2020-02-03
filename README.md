@@ -186,7 +186,6 @@ and [Abbreviations](https://docs.fast.ai/dev/abbr.html). Also we will use RL spe
 | ![01](./res/reward_plots/pendulum_ddpg.png) |    DDPG    |
 | ![01](./res/reward_plots/halfcheetah_ddpg.png) |    DDPG    |
 
-![](./res/run_gifs/cartpole_ExperienceReplay_FixedTargetDQNModule_1_episode_57.gif)
 
 ### Agent Stages
 
