@@ -1,11 +1,11 @@
 - [X] 0.7.0 Full test suite using multi-processing. Connect to CI.
 - [X] 0.8.0 Comprehensive model eval **debug/verify**. Each model should succeed at at least a few known environments. Also, massive refactoring will be needed.
 - [X] 0.9.0 Notebook demonstrations of basic model usage.
-- [ ] **Working on** **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
+- [X] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
-- [ ] 1.1.0 More Traditional RL models
-    - [ ] Add PPO
-    - [ ] Add TRPO
+- [ ] **Working on** 1.1.0 More Traditional RL models
+    - [ ] **Working on** Add PPO
+    - [ ] **Working on** Add TRPO
     - [ ] Add D4PG
     - [ ] Add A2C
     - [ ] Add A3C

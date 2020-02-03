@@ -110,9 +110,9 @@ OpenAI environments.
 
 - [ ] **Working on** **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
-- [ ] 1.1.0 More Traditional RL models
-    - [ ] Add PPO
-    - [ ] Add TRPO
+- [ ] 1.1.0 **Working on**  More Traditional RL models
+    - [ ]  **Working on** Add PPO
+    - [ ]  **Working on** Add TRPO
     - [ ] Add D4PG
     - [ ] Add A2C
     - [ ] Add A3C
