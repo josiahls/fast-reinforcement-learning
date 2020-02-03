@@ -11,6 +11,8 @@ Our goal is for fast_rl to be make benchmarking easier, inference more efficient
 as decoupled as much as possible. This being version 1.0, we still have a lot of work to make RL training itself faster 
 and more efficient. The goals for this repo can be seen in the [RoadMap](#roadmap).
 
+**An important note is that training can use up a lot of RAM. This will likely be resolved as more models are being added. Likely will be resolved by off loading to storage in the next few versions.**
+
 A simple example:
 ```python
 from fast_rl.agents.dqn import create_dqn_model, dqn_learner
@@ -163,3 +165,52 @@ and [Abbreviations](https://docs.fast.ai/dev/abbr.html). Also we will use RL spe
 | **RL** |  State  |  st   |                      |
 |        | Action  |  acn  |                      |
 |        | Bounds  |  bb   | Same as Bounding Box |
+
+## Examples
+
+### Reward Graphs
+
+|                                            |       Model     | 
+|:------------------------------------------:|:---------------:|
+| ![01](./res/reward_plots/cartpole_dqn.png) |      DQN     |
+| ![01](./res/reward_plots/cartpole_dueling.png) |  Dueling DQN     |
+| ![01](./res/reward_plots/cartpole_double.png) |  Double DQN     |
+| ![01](./res/reward_plots/cartpole_dddqn.png) |    DDDQN     |
+| ![01](./res/reward_plots/cartpole_fixedtarget.png) |     Fixed Target DQN     |
+| ![01](./res/reward_plots/lunarlander_dqn.png) |      DQN     |
+| ![01](./res/reward_plots/lunarlander_dueling.png) |  Dueling DQN     |
+| ![01](./res/reward_plots/lunarlander_double.png) |  Double DQN     |
+| ![01](./res/reward_plots/lunarlander_dddqn.png) |    DDDQN     |
+| ![01](./res/reward_plots/lunarlander_fixedtarget.png) |     Fixed Target DQN     |
+| ![01](./res/reward_plots/ant_ddpg.png) |    DDPG    |
+| ![01](./res/reward_plots/pendulum_ddpg.png) |    DDPG    |
+| ![01](./res/reward_plots/halfcheetah_ddpg.png) |    DDPG    |
+
+
+### Agent Stages
+
+|      Model    |   Gif(Early)    |   Gif(Mid)    |   Gif(Late)     |
+|:------------:|:------------:|:------------:|:------------:|
+| DDPG+PER | ![](./res/run_gifs/pendulum_PriorityExperienceReplay_DDPGModule_1_episode_35.gif)  | ![](./res/run_gifs/pendulum_PriorityExperienceReplay_DDPGModule_1_episode_222.gif)  | ![](./res/run_gifs/pendulum_PriorityExperienceReplay_DDPGModule_1_episode_431.gif)|
+| DoubleDueling+ER | ![](./res/run_gifs/lunarlander_ExperienceReplay_DoubleDuelingModule_1_episode_114.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DoubleDuelingModule_1_episode_346.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DoubleDuelingModule_1_episode_925.gif)|
+| DoubleDQN+ER | ![](./res/run_gifs/lunarlander_ExperienceReplay_DoubleDQNModule_1_episode_88.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DoubleDQNModule_1_episode_613.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DoubleDQNModule_1_episode_999.gif)|
+| DuelingDQN+ER | ![](./res/run_gifs/lunarlander_ExperienceReplay_DuelingDQNModule_1_episode_112.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DuelingDQNModule_1_episode_431.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DuelingDQNModule_1_episode_980.gif)|
+| DoubleDueling+PER | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DoubleDuelingModule_1_episode_151.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DoubleDuelingModule_1_episode_341.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DoubleDuelingModule_1_episode_999.gif)|
+| DQN+ER | ![](./res/run_gifs/lunarlander_ExperienceReplay_DQNModule_1_episode_93.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DQNModule_1_episode_541.gif)  | ![](./res/run_gifs/lunarlander_ExperienceReplay_DQNModule_1_episode_999.gif)|
+| DuelingDQN+PER | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DuelingDQNModule_1_episode_21.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DuelingDQNModule_1_episode_442.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DuelingDQNModule_1_episode_998.gif)|
+| DQN+PER | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DQNModule_1_episode_99.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DQNModule_1_episode_382.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DQNModule_1_episode_949.gif)|
+| DoubleDQN+PER | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DoubleDQNModule_1_episode_7.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DoubleDQNModule_1_episode_514.gif)  | ![](./res/run_gifs/lunarlander_PriorityExperienceReplay_DoubleDQNModule_1_episode_999.gif)|
+| DDPG+PER | ![](./res/run_gifs/ant_PriorityExperienceReplay_DDPGModule_1_episode_52.gif)  | ![](./res/run_gifs/ant_PriorityExperienceReplay_DDPGModule_1_episode_596.gif)  | ![](./res/run_gifs/ant_PriorityExperienceReplay_DDPGModule_1_episode_984.gif)|
+| DDPG+ER | ![](./res/run_gifs/ant_ExperienceReplay_DDPGModule_1_episode_54.gif)  | ![](./res/run_gifs/ant_ExperienceReplay_DDPGModule_1_episode_614.gif)  | ![](./res/run_gifs/ant_ExperienceReplay_DDPGModule_1_episode_999.gif)|
+| DQN+PER | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DQNModule_1_episode_44.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DQNModule_1_episode_216.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DQNModule_1_episode_413.gif)|
+| FixedTargetDQN+ER | ![](./res/run_gifs/cartpole_ExperienceReplay_FixedTargetDQNModule_1_episode_57.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_FixedTargetDQNModule_1_episode_309.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_FixedTargetDQNModule_1_episode_438.gif)|
+| DQN+ER | ![](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_31.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_207.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DQNModule_1_episode_447.gif)|
+| FixedTargetDQN+PER | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_FixedTargetDQNModule_1_episode_13.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_FixedTargetDQNModule_1_episode_265.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_FixedTargetDQNModule_1_episode_449.gif)|
+| DoubleDQN+ER | ![](./res/run_gifs/cartpole_ExperienceReplay_DoubleDQNModule_1_episode_60.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DoubleDQNModule_1_episode_268.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DoubleDQNModule_1_episode_438.gif)|
+| DoubleDQN+PER | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DoubleDQNModule_1_episode_35.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DoubleDQNModule_1_episode_269.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DoubleDQNModule_1_episode_444.gif)|
+| DuelingDQN+ER | ![](./res/run_gifs/cartpole_ExperienceReplay_DuelingDQNModule_1_episode_62.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DuelingDQNModule_1_episode_209.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DuelingDQNModule_1_episode_432.gif)|
+| DoubleDueling+PER | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DoubleDuelingModule_1_episode_2.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DoubleDuelingModule_1_episode_260.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DoubleDuelingModule_1_episode_438.gif)|
+| DuelingDQN+PER | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DuelingDQNModule_1_episode_69.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DuelingDQNModule_1_episode_272.gif)  | ![](./res/run_gifs/cartpole_PriorityExperienceReplay_DuelingDQNModule_1_episode_438.gif)|
+| DoubleDueling+ER | ![](./res/run_gifs/cartpole_ExperienceReplay_DoubleDuelingModule_1_episode_43.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DoubleDuelingModule_1_episode_287.gif)  | ![](./res/run_gifs/cartpole_ExperienceReplay_DoubleDuelingModule_1_episode_447.gif)|
+| DDPG+ER | ![](./res/run_gifs/acrobot_ExperienceReplay_DDPGModule_1_episode_69.gif)  | ![](./res/run_gifs/acrobot_ExperienceReplay_DDPGModule_1_episode_197.gif)  | ![](./res/run_gifs/acrobot_ExperienceReplay_DDPGModule_1_episode_438.gif)|
+| DDPG+PER | ![](./res/run_gifs/acrobot_PriorityExperienceReplay_DDPGModule_1_episode_55.gif)  | ![](./res/run_gifs/acrobot_PriorityExperienceReplay_DDPGModule_1_episode_267.gif)  | ![](./res/run_gifs/acrobot_PriorityExperienceReplay_DDPGModule_1_episode_422.gif)|

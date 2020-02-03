@@ -86,4 +86,4 @@ class CriticTabularEmbedWrapper(Module):
 		if not self.exclude_cat:
 			return self.tabular_model(*args)
 		else:
-			return self.tabular_model(0, torch.cat(args, axis=1))
+			return self.tabular_model(0, torch.cat(args, 1))

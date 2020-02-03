@@ -7,7 +7,7 @@ logging.basicConfig()
 import gym
 from fastai.basic_train import LearnerCallback, DatasetType, DataLoader, Dataset, Tensor
 from fastai.tabular.data import def_emb_sz
-from gym import Wrapper
+from gym import Wrapper, Env
 from gym.spaces import Discrete, Box, MultiDiscrete
 import gc
 
@@ -19,6 +19,25 @@ import os
 WRAP_ENV_FNS = []
 # Because concurrency errors happen from Open AI when there are multiple environments.
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+
+# class OpenAIGym(Wrapper):
+#     def __init__(self, render, **kwargs):
+#         super(OpenAIGym, self).__init__(**kwargs)
+#
+#     def render(self, mode='human', **kwargs):
+#         r""" If human is used as a mode, the returned image is blank. Get image regardless of mode. """
+#         out=super(OpenAIGym, self).render(mode=mode)
+#         if mode=='human': out=super(OpenAIGym, self).render(mode='rdb_array')
+#         return out
+#
+#
+# def openaigym_wrap(env, render):
+#     if isinstance(env.unwrapped.__class__, Env):
+#         env=BulletWrapper(env=env, render=render)
+#         if render=='human': env.render()
+#     return OpenAIGym(env)
+# WRAP_ENV_FNS.append(openaigym_wrap)
 
 try:
     import pybullet

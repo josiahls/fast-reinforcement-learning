@@ -205,15 +205,15 @@ class PriorityExperienceReplay(Experience):
 		self.tree.add(np.abs(maximal_priority)+self.epsilon, item)
 
 
-class HindsightExperienceReplay(Experience):
-	def __init__(self, memory_size):
-		"""
-
-		References:
-			[1] Andrychowicz, Marcin, et al. "Hindsight experience replay."
-			Advances in Neural Information Processing Systems. 2017.
-
-		Args:
-			memory_size:
-		"""
-		super().__init__(memory_size)
+# class HindsightExperienceReplay(Experience):
+# 	def __init__(self, memory_size):
+# 		"""
+#
+# 		References:
+# 			[1] Andrychowicz, Marcin, et al. "Hindsight experience replay."
+# 			Advances in Neural Information Processing Systems. 2017.
+#
+# 		Args:
+# 			memory_size:
+# 		"""
+# 		super().__init__(memory_size)

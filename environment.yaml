@@ -4,12 +4,13 @@ channels:
   - pytorch
   - fastai
 dependencies:
-  - python=3.7
+  - python=3.6
   - pip
   - cuda100
   - fastprogress
   - fastai=1.0.58
   - jupyter
+  - notebook
   - setuptools
   - pip:
       - pytest
@@ -22,5 +23,9 @@ dependencies:
       - requests
       - sklearn
       - cython
+      - gym[box2d, atari]
       - easydict
       - matplotlib
+      - jupyter_console
+      - moviepy
+      - pygifsicle
