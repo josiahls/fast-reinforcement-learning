@@ -28,3 +28,4 @@ dependencies:
       - matplotlib
       - jupyter_console
       - moviepy
+      - pygifsicle
