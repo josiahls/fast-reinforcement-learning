@@ -172,7 +172,20 @@ and [Abbreviations](https://docs.fast.ai/dev/abbr.html). Also we will use RL spe
 
 |                                            |       Model     | 
 |:------------------------------------------:|:---------------:|
-| ![01](./res/reward_plots/cartpole_dqn.png) |      DQN+ER     |
+| ![01](./res/reward_plots/cartpole_dqn.png) |      DQN     |
+| ![01](./res/reward_plots/cartpole_dueling.png) |  Dueling DQN     |
+| ![01](./res/reward_plots/cartpole_double.png) |  Double DQN     |
+| ![01](./res/reward_plots/cartpole_dddqn.png) |    DDDQN     |
+| ![01](./res/reward_plots/cartpole_fixedtarget.png) |     Fixed Target DQN     |
+| ![01](./res/reward_plots/lunarlander_dqn.png) |      DQN     |
+| ![01](./res/reward_plots/lunarlander_dueling.png) |  Dueling DQN     |
+| ![01](./res/reward_plots/lunarlander_double.png) |  Double DQN     |
+| ![01](./res/reward_plots/lunarlander_dddqn.png) |    DDDQN     |
+| ![01](./res/reward_plots/lunarlander_fixedtarget.png) |     Fixed Target DQN     |
+| ![01](./res/reward_plots/ant_ddpg.png) |    DDPG    |
+| ![01](./res/reward_plots/pendulum_ddpg.png) |    DDPG    |
+| ![01](./res/reward_plots/halfcheetah_ddpg.png) |    DDPG    |
+
 
 
 ### Agent Stages
