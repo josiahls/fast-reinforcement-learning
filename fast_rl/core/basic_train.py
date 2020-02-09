@@ -53,7 +53,7 @@ class AgentLearner(Learner):
 		 By default, the learner will have a `None` loss function, and so the fit function will not try to log that
 		 loss.
 		 """
-		self.loss_func = WrapperLossFunc(self)
+		self.loss_func=self._loss_func
 
 	def export(self, file:PathLikeOrBinaryStream='export.pkl', destroy=False, pickle_data=False):
 		"Export the state of the `Learner` in `self.path/file`. `file` can be file-like (file or buffer)"
