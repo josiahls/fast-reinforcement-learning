@@ -1,33 +1,28 @@
 from typing import *
-from fastai.basic_train import LearnerCallback, Module, torch, ifnone, Tensor, listify
 
-import numpy as np
+from fastai.basic_train import Module, ifnone, Tensor
 from fastai.tabular import TabularModel
-from torch.distributions import Categorical
 from torch.nn import Sequential
 
 from fast_rl.agents.reinforce import lazy_conv_out
-from fast_rl.core.agent_core import ExplorationStrategy
-from fast_rl.core.basic_train import AgentLearner
-from fast_rl.core.data_block import MDPStep
 from fast_rl.core.layers import conv_bn_lrelu, ChannelTranspose, Flatten, FakeBatchNorm, TabularEmbedWrapper
-
 
 
 class REINFORCEModel(Module):
 	def __init__(self, ni: int, na: int, layers: Optional[List[int]] = None, conv_layers: Optional[List[int]] = None,
 			stride: Optional[List[int]] = None, padding: Optional[List[int]] = None, use_bn=False,
-			nc: Optional[int] = None,
+			nc: Optional[int] = None, model_base_line=0,
 			w: Optional[int] = None, h: Optional[int] = None, embed_szs: Optional[List[int]] = None):
 		super().__init__()
+		self.model_base_line=model_base_line
 		self.switched=False
 		self.action_model=Sequential()
 		if self.setup_convolutional_layers(ni, nc, conv_layers, stride, padding, use_bn):
 			ni=lazy_conv_out(self.action_model, w, h, nc, self.switched)
 		self.setup_linear_layers(ni, ifnone(embed_szs, []), ifnone(layers, [32, 32]), na, use_bn)
 
-	def set_opt(self, _):
-		pass
+	def set_opt(self, opt):
+		None
 
 	def fix_switched_channels(self, current_channels, expected_channels, layers: list):
 		if current_channels==expected_channels: return layers
@@ -55,4 +50,5 @@ class REINFORCEModel(Module):
 		if xi.shape[0]==1: self.eval()
 		pred=self.action_model(xi)
 		if training: self.train()
+		pred[pred<0]=self.model_base_line+0.0001  # TODO sometimes this fails due to a de-synchronization error
 		return pred

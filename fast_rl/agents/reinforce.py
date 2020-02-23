@@ -1,5 +1,5 @@
 from typing import *
-from fastai.basic_train import LearnerCallback, Module, torch, ifnone, Tensor, listify
+from fastai.basic_train import LearnerCallback, Module, torch, ifnone, Tensor, listify, OptimWrapper
 
 import numpy as np
 from fastai.tabular import TabularModel
@@ -44,26 +44,61 @@ class REINFORCEStepWiseTrainer(LearnerCallback):
 		super().__init__(learn)
 		self._order=1
 
+	def on_backward_begin(self, **kwargs:Any): return {'skip_bwd': False}
+
 	def on_loss_begin(self, last_output,**kwargs):
-		r""" Loss will require the reward also """
+		r""" Loss will require the reward also. """
 		return {'last_output':{'last_output':last_output,
 							   'reward':self.learn.data.x.items[-1].reward.float().to(device=self.learn.data.device),
 							   'log_prob':self.learn.exploration_strategy.log_prob_a}}
 
-	def on_step_end(self, **kwargs:Any) ->None:
-		self.learn.exploration_strategy.log_prob_a
+
+def discount_reward(r:List,discount):
+	discounts=discount**torch.arange(len(r))
+	if discounts.shape[0]==1: discounts=discounts.unsqueeze(0)
+	discount_r=torch.cat(r).view(-1).dot(discounts.squeeze(0).float())
+	if len(discount_r.shape)==0:  discount_r=discount_r.unsqueeze(0).unsqueeze(0)
+	elif len(discount_r.shape)==1:  discount_r=discount_r.unsqueeze(0)
+	return discount_r
+
+class REINFORCEEpisodicTrainer(LearnerCallback):
+	def __init__(self, learn):
+		super().__init__(learn)
+		self._order=1
+		self.reward_buffer=[]
+		self.log_prob_buffer=[]
+
+	def on_backward_begin(self, **kwargs: Any):
+		return {'skip_bwd': not bool(self.learn.data.x.items[-1].done)}
+
+	def on_loss_begin(self, last_output,**kwargs):
+		r""" Loss will require the reward also. """
+		self.reward_buffer.append(self.learn.data.x.items[-1].reward.float())
+		self.log_prob_buffer.append(self.learn.exploration_strategy.log_prob_a)
+		return {'last_output':{'last_output':last_output,
+							   'reward':discount_reward(self.reward_buffer,self.learn.discount).to(device=self.learn.data.device),
+							   'log_prob':self.log_prob_buffer}}
+
+	def on_epoch_end(self, **kwargs:Any) ->None:
+		self.reward_buffer=[]
+		self.log_prob_buffer=[]
 
 
 def log_wise_loss(out, *args):
-	return -1*out['log_prob']*out['reward']
+	if len(out['log_prob'])<2:
+		return (-1*torch.cat(out['log_prob'])*out['reward']).squeeze(0).squeeze(0)
+	else:
+		return (-1*torch.cat(out['log_prob'],-1)*out['reward'].squeeze(0)).sum()
 
 
 class REINFORCELearner(AgentLearner):
-	def __init__(self, data,model,trainers=None,**kwargs):
+	def __init__(self, data,model,trainers=None, lr=0.005,exploration_strategy=None,discount=None,**kwargs):
+		self.discount=ifnone(discount,0.99)
 		trainers=ifnone(trainers,REINFORCEStepWiseTrainer)
 		super().__init__(data=data, model=model,**kwargs)
+		self.opt=OptimWrapper.create(self.opt_func, lr=lr,layer_groups=[self.model.action_model])
 		self.loss_func=log_wise_loss
-		self.exploration_strategy=LogBasedExploration()
+		self.exploration_strategy=ifnone(exploration_strategy,LogBasedExploration())
 		self.trainers=listify(trainers)
 		for t in self.trainers: self.callbacks.append(t(self))
 
