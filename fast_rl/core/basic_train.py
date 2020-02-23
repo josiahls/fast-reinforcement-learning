@@ -3,6 +3,7 @@ from multiprocessing.pool import Pool
 from fastai.basic_train import Learner, load_callback
 from fastai.torch_core import *
 
+from fast_rl.core.agent_core import ExplorationStrategy
 from fast_rl.core.data_block import MDPDataBunch
 
 
@@ -39,6 +40,7 @@ class AgentLearner(Learner):
 		self.model.set_opt(opt)
 		self.loss_func = None
 		self.trainers = None
+		self.exploration_strategy: Union[None,ExplorationStrategy]=None
 		self._loss_func = WrapperLossFunc(self)
 
 	@property

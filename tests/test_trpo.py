@@ -1,5 +1,5 @@
-from fast_rl.agents.trpo import TRPOLearner, TRPOTrainer
-from fast_rl.agents.trpo_models import TRPOModule
+from fast_rl.agents.old_trpo import TRPOLearner, TRPOTrainer
+from fast_rl.agents.old_trpo_models import TRPOModule
 from fast_rl.core.agent_core import ExperienceReplay
 from fast_rl.core.data_block import MDPDataBunch
 
