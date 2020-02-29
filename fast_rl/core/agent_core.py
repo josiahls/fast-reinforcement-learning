@@ -84,6 +84,9 @@ class Experience:
 		self.max_size=memory_size
 		self.callbacks=[]
 
+	def __len__(self):
+		raise NotImplementedError('Experience needs a concept of size')
+
 	@property
 	def memory(self): return None
 	def sample(self, **kwargs): pass

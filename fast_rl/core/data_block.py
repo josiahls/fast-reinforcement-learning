@@ -393,10 +393,11 @@ class MDPStep(object):
     step: int
 
     def __post_init__(self):
-        self.action = deepcopy(self.action)
-        self.state = deepcopy(self.state)
-        self.reward = torch.tensor(data=self.reward).reshape(1, -1).float()
-        self.done = torch.tensor(data=self.done).reshape(1, -1).float()
+        with torch.no_grad():
+            self.action = deepcopy(self.action)
+            self.state = deepcopy(self.state)
+            self.reward = torch.tensor(data=self.reward).reshape(1, -1).float()
+            self.done = torch.tensor(data=self.done).reshape(1, -1).float()
 
     def to(self, device):
         self.reward = self.reward.to(device=device)
@@ -451,9 +452,10 @@ class MDPCallback(LearnerCallback):
     def on_batch_begin(self, last_input, last_target, train, **kwargs: Any):
         r""" Set the Action of a dataset, determine if still warming up. """
         a = self.learn.predict(last_input)
-        if self.learn.model.training:
-            self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
-        else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
+        with torch.no_grad():
+            if self.learn.model.training:
+                self.train_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
+            else: self.valid_ds.action = Action(taken_action=a, action_space=self.train_ds.action.action_space)
         self.train_ds.is_warming_up = self.learn.warming_up
         if self.valid_ds is not None: self.valid_ds.is_warming_up = self.learn.warming_up
         if not self.learn.warming_up and self.learn.loss_func is None: self.learn.init_loss_func()
@@ -655,9 +657,9 @@ class MDPDataset(Dataset):
         self.s_prime, reward, done, _, self.alt_s_prime = self.stage_2_env_step()
         # If both the current item and the done are both true, then we need to retry the env
         if self.item is not None and self.item.d and done: return self.new(_)
-
-        self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
-        self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
+        with torch.no_grad():
+            self.state = State(s, self.s_prime, alt_s, self.alt_s_prime,  self.env.observation_space, self.feed_type)
+            self.item = MDPStep(self.action, self.state, done, reward, self.episode, self.counter)
         self.counter += 1
 
         return MDPList([self.item])
