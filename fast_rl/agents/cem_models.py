@@ -52,21 +52,3 @@ class CEMModel(Module):
 		pred=self.action_model(xi)
 		if training: self.train()
 		return pred
-#
-# class CEMModel(Module):
-# 	def __init__(self, ni: int, na: int, layers: Optional[List[int]] = None, conv_layers: Optional[List[int]] = None,
-# 			stride: Optional[List[int]] = None, padding: Optional[List[int]] = None, use_bn=False,
-# 			nc: Optional[int] = None, model_base_line=0,
-# 			w: Optional[int] = None, h: Optional[int] = None, embed_szs: Optional[List[int]] = None):
-# 		super().__init__()
-# 		self.action_model=nn.Sequential(nn.Linear(ni,layers[0]),nn.ReLU(),nn.Linear(layers[0],na))
-#
-# 	def set_opt(self, opt):
-# 		None
-#
-# 	def forward(self, xi: Tensor):
-# 		training=self.training
-# 		if xi.shape[0]==1: self.eval()
-# 		pred=self.action_model(xi)
-# 		if training: self.train()
-# 		return pred

@@ -1,19 +1,13 @@
 from typing import *
 
 import gym
-from fastai.basic_train import LearnerCallback, Module, torch, ifnone, Tensor, listify, OptimWrapper
-
 import numpy as np
-from fastai.tabular import TabularModel
+from fastai.basic_train import LearnerCallback, torch, ifnone, listify, OptimWrapper
 from torch import nn
-from torch.distributions import Categorical
-from torch.nn import Sequential
 
 from fast_rl.core.agent_core import ExplorationStrategy, Experience
 from fast_rl.core.basic_train import AgentLearner
 from fast_rl.core.data_block import MDPStep
-from fast_rl.core.layers import conv_bn_lrelu, ChannelTranspose, Flatten, FakeBatchNorm, TabularEmbedWrapper
-
 
 
 class EpisodeBuffer(Experience):
@@ -29,8 +23,8 @@ class EpisodeBuffer(Experience):
 	def update(self, item, **kwargs):
 		if 'episode' not in self.episodes[-1]: self.episodes[-1]['episode']=[]
 		self.episodes[-1]['episode'].append(item)
-		self.current_episode_reward+=item.reward
-		if item.done:
+		self.current_episode_reward+=item.reward.item()
+		if item.d:
 			self.episodes[-1]['reward']=self.current_episode_reward
 			self.current_episode_reward=0
 			self.episodes.append({})
@@ -88,19 +82,21 @@ class CEMLearner(AgentLearner):
 		for t in self.trainers: self.callbacks.append(t(self))
 
 	def filter_memory(self):
-		r=list(map(lambda x: x['reward'],self.memory.not_empty_episodes()))
+		episodes=self.memory.not_empty_episodes()
+		r=list(map(lambda x: x['reward'],episodes))
 		r_boundary=np.percentile(r,self.percentile)
 		r_mean=float(np.mean(r))
 
 		s=[]
 		a=[]
-		for e in self.memory.not_empty_episodes():
+		for e in episodes:
 			if e['reward']<r_boundary: continue
 			s.extend(map(lambda x: x.s, e['episode']))
 			a.extend(map(lambda x: x.a, e['episode']))
 		return s,a,r_boundary,r_mean
 
 	def optimize(self):
+		self.opt.zero_grad()
 		s,a,boundary,r_mean=self.filter_memory()
 		s,a=torch.cat(s).to(device=self.data.device),torch.cat(a).to(device=self.data.device).squeeze(1)
 		a_scores=self.model(s)

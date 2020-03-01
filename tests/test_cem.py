@@ -18,4 +18,4 @@ def test_cem():
 
 	model=CEMModel(4,2,embed_szs=emb_szs,layers=[128])
 	reinforce_learner=CEMLearner(data,model,trainers=[CEMTrainer],callback_fns=[RewardMetric,RollingRewardMetric])
-	reinforce_learner.fit(1000,lr=0.01)
+	reinforce_learner.fit(1000,lr=0.01,wd=0)
