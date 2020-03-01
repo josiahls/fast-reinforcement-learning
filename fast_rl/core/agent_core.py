@@ -10,7 +10,7 @@ from fast_rl.core.data_structures import SumTree
 
 class ExplorationStrategy:
 	def __init__(self, explore: bool = True): self.explore=explore
-	def update(self, max_episodes, explore, **kwargs): self.explore=explore
+	def update(self,episode, max_episodes, explore, **kwargs): self.explore=explore
 	def perturb(self, action, action_space) -> np.ndarray:
 		"""
 		Base method just returns the action. Subclass, and change to return randomly / augmented actions.

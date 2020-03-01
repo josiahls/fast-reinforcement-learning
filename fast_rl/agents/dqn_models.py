@@ -8,7 +8,7 @@ class DQNModule(Module):
 	def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99, lr=0.001,
 				n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
 				w=-1, h=-1, ks: Union[None, list]=None, stride: Union[None, list]=None, grad_clip=5,
-				conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False):
+				conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False,lin_cls=nn.Linear):
 		r"""
 		Basic DQN Module.
 
@@ -21,6 +21,7 @@ class DQNModule(Module):
 			nc: Number of channels that will be expected by the convolutional blocks.
 		"""
 		super().__init__()
+		self.lin_cls=lin_cls
 		self.name = 'DQN'
 		self.loss = None
 		self.loss_func = loss_func
@@ -52,7 +53,7 @@ class DQNModule(Module):
 		return ni
 
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
-		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm)
+		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao, use_bn=self.batch_norm,lin_cls=self.lin_cls)
 		if not emb_szs: tabular_model.embeds = None
 		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
 		self.action_model.add_module('lin_block', TabularEmbedWrapper(tabular_model))
@@ -72,7 +73,7 @@ class DQNModule(Module):
 		return pred
 
 	def init_weights(self, m):
-		if type(m) == nn.Linear:
+		if issubclass(m.__class__,nn.Linear):
 			torch.nn.init.xavier_uniform_(m.weight)
 			m.bias.data.fill_(0.01)
 
@@ -162,11 +163,11 @@ class DoubleDQNModule(FixedTargetDQNModule):
 
 
 class DuelingBlock(nn.Module):
-	def __init__(self, ao, stream_input_size):
+	def __init__(self, ao, stream_input_size,lin_cls=nn.Linear):
 		super().__init__()
 
-		self.val = nn.Linear(stream_input_size, 1)
-		self.adv = nn.Linear(stream_input_size, ao)
+		self.val = lin_cls(stream_input_size, 1)
+		self.adv = lin_cls(stream_input_size, ao)
 
 	def forward(self, xi):
 		r"""Splits the base neural net output into 2 streams to evaluate the advantage and v of the s space and
@@ -189,7 +190,7 @@ class DuelingDQNModule(FixedTargetDQNModule):
 
 	def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao):
 		tabular_model = TabularModel(emb_szs=emb_szs, n_cont=ni if not emb_szs else 0, layers=layers, out_sz=ao,
-							 use_bn=self.batch_norm)
+							 use_bn=self.batch_norm,lin_cls=self.lin_cls)
 		if not emb_szs: tabular_model.embeds = None
 		if not self.batch_norm: tabular_model.bn_cont = FakeBatchNorm()
 		tabular_model.layers, removed_layer = split_model(tabular_model.layers, [last_layer(tabular_model)])

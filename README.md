@@ -108,11 +108,14 @@ OpenAI environments.
 
 ## RoadMap
 
-- [ ] **Working on** **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
-this point, all models should have guaranteed environments they should succeed in. 
 - [ ] 1.1.0 More Traditional RL models
-    - [ ] Add PPO
-    - [ ] Add TRPO
+    - [X] Add Cross Entropy Method CEM
+    - [X] NStep Experience replay
+    - [X] Gaussian and Factored Gaussian Noise exploration replacement
+    - [ ] Add RAINBOW DQN
+    - [ ] **Working on** Add REINFORCE
+    - [ ] **Working on** Add PPO
+    - [ ] **Working on** Add TRPO
     - [ ] Add D4PG
     - [ ] Add A2C
     - [ ] Add A3C
@@ -143,10 +146,12 @@ this point, all models should have guaranteed environments they should succeed i
     - [ ] Skills augmentation to DQN based models
     - [ ] Skills augmentation to actor critic models
     - [ ] Skills augmentation to async actor critic models
-- [ ] 1.9.0
-- [ ] 2.0.0 Add PyBullet Fetch Environments
-    - [ ] 2.0.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
-    - [ ] 2.0.0 Add HER
+- [ ] 1.9.0 Add PyBullet Fetch Environments
+    - [ ] Envs need to subclaNot part of this repo, however the ess the OpenAI `gym.GoalEnv`
+    - [ ] Add HER
+- [ ] 2.0.0 Breaking refactor of all methods
+    - [ ] Environment needs to be faster. Beat openai baseline 350 frames per second.
+    - [ ] Unify common code pieces shared in all models
 
 
 ## Contribution
