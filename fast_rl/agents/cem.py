@@ -70,10 +70,10 @@ class Probabilistic(ExplorationStrategy):
 
 
 class CEMLearner(AgentLearner):
-	def __init__(self, data,model,percentile=70,trainers=None,lr=0.01,exploration_strategy=None,**kwargs):
+	def __init__(self, data,model,percentile=70,trainers=None,lr=0.01,exploration_strategy=None,wd=0,**kwargs):
 		self.percentile=percentile
 		trainers=ifnone(trainers,CEMTrainer)
-		super().__init__(data=data, model=model,**kwargs)
+		super().__init__(data=data, model=model,wd=wd,**kwargs)
 		self.opt=OptimWrapper.create(self.opt_func, lr=lr,layer_groups=[self.model.action_model])
 		self.loss_func=nn.CrossEntropyLoss()
 		self.exploration_strategy=ifnone(exploration_strategy,Probabilistic())

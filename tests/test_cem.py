@@ -1,3 +1,4 @@
+import pytest
 from fastai.tabular.data import emb_sz_rule
 
 from fast_rl.agents.cem import CEMLearner, CEMTrainer
@@ -8,6 +9,7 @@ import numpy as np
 from fast_rl.core.metrics import RewardMetric, RollingRewardMetric
 
 
+@pytest.mark.usefixtures('skip_performance_check')
 def test_cem():
 	data=MDPDataBunch.from_env('CartPole-v0',render='human',add_valid=False,bs=16)
 	bs, state, action=data.bs, data.state, data.action
@@ -18,4 +20,4 @@ def test_cem():
 
 	model=CEMModel(4,2,embed_szs=emb_szs,layers=[128])
 	reinforce_learner=CEMLearner(data,model,trainers=[CEMTrainer],callback_fns=[RewardMetric,RollingRewardMetric])
-	reinforce_learner.fit(1000,lr=0.01,wd=0)
+	reinforce_learner.fit(600,lr=0.01,wd=0)
