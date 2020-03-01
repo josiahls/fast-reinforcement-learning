@@ -6,9 +6,9 @@ from fastai.basic_data import DatasetType
 
 from fast_rl.agents.dqn import create_dqn_model, dqn_learner, DQNLearner
 from fast_rl.agents.dqn_models import *
-from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
+from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon, NStepExperienceReplay
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE, ResolutionWrapper
-from fast_rl.core.metrics import RewardMetric, EpsilonMetric
+from fast_rl.core.metrics import RewardMetric, EpsilonMetric, RollingRewardMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 from torch import optim
 
@@ -47,7 +47,7 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
-						callback_fns=[RewardMetric, EpsilonMetric])
+						callback_fns=[RewardMetric, EpsilonMetric,RollingRewardMetric])
 	learn.fit(epochs)
 	return learn
 
@@ -163,6 +163,20 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
 		# group_interp.to_pickle(f'../docs_src/data/cartpole_{learn.model.name.lower()}/', filename)
 		# [g.write('../res/run_gifs/cartpole') for g in interp.generate_gif()]
 		# del learn
+
+
+@pytest.mark.usefixtures('skip_performance_check')
+@pytest.mark.parametrize(["model_cls", "s_format"],
+						 list(product(p_model, p_format)))
+def test_dqn_models_nstep_cartpole(model_cls, s_format):
+	experience=NStepExperienceReplay
+	group_interp = GroupAgentInterpretation()
+	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
+	for i in range(5):
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],
+								memory_size=1000000, decay=0.001)
+
+		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
 
 
 @pytest.mark.usefixtures('skip_performance_check')

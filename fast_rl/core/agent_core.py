@@ -128,6 +128,46 @@ class ExperienceReplay(Experience):
 		self._memory.append(item)
 
 
+class NStepExperienceReplay(Experience):
+	def __init__(self, memory_size,step_sz=2,**kwargs):
+		r"""
+		Basic store-er of s space transitions for training agents.
+
+		References:
+			[1] Mnih, Volodymyr, et al. "Playing atari with deep reinforcement learning."
+			arXiv preprint arXiv:1312.5602 (2013).
+
+		Args:
+			memory_size (int): Max N samples to store
+		"""
+		super().__init__(memory_size, **kwargs)
+		self.step_sz=step_sz
+		self.max_size=memory_size
+		self._memory=deque(maxlen=memory_size)
+
+	@property
+	def memory(self):
+		return self._memory
+
+	def __len__(self):
+		return len(self._memory)
+
+	def sample(self, batch, **kwargs):
+		if len(self._memory)<batch: return self._memory
+		return [o for ll in random.sample(self.memory, batch) for o in ll]
+
+	def update(self, item, **kwargs):
+		item=deepcopy(item)
+		super().update(item, **kwargs)
+		if self.reduce_ram: item.clean()
+		if len(self._memory)==0: self._memory.append([])
+		if len(self.memory[-1])<self.step_sz and not item.d: self.memory[-1].append(item)
+		if len(self.memory[-1])<self.step_sz and item.d:
+			self.memory[-1].append(item)
+			self._memory.append([])
+		else:								  self._memory.append([item])
+
+
 class PriorityExperienceReplayCallback(LearnerCallback):
 	def on_train_begin(self, **kwargs):
 		self.learn.model.loss_func=partial(self.learn.model.memory.handle_loss, loss_fn=self.learn.model.loss_func)

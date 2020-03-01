@@ -96,7 +96,6 @@ class CEMLearner(AgentLearner):
 		return s,a,r_boundary,r_mean
 
 	def optimize(self):
-		self.opt.zero_grad()
 		s,a,boundary,r_mean=self.filter_memory()
 		s,a=torch.cat(s).to(device=self.data.device),torch.cat(a).to(device=self.data.device).squeeze(1)
 		a_scores=self.model(s)
