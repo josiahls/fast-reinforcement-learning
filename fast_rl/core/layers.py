@@ -187,4 +187,3 @@ class CriticTabularEmbedWrapper(Module):
             return self.tabular_model(*args)
         else:
             return self.tabular_model(0, torch.cat(args, 1))
-
