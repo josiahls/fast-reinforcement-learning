@@ -112,6 +112,7 @@ OpenAI environments.
     - [X] Add Cross Entropy Method CEM
     - [X] NStep Experience replay
     - [X] Gaussian and Factored Gaussian Noise exploration replacement
+    - [ ] Distributional DQN
     - [ ] Add RAINBOW DQN
     - [ ] **Working on** Add REINFORCE
     - [ ] **Working on** Add PPO
@@ -119,6 +120,7 @@ OpenAI environments.
     - [ ] Add D4PG
     - [ ] Add A2C
     - [ ] Add A3C
+    - [ ] Add SAC
 - [ ] 1.2.0 HRL models *Possibly might change version to 2.0 depending on SMDP issues*
     - [ ] Add SMDP
     - [ ] Add Goal oriented MDPs. Will Require a new "Step"

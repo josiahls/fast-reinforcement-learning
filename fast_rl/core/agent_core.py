@@ -42,7 +42,7 @@ class GreedyEpsilon(ExplorationStrategy):
 		return action_space.sample() if np.random.random()<self.epsilon and self.explore else action
 
 	def update(self, episode, end_episode=0, **kwargs):
-		super(GreedyEpsilon, self).update(**kwargs)
+		super(GreedyEpsilon, self).update(episode,**kwargs)
 		if self.explore:
 			self.end_episode=end_episode
 			self.epsilon=self.e_end+(self.e_start-self.e_end)*math.exp(-1.*(self.steps*self.decay))
