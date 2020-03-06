@@ -157,7 +157,7 @@ class ResolutionWrapper(Wrapper):
 
     def render(self,mode='human',**kwargs):
         img = super(ResolutionWrapper,self).render(mode=mode,**kwargs)
-        return img if len(img)==0 else img[::self.w_step,::self.h_step,:]
+        return img if type(img)==bool or len(img)==0 else img[::self.w_step,::self.h_step,:]
 
 @dataclass
 class Bounds(object):

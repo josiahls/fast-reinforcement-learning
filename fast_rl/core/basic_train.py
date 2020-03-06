@@ -36,7 +36,7 @@ class AgentLearner(Learner):
 
 	def __init__(self, data, loss_func=None, callback_fns=None, opt=torch.optim.Adam, **kwargs):
 		super().__init__(data=data, callback_fns=ifnone(callback_fns, []) + data.callback, **kwargs)
-		self.model.loss_func = ifnone(loss_func, F.mse_loss)
+		self.model.loss_func = ifnone(ifnone(loss_func,self.model.loss_func), F.mse_loss)
 		self.model.set_opt(opt)
 		self.loss_func = None
 		self.trainers = None

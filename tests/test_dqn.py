@@ -38,8 +38,9 @@ def learner2gif(lnr:DQNLearner,s_format,group_interp:GroupAgentInterpretation,na
 
 
 def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.001,
-					copy_over_frequency=300, lr=None, epochs=450,lin_cls=None,explore=None,**kwargs):
+					copy_over_frequency=300, lr=None, epochs=450,lin_cls=None,explore=None,model_kwargs=None,**kwargs):
 	if lr is None: lr = [0.001, 0.00025]
+	model_kwargs=ifnone(model_kwargs,{})
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	metrics=[RewardMetric, RollingRewardMetric]
 	if explore is None: metrics.append(EpsilonMetric)
@@ -47,8 +48,8 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
 								 memory_management_strategy='k_partitions_top', k=3,**kwargs)
-	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop,lin_cls=ifnone(lin_cls,nn.Linear))
-	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers,lin_cls=ifnone(lin_cls,nn.Linear))
+	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
+	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
 						callback_fns=metrics)
 	learn.fit(epochs)
@@ -138,15 +139,31 @@ def test_dqn_models_cartpole(model_cls, s_format, experience):
 		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
 
 @pytest.mark.usefixtures('skip_performance_check')
-@pytest.mark.parametrize(["model_cls", "s_format"],
-						 list(product(p_model, p_format)))
-def test_dqn_models_nstep_cartpole(model_cls, s_format):
-	experience=NStepExperienceReplay
+@pytest.mark.parametrize(["s_format", 'experience'],
+						 list(product(p_format, p_exp)))
+def test_dqn_models_categorical_cartpole(s_format, experience):
+	model_cls=DistributionalDQN
 	group_interp = GroupAgentInterpretation()
 	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
 	for i in range(5):
 		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],
 								memory_size=1000000, decay=0.001)
+
+		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
+
+
+@pytest.mark.usefixtures('skip_performance_check')
+@pytest.mark.parametrize(["s_format"],
+						 list(product(p_format)))
+def test_dqn_models_distributional_cartpole(s_format):
+	experience=ExperienceReplay
+	group_interp = GroupAgentInterpretation()
+	model_cls=DistributionalDQN
+	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
+	for i in range(5):
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[512, 512],lr=[1e-4,1e-4],
+								memory_size=1000000, decay=0.001,model_kwargs={'v_max':400,'v_min':-1,'n_atoms':51},epochs=900,
+								res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
 
 		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
 

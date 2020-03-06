@@ -101,7 +101,8 @@ dqn_config = {
     DoubleDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
     DuelingDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
     DoubleDuelingModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
-    FixedTargetDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer]
+    FixedTargetDQNModule: [BaseDQNTrainer, FixedTargetDQNTrainer],
+    DistributionalDQN: [BaseDQNTrainer, FixedTargetDQNTrainer]
 }
 
 

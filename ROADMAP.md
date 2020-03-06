@@ -7,7 +7,7 @@ this point, all models should have guaranteed environments they should succeed i
     - [X] Add Cross Entropy Method CEM
     - [X] NStep Experience replay
     - [X] Gaussian and Factored Gaussian Noise exploration replacement
-    - [ ] **Working on** Add Distributional DQN
+    - [X] Add Distributional DQN
     - [ ] **Working on** Add RAINBOW DQN
     - [ ] **Working on** Add REINFORCE
     - [ ] **Working on** Add PPO

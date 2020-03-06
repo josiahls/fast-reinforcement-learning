@@ -112,7 +112,7 @@ OpenAI environments.
     - [X] Add Cross Entropy Method CEM
     - [X] NStep Experience replay
     - [X] Gaussian and Factored Gaussian Noise exploration replacement
-    - [ ] Distributional DQN
+    - [X] Distributional DQN
     - [ ] Add RAINBOW DQN
     - [ ] **Working on** Add REINFORCE
     - [ ] **Working on** Add PPO
