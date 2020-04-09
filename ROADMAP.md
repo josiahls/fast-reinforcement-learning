@@ -50,4 +50,5 @@ this point, all models should have guaranteed environments they should succeed i
     - [ ] Move to fastai 2.0
     - [ ] Environment needs to be faster. Beat openai baseline 350 frames per second
     - [ ] fastrl needs to handle ram better
+    - [ ] Use yield instead of return for the MDPDataset object
     - [ ] Unify common code pieces shared in all models

@@ -44,7 +44,7 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	memory = experience(memory_size=memory_size, reduce_ram=True)
 	metrics=[RewardMetric, RollingRewardMetric]
 	if explore is None: metrics.append(EpsilonMetric)
-	explore = ifnone(explore,GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay))
+	explore = ifnone(explore,GreedyEpsilon(epsilon_start=1, epsilon_end=0.02, decay=decay))
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
 								 memory_management_strategy='k_partitions_top', k=3,**kwargs)
@@ -52,7 +52,7 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
 						callback_fns=metrics)
-	learn.fit(epochs)
+	learn.fit(epochs,wd=0)
 	return learn
 
 # @pytest.mark.usefixtures('skip_performance_check')
@@ -132,11 +132,11 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
 def test_dqn_models_cartpole(model_cls, s_format, experience):
 	group_interp = GroupAgentInterpretation()
 	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
-	for i in range(5):
-		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],
-								memory_size=1000000, decay=0.001)
+	for i in range(1):
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],epochs=200,
+								memory_size=1000000,decay=0.001,res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
+		# learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
 
-		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["s_format", 'experience'],
@@ -160,12 +160,12 @@ def test_dqn_models_distributional_cartpole(s_format):
 	group_interp = GroupAgentInterpretation()
 	model_cls=DistributionalDQN
 	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
-	for i in range(5):
-		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[512, 512],lr=[1e-4,1e-4],
-								memory_size=1000000, decay=0.001,model_kwargs={'v_max':400,'v_min':-1,'n_atoms':51},epochs=900,
-								res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
+	for i in range(1):
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[512],lr=[0.0001,0.0001],
+								memory_size=100000, decay=0.008,model_kwargs={'v_max':10,'v_min':-10,'n_atoms':51,'opt':optim.Adam},
+								res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3),epochs=800,copy_over_frequency=300)
 
-		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
+		# learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
 
 
 layer_clss=[GaussianNoisyLinear,GaussianNoisyFactorizedLinear]
@@ -198,14 +198,6 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
 		learner2gif(learn, s_format, group_interp, 'lunarlander', extra_s)
 		del learn
 		gc.collect()
-		# meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
-		# interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
-		# interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
-		# group_interp.add_interpretation(interp)
-		# filename = f'{learn.model.name.lower()}_{meta}'
-		# group_interp.to_pickle(f'../docs_src/data/lunarlander_{learn.model.name.lower()}/', filename)
-		# [g.write('../res/run_gifs/lunarlander') for g in interp.generate_gif()]
-		# del learn
 
 
 @pytest.mark.usefixtures('skip_performance_check')

@@ -1,6 +1,7 @@
 from fastai.callback import OptimWrapper
 
 from fast_rl.core.layers import *
+# import copy
 
 
 def distr_projection(next_distr, rewards, dones, Vmin, Vmax, n_atoms, gamma):
@@ -9,10 +10,7 @@ def distr_projection(next_distr, rewards, dones, Vmin, Vmax, n_atoms, gamma):
     "A Distributional Perspective on RL" paper
     """
     batch_size = len(rewards)
-    rewards=rewards.detach().cpu().numpy().flatten()
-    dones=dones.detach().cpu().numpy().flatten().astype(np.bool)
     proj_distr = np.zeros((batch_size, n_atoms), dtype=np.float32)
-    next_distr=next_distr.numpy()
     delta_z = (Vmax - Vmin) / (n_atoms - 1)
     for atom in range(n_atoms):
         tz_j = np.minimum(Vmax, np.maximum(Vmin, rewards + (Vmin + atom * delta_z) * gamma))
@@ -44,12 +42,14 @@ def distr_projection(next_distr, rewards, dones, Vmin, Vmax, n_atoms, gamma):
     return proj_distr
 
 
+
 class DQNModule(Module):
 
     def __init__(self, ni: int, ao: int, layers: Collection[int], discount: float = 0.99, lr=0.001,
                 n_conv_blocks: Collection[int] = 0, nc=3, opt=None, emb_szs: ListSizes = None, loss_func=None,
                 w=-1, h=-1, ks: Union[None, list]=None, stride: Union[None, list]=None, grad_clip=5,
-                conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False,lin_cls=nn.Linear):
+                conv_kern_proportion=0.1, stride_proportion=0.1, pad=False, batch_norm=False,lin_cls=nn.Linear,
+                do_grad_clipping=True):
         r"""
         Basic DQN Module.
 
@@ -71,6 +71,7 @@ class DQNModule(Module):
         self.lr = lr
         self.batch_norm = batch_norm
         self.switched = False
+        self.do_grad_clipping=do_grad_clipping
         # self.ks, self.stride = ([], []) if len(n_conv_blocks) == 0 else ks_stride(ks, stride, w, h, n_conv_blocks, conv_kern_proportion, stride_proportion)
         self.ks, self.stride=([], []) if len(n_conv_blocks)==0 else (ifnone(ks, [10, 10, 10]), ifnone(stride, [5, 5, 5]))
         self.action_model = nn.Sequential()
@@ -144,15 +145,15 @@ class DQNModule(Module):
 
         y_hat = self.y_hat(s, a,s_prime,r,masking)
         y = self.y(s_prime, masking, r, y_hat,s,a)
-
+        self.opt.zero_grad()
         loss = self.loss_func(y, y_hat)
 
         if self.training:
-            self.opt.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.action_model.parameters(), self.gradient_clipping_norm)
-            for param in self.action_model.parameters():
-                if param.grad is not None: param.grad.data.clamp_(-1, 1)
+            if self.do_grad_clipping:
+                torch.nn.utils.clip_grad_norm_(self.action_model.parameters(), self.gradient_clipping_norm)
+                for param in self.action_model.parameters():
+                    if param.grad is not None: param.grad.data.clamp_(-1, 1)
             self.opt.step()
 
         with torch.no_grad():
@@ -172,13 +173,14 @@ class FixedTargetDQNModule(DQNModule):
         super().__init__(ni, ao, layers, **kwargs)
         self.name = 'Fixed Target DQN'
         self.tau = tau
-        self.target_model = copy(self.action_model)
+        self.target_model = deepcopy(self.action_model)
 
     def target_copy_over(self):
         r""" Updates the target network from calls in the FixedTargetDQNTrainer callback."""
         # self.target_net.load_state_dict(self.action_model.state_dict())
-        for target_param, local_param in zip(self.target_model.parameters(), self.action_model.parameters()):
-            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+        # for target_param, local_param in zip(self.target_model.parameters(), self.action_model.parameters()):
+        #     target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+        self.target_model.load_state_dict(self.action_model.state_dict())
 
     def y(self, s_prime, masking, r, y_hat,s,a):
         r"""
@@ -247,8 +249,94 @@ class DoubleDuelingModule(DuelingDQNModule, DoubleDQNModule):
 
 
 def distributional_loss_fn(s_log_sm_v,proj_distr_v):
-    return (-s_log_sm_v*proj_distr_v).sum(dim=1).mean()
+    loss= (-s_log_sm_v*proj_distr_v)
+    return loss.sum(dim=1).mean()
 
+
+# class DistributionalDQN(FixedTargetDQNModule):
+#     def __init__(self,ao,n_atoms=51,v_min=-10,v_max=10,**kwargs):
+#         self.z_delta=(v_max-v_min)/(n_atoms-1)
+#         self.n_atoms=n_atoms
+#         self.v_min=v_min
+#         self.v_max=v_max
+#         super().__init__(ao=ao*n_atoms,**kwargs)
+#         self.name='Distributional DQN'
+#         # self.sm=nn.Softmax(dim=1)
+#
+#         self.loss_func=distributional_loss_fn
+#
+#     def init_weights(self, m):pass
+#
+#     def setup_linear_block(self, **kwargs):
+#         super(DistributionalDQN,self).setup_linear_block(**kwargs)
+#         self.action_model.register_buffer('supports', torch.arange(self.v_min, self.v_max+self.z_delta, self.z_delta))
+#         self.action_model.add_module('softmax_buff',nn.Softmax(dim=1))
+#
+#     def both(self,xi,use_target=False):
+#         if not use_target: cat_out=self(xi,False)
+#         else:              cat_out=self.target_model(xi).view(xi.size()[0],-1,self.n_atoms)
+#         probs=self.apply_softmax(cat_out,use_target)
+#         if not use_target: weights=probs*self.action_model.supports
+#         else:              weights=probs*self.target_model.supports
+#         res=weights.sum(dim=2)
+#         return cat_out,res
+#
+#     def q_vals(self,xi):
+#         return self.both(xi)[1]
+#
+#     def apply_softmax(self,t,use_target=False):
+#         if not use_target: return self.action_model.softmax_buff(t.view(-1,self.n_atoms)).view(t.size())
+#         return self.target_model.softmax_buff(t.view(-1,self.n_atoms)).view(t.size())
+#
+#     def y(self, s_prime, masking, r, y_hat,s,a):
+#         distr_v=self(s,only_q=False)
+#         state_action_values=distr_v[range(s.size()[0]), a.data]
+#         state_log_sm_v=F.log_softmax(state_action_values, dim=1)
+#         return state_log_sm_v
+#
+#     def y_hat(self, s, a,s_prime,r,masking):
+#         next_distr_v, next_q_vals_v=self.both(s_prime,True) # target
+#         next_actions=next_q_vals_v.max(1)[1].data.cpu().numpy()
+#         next_distr=self.apply_softmax(next_distr_v,True).data.cpu() # target
+#         next_best_distr=next_distr[range(s_prime.size()[0]),next_actions]
+#         proj_distr=distr_projection(next_best_distr,r,masking,self.v_min,self.v_max,self.n_atoms,self.discount)
+#         proj_distr_v=torch.tensor(proj_distr).to(device=self.action_model.supports.device)
+#         return proj_distr_v
+#
+#     def forward(self, xi: Tensor,only_q=True):
+#         return self.q_vals(xi) if only_q else super(DistributionalDQN,self).forward(xi).view(xi.size()[0],-1,self.n_atoms)
+
+class DistributionalDQNModule(nn.Module):
+    def __init__(self, input_shape, n_actions,n_atoms=51,v_min=-10,v_max=10,):
+        super(DistributionalDQNModule, self).__init__()
+        self.n_atoms=n_atoms
+        self.v_min=v_min
+        self.v_max=v_max
+        self.z_delta=(v_max-v_min)/(n_atoms-1)
+
+        self.fc = nn.Sequential(
+            nn.Linear(input_shape, 512),
+            nn.ReLU(),
+            nn.Linear(512, n_actions * self.n_atoms)
+        )
+
+        self.register_buffer("supports", torch.arange(self.v_min, self.v_max+self.z_delta, self.z_delta))
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        batch_size = x.size()[0]
+        fc_out = self.fc(x.float())
+        return fc_out.view(batch_size, -1, self.n_atoms)
+
+    def both(self, x):
+        cat_out = self(x)
+        probs = self.apply_softmax(cat_out)
+        weights = probs * self.supports
+        res = weights.sum(dim=2)
+        return cat_out, res
+
+    def qvals(self, x): return self.both(x)[1]
+    def apply_softmax(self, t): return self.softmax(t.view(-1, self.n_atoms)).view(t.size())
 
 class DistributionalDQN(FixedTargetDQNModule):
     def __init__(self,ao,n_atoms=51,v_min=-10,v_max=10,**kwargs):
@@ -256,41 +344,73 @@ class DistributionalDQN(FixedTargetDQNModule):
         self.n_atoms=n_atoms
         self.v_min=v_min
         self.v_max=v_max
-        super().__init__(ao=ao*n_atoms,**kwargs)
+        super().__init__(ao=ao,**kwargs)
+        self.do_grad_clipping=False
         self.name='Distributional DQN'
-
-        self.action_model.register_buffer('supports',torch.arange(v_min,v_max+self.z_delta,self.z_delta))
-        self.sm=nn.Softmax(dim=1)
+        # self.sm=nn.Softmax(dim=1)
 
         self.loss_func=distributional_loss_fn
 
-    def both(self,xi):
-        cat_out=self(xi,False)
-        probs=self.apply_softmax(cat_out)
-        weights=probs*self.action_model.supports
-        res=weights.sum(dim=2)
-        return cat_out,res
+    def init_weights(self, m):pass
+
+    def setup_linear_block(self, _layers, ni, nc, w, h, emb_szs, layers, ao,**kwargs):
+        self.action_model=DistributionalDQNModule(ni,ao)
+
+    def optimize(self, sampled):
+        with torch.no_grad():
+            r = torch.cat([item.reward.float() for item in sampled]).flatten().cpu().numpy()
+            s_prime = torch.cat([item.s_prime for item in sampled])
+            s = torch.cat([item.s for item in sampled])
+            a = torch.cat([item.a.long() for item in sampled])
+            d = torch.cat([item.done.float() for item in sampled]).flatten().cpu().numpy()
+        # masking = self.sample_mask(d)
+
+        batch_size=len(r)
+
+        # next state distribution
+        next_distr_v, next_qvals_v=self.target_model.both(s_prime)
+        next_actions=next_qvals_v.max(1)[1].data.cpu().numpy()
+        next_distr=self.target_model.apply_softmax(next_distr_v).data.cpu().numpy()
+
+        next_best_distr=next_distr[range(batch_size), next_actions]
+        dones=d.astype(np.bool)
+
+        # project our distribution using Bellman update
+        proj_distr=distr_projection(next_best_distr, r, dones, self.v_min, self.v_max, self.n_atoms, self.discount)
+
+        # calculate net output
+        distr_v=self.action_model(s)
+        state_action_values=distr_v[range(batch_size), a.data]
+        state_log_sm_v=F.log_softmax(state_action_values, dim=1)
+        proj_distr_v=torch.tensor(proj_distr).to(self.action_model.supports.device)
+
+        loss=-state_log_sm_v*proj_distr_v
+        loss= loss.sum(dim=1).mean()
+
+        with torch.no_grad():
+            self.loss = loss
+            _,y=self.action_model.both(s.to(device=self.action_model.supports.device))
+            post_info = {'td_error': to_detach(y - next_qvals_v).cpu().numpy()}
+            return post_info
 
     def q_vals(self,xi):
-        return self.both(xi)[1]
+        return self.action_model.both(xi)[1]
 
-    def apply_softmax(self,t):
-        return self.sm(t.view(-1,self.n_atoms)).view(t.size())
-
-    def y(self, s_prime, masking, r, y_hat,s,a):
-        distr_v=self(s,only_q=False)
-        state_action_values=distr_v[range(s.size()[0]), a.data]
-        state_log_sm_v=F.log_softmax(state_action_values, dim=1)
-        return state_log_sm_v
-
-    def y_hat(self, s, a,s_prime,r,masking):
-        next_distr_v, next_q_vals_v=self.both(s_prime)
-        next_actions=next_q_vals_v.max(1)[1].data.cpu().numpy()
-        next_distr=self.apply_softmax(next_distr_v).data.cpu()
-        next_best_distr=next_distr[range(s_prime.size()[0]),next_actions]
-        proj_distr=distr_projection(next_best_distr,r,masking,self.v_min,self.v_max,self.n_atoms,self.discount)
-        proj_distr_v=torch.tensor(proj_distr).to(device=self.action_model.supports.device)
-        return proj_distr_v
+    # def y(self, s_prime, masking, r, y_hat,s,a):
+    #     distr_v=self(s,only_q=False)
+    #     state_action_values=distr_v[range(s.size()[0]), a.data]
+    #     state_log_sm_v=F.log_softmax(state_action_values, dim=1)
+    #     return state_log_sm_v
+    #
+    # def y_hat(self, s, a,s_prime,r,masking):
+    #     next_distr_v, next_q_vals_v=self.both(s_prime,True) # target
+    #     next_actions=next_q_vals_v.max(1)[1].data.cpu().numpy()
+    #     next_distr=self.apply_softmax(next_distr_v,True).data.cpu() # target
+    #     next_best_distr=next_distr[range(s_prime.size()[0]),next_actions]
+    #     proj_distr=distr_projection(next_best_distr,r,masking,self.v_min,self.v_max,self.n_atoms,self.discount)
+    #     proj_distr_v=torch.tensor(proj_distr).to(device=self.action_model.supports.device)
+    #     return proj_distr_v
 
     def forward(self, xi: Tensor,only_q=True):
-        return self.q_vals(xi) if only_q else super(DistributionalDQN,self).forward(xi).view(xi.size()[0],-1,self.n_atoms)
+        bs=xi.size()[0]
+        return self.q_vals(xi) if only_q else super(DistributionalDQN,self).forward(xi).view(bs,-1,self.n_atoms)

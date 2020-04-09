@@ -112,8 +112,8 @@ OpenAI environments.
     - [X] Add Cross Entropy Method CEM
     - [X] NStep Experience replay
     - [X] Gaussian and Factored Gaussian Noise exploration replacement
-    - [X] Distributional DQN
-    - [ ] Add RAINBOW DQN
+    - [X] Add Distributional DQN
+    - [ ] **Working on** Add RAINBOW DQN
     - [ ] **Working on** Add REINFORCE
     - [ ] **Working on** Add PPO
     - [ ] **Working on** Add TRPO
@@ -152,7 +152,10 @@ OpenAI environments.
     - [ ] Envs need to subclaNot part of this repo, however the ess the OpenAI `gym.GoalEnv`
     - [ ] Add HER
 - [ ] 2.0.0 Breaking refactor of all methods
-    - [ ] Environment needs to be faster. Beat openai baseline 350 frames per second.
+    - [ ] Move to fastai 2.0
+    - [ ] Environment needs to be faster. Beat openai baseline 350 frames per second
+    - [ ] fastrl needs to handle ram better
+    - [ ] Use yield instead of return for the MDPDataset object
     - [ ] Unify common code pieces shared in all models
 
 

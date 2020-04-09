@@ -154,7 +154,7 @@ class NStepExperienceReplay(Experience):
 
 	def sample(self, batch, **kwargs):
 		if len(self._memory)<batch: return self._memory
-		return [o for ll in random.sample(self.memory, batch) for o in ll]
+		return [o for ll in random.sample(self.memory, batch) for o in ll][:batch]
 
 	def update(self, item, **kwargs):
 		item=deepcopy(item)
