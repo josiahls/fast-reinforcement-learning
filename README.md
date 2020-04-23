@@ -173,7 +173,7 @@ OpenAI environments.
     - [ ] Skills augmentation to actor critic models
     - [ ] Skills augmentation to async actor critic models
 - [ ] 2.7.0 Add PyBullet Fetch Environments
-    - [ ] Envs need to subclaNot part of this repo, however the ess the OpenAI `gym.GoalEnv`
+    - [ ] Envs need to subclass OpenAI `gym.GoalEnv`
     - [ ] Add HER
 - [ ] 3.0.0 Breaking refactor of all methods
     - [ ] Move to fastai 2.0

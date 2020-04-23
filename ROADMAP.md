@@ -8,7 +8,7 @@ this point, all models should have guaranteed environments they should succeed i
     - [X] NStep Experience replay
     - [X] Gaussian and Factored Gaussian Noise exploration replacement
     - [X] Add Distributional DQN
-    - [X] Add RAINBOW DQN
+    - [X] Add RAINBOW DQN (Note warnings, will require refactor / re-testing)
     - [ ] **Working on** Add REINFORCE
     - [ ] **Working on** Add PPO
     - [ ] **Working on** Add TRPO
@@ -68,7 +68,7 @@ this point, all models should have guaranteed environments they should succeed i
     - [ ] Skills augmentation to actor critic models
     - [ ] Skills augmentation to async actor critic models
 - [ ] 2.7.0 Add PyBullet Fetch Environments
-    - [ ] Envs need to subclaNot part of this repo, however the ess the OpenAI `gym.GoalEnv`
+    - [ ] Envs need to subclass OpenAI `gym.GoalEnv`
     - [ ] Add HER
 - [ ] 3.0.0 Breaking refactor of all methods
     - [ ] Move to fastai 2.0
