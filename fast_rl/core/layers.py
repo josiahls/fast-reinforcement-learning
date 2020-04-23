@@ -6,6 +6,45 @@ from fastai.torch_core import *
 from torch.distributions import Normal
 
 
+def distr_projection(next_distr, rewards, dones, Vmin, Vmax, n_atoms, gamma):
+    """
+    Perform distribution projection aka Catergorical Algorithm from the
+    "A Distributional Perspective on RL" paper
+    """
+    batch_size = len(rewards)
+    proj_distr = np.zeros((batch_size, n_atoms), dtype=np.float32)
+    delta_z = (Vmax - Vmin) / (n_atoms - 1)
+    for atom in range(n_atoms):
+        tz_j = np.minimum(Vmax, np.maximum(Vmin, rewards + (Vmin + atom * delta_z) * gamma))
+        b_j = (tz_j - Vmin) / delta_z
+        l = np.floor(b_j).astype(np.int64)
+        u = np.ceil(b_j).astype(np.int64)
+        eq_mask = u == l
+        proj_distr[eq_mask, l[eq_mask]] += next_distr[eq_mask, atom]
+        ne_mask = u != l
+        proj_distr[ne_mask, l[ne_mask]] += next_distr[ne_mask, atom] * (u - b_j)[ne_mask]
+        proj_distr[ne_mask, u[ne_mask]] += next_distr[ne_mask, atom] * (b_j - l)[ne_mask]
+    if dones.any():
+        proj_distr[dones] = 0.0
+        tz_j = np.minimum(Vmax, np.maximum(Vmin, rewards[dones]))
+        b_j = (tz_j - Vmin) / delta_z
+        l = np.floor(b_j).astype(np.int64)
+        u = np.ceil(b_j).astype(np.int64)
+        eq_mask = u == l
+        eq_dones = dones.copy()
+        eq_dones[dones] = eq_mask
+        if eq_dones.any():
+            proj_distr[eq_dones, l[eq_mask]] = 1.0
+        ne_mask = u != l
+        ne_dones = dones.copy()
+        ne_dones[dones] = ne_mask
+        if ne_dones.any():
+            proj_distr[ne_dones, l[ne_mask]] = (u - b_j)[ne_mask]
+            proj_distr[ne_dones, u[ne_mask]] = (b_j - l)[ne_mask]
+    return proj_distr
+
+
+
 def bn_drop_lin(n_in:int, n_out:int, bn:bool=True, p:float=0., actn:Optional[nn.Module]=None,lin_cls=nn.Linear):
     "Sequence of batchnorm (if `bn`), dropout (with `p`) and linear (`n_in`,`n_out`) layers followed by `actn`."
     layers = [nn.BatchNorm1d(n_in)] if bn else []
@@ -81,31 +120,28 @@ class FakeBatchNorm(Module):
 
 
 class GaussianNoisyLinear(nn.Linear):
-    def __init__(self, in_features, out_features, sigma_init=0.017, bias=True):
-        super().__init__(in_features, out_features, bias=bias)
-        self.sigma_weight=nn.Parameter(torch.full((out_features, in_features), sigma_init))
-        self.register_buffer("epsilon_weight",torch.zeros(out_features,in_features))
-        self.normal=Normal(0,1)
+    def __init__(self, in_features, out_features, sigma_zero=0.4, bias=True):
+        super(GaussianNoisyLinear, self).__init__(in_features, out_features, bias=bias)
+        sigma_init = sigma_zero / math.sqrt(in_features)
+        self.sigma_weight = nn.Parameter(torch.full((out_features, in_features), sigma_init))
+        self.register_buffer("epsilon_input", torch.zeros(1, in_features))
+        self.register_buffer("epsilon_output", torch.zeros(out_features, 1))
         if bias:
-            self.sigma_bias=nn.Parameter(torch.full((out_features,),sigma_init))
-            self.register_buffer("epsilon_bias", torch.zeros(out_features))
-            self.reset_parameters()
+            self.sigma_bias = nn.Parameter(torch.full((out_features,), sigma_init))
 
-    def reset_parameters(self):
-        std=math.sqrt(3/self.in_features)
-        self.weight.data.uniform_(-std,std)
-        self.bias.data.uniform_(-std,std)
+    def forward(self, input):
+        self.epsilon_input.normal_()
+        self.epsilon_output.normal_()
 
-    def forward(self, xi):
-        # self.normal=Normal(0,1)
-        self.epsilon_weight.data.copy_(self.normal.sample(self.epsilon_weight.shape))
-        bias=self.bias
+        func = lambda x: torch.sign(x) * torch.sqrt(torch.abs(x))
+        eps_in = func(self.epsilon_input.data)
+        eps_out = func(self.epsilon_output.data)
+
+        bias = self.bias
         if bias is not None:
-            # self.epsilon_bias.normal_()
-            self.epsilon_bias.data.copy_(self.normal.sample(self.epsilon_bias.shape))
-            bias=bias+self.sigma_bias*self.epsilon_bias
-        return F.linear(xi,self.weight+self.sigma_weight*self.epsilon_weight,bias)
-
+            bias = bias + self.sigma_bias * eps_out.t()
+        noise_v = torch.mul(eps_in, eps_out)
+        return F.linear(input, self.weight + self.sigma_weight * noise_v, bias)
 
 class GaussianNoisyFactorizedLinear(nn.Linear):
     def __init__(self, in_features, out_features,sigma_zero=0.4,bias=True):

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import math
+
 import gym
 
 import numpy as np
@@ -1668,42 +1670,213 @@ def calc_loss(batch, net, tgt_net, gamma, device="cpu", save_prefix=None):
     return loss_v.sum(dim=1).mean()
 
 
+# if __name__ == "__main__":
+#     params = HYPERPARAMS['cartpole']
+# #    params['epsilon_frames'] *= 2
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--cuda", default=False, action="store_true", help="Enable cuda")
+#     args = parser.parse_args()
+#     device = torch.device("cuda" if args.cuda or True else "cpu")
+#
+#     env = gym.make(params['env_name'])
+#
+#     writer = SummaryWriter(comment="-" + params['run_name'] + "-distrib")
+#     net = DistributionalDQN(env.observation_space.shape, env.action_space.n).to(device)
+#
+#     tgt_net = TargetNet(net)
+#     selector = EpsilonGreedyActionSelector(epsilon=params['epsilon_start'])
+#     epsilon_tracker = EpsilonTracker(selector, params)
+#     agent = DQNAgent(lambda x: net.qvals(x), selector, device=device)
+#
+#     exp_source = ExperienceSourceFirstLast(env, agent, gamma=params['gamma'], steps_count=1)
+#     buffer = ExperienceReplayBuffer(exp_source, buffer_size=params['replay_size'])
+#     optimizer = optim.Adam(net.parameters(), lr=params['learning_rate'])
+#
+#     frame_idx = 0
+#     eval_states = None
+#     prev_save = 0
+#     save_prefix = None
+#
+#     with RewardTracker(writer, params['stop_reward']) as reward_tracker:
+#         while True:
+#             frame_idx += 1
+#             buffer.populate(1)
+#             epsilon_tracker.frame(frame_idx)
+#
+#             new_rewards = exp_source.pop_total_rewards()
+#             if new_rewards:
+#                 if reward_tracker.reward(new_rewards[0], frame_idx, selector.epsilon):
+#                     break
+#
+#             if len(buffer) < params['replay_initial']:
+#                 continue
+#
+#             optimizer.zero_grad()
+#             batch = buffer.sample(params['batch_size'])
+#
+#             loss_v = calc_loss(batch, net, tgt_net.target_model, gamma=params['gamma'],
+#                                device=device, save_prefix=save_prefix)
+#             loss_v.backward()
+#             # print(str(loss_v.data))
+#             optimizer.step()
+#
+#             if frame_idx % params['target_net_sync'] == 0:
+#                 tgt_net.sync()
+
+
+class NoisyLinear(nn.Linear):
+    def __init__(self, in_features, out_features, sigma_init=0.017, bias=True):
+        super(NoisyLinear, self).__init__(in_features, out_features, bias=bias)
+        self.sigma_weight = nn.Parameter(torch.full((out_features, in_features), sigma_init))
+        self.register_buffer("epsilon_weight", torch.zeros(out_features, in_features))
+        if bias:
+            self.sigma_bias = nn.Parameter(torch.full((out_features,), sigma_init))
+            self.register_buffer("epsilon_bias", torch.zeros(out_features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        std = math.sqrt(3 / self.in_features)
+        self.weight.data.uniform_(-std, std)
+        self.bias.data.uniform_(-std, std)
+
+    def forward(self, input):
+        self.epsilon_weight.normal_()
+        bias = self.bias
+        if bias is not None:
+            self.epsilon_bias.normal_()
+            bias = bias + self.sigma_bias * self.epsilon_bias.data
+        return F.linear(input, self.weight + self.sigma_weight * self.epsilon_weight.data, bias)
+
+
+class NoisyFactorizedLinear(nn.Linear):
+    """
+    NoisyNet layer with factorized gaussian noise
+
+    N.B. nn.Linear already initializes weight and bias to
+    """
+    def __init__(self, in_features, out_features, sigma_zero=0.4, bias=True):
+        super(NoisyFactorizedLinear, self).__init__(in_features, out_features, bias=bias)
+        sigma_init = sigma_zero / math.sqrt(in_features)
+        self.sigma_weight = nn.Parameter(torch.full((out_features, in_features), sigma_init))
+        self.register_buffer("epsilon_input", torch.zeros(1, in_features))
+        self.register_buffer("epsilon_output", torch.zeros(out_features, 1))
+        if bias:
+            self.sigma_bias = nn.Parameter(torch.full((out_features,), sigma_init))
+
+    def forward(self, input):
+        self.epsilon_input.normal_()
+        self.epsilon_output.normal_()
+
+        func = lambda x: torch.sign(x) * torch.sqrt(torch.abs(x))
+        eps_in = func(self.epsilon_input.data)
+        eps_out = func(self.epsilon_output.data)
+
+        bias = self.bias
+        if bias is not None:
+            bias = bias + self.sigma_bias * eps_out.t()
+        noise_v = torch.mul(eps_in, eps_out)
+        return F.linear(input, self.weight + self.sigma_weight * noise_v, bias)
+
+
+class DQN(nn.Module):
+    def __init__(self, input_shape, n_actions):
+        super(DQN, self).__init__()
+
+        # self.conv = nn.Sequential(
+        #     nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+        #     nn.ReLU(),
+        #     nn.Conv2d(32, 64, kernel_size=4, stride=2),
+        #     nn.ReLU(),
+        #     nn.Conv2d(64, 64, kernel_size=3, stride=1),
+        #     nn.ReLU()
+        # )
+        #
+        # conv_out_size = self._get_conv_out(input_shape)
+        self.fc = nn.Sequential(
+            nn.Linear(input_shape[0], 512),
+            nn.ReLU(),
+            nn.Linear(512, n_actions)
+        )
+
+    def _get_conv_out(self, shape):
+        o = self.conv(torch.zeros(1, *shape))
+        return int(np.prod(o.size()))
+
+    def forward(self, x):
+        fx = x.float()# / 256
+        # conv_out = self.conv(fx).view(fx.size()[0], -1)
+        return self.fc(fx)
+
+
+class NoisyDQN(nn.Module):
+    def __init__(self, input_shape, n_actions):
+        super(NoisyDQN, self).__init__()
+
+        # self.conv = nn.Sequential(
+        #     nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+        #     nn.ReLU(),
+        #     nn.Conv2d(32, 64, kernel_size=4, stride=2),
+        #     nn.ReLU(),
+        #     nn.Conv2d(64, 64, kernel_size=3, stride=1),
+        #     nn.ReLU()
+        # )
+        #
+        # conv_out_size = self._get_conv_out(input_shape)
+        self.noisy_layers = [
+            NoisyLinear(input_shape[0], 512),
+            NoisyLinear(512, n_actions)
+        ]
+        self.fc = nn.Sequential(
+            self.noisy_layers[0],
+            nn.ReLU(),
+            self.noisy_layers[1]
+        )
+
+    def _get_conv_out(self, shape):
+        o = self.conv(torch.zeros(1, *shape))
+        return int(np.prod(o.size()))
+
+    def forward(self, x):
+        fx = x.float() #/ 256
+        # conv_out = self.conv(fx).view(fx.size()[0], -1)
+        return self.fc(fx)
+
+    def noisy_layers_sigma_snr(self):
+        return [
+            ((layer.weight ** 2).mean().sqrt() / (layer.sigma_weight ** 2).mean().sqrt()).item()
+            for layer in self.noisy_layers
+        ]
+
+
 if __name__ == "__main__":
     params = HYPERPARAMS['cartpole']
-#    params['epsilon_frames'] *= 2
     parser = argparse.ArgumentParser()
     parser.add_argument("--cuda", default=False, action="store_true", help="Enable cuda")
     args = parser.parse_args()
-    device = torch.device("cuda" if args.cuda or True else "cpu")
+    device = torch.device("cuda" if args.cuda else "cpu")
 
     env = gym.make(params['env_name'])
+    # env = wrap_dqn(env)
 
-    writer = SummaryWriter(comment="-" + params['run_name'] + "-distrib")
-    net = DistributionalDQN(env.observation_space.shape, env.action_space.n).to(device)
-
+    writer = SummaryWriter(comment="-" + params['run_name'] + "-noisy-net")
+    net = NoisyDQN(env.observation_space.shape, env.action_space.n).to(device)
     tgt_net = TargetNet(net)
-    selector = EpsilonGreedyActionSelector(epsilon=params['epsilon_start'])
-    epsilon_tracker = EpsilonTracker(selector, params)
-    agent = DQNAgent(lambda x: net.qvals(x), selector, device=device)
+    agent = DQNAgent(net, ArgmaxActionSelector(), device=device)
 
     exp_source = ExperienceSourceFirstLast(env, agent, gamma=params['gamma'], steps_count=1)
     buffer = ExperienceReplayBuffer(exp_source, buffer_size=params['replay_size'])
     optimizer = optim.Adam(net.parameters(), lr=params['learning_rate'])
 
     frame_idx = 0
-    eval_states = None
-    prev_save = 0
-    save_prefix = None
 
     with RewardTracker(writer, params['stop_reward']) as reward_tracker:
         while True:
             frame_idx += 1
             buffer.populate(1)
-            epsilon_tracker.frame(frame_idx)
 
             new_rewards = exp_source.pop_total_rewards()
             if new_rewards:
-                if reward_tracker.reward(new_rewards[0], frame_idx, selector.epsilon):
+                if reward_tracker.reward(new_rewards[0], frame_idx):
                     break
 
             if len(buffer) < params['replay_initial']:
@@ -1711,12 +1884,15 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
             batch = buffer.sample(params['batch_size'])
-
-            loss_v = calc_loss(batch, net, tgt_net.target_model, gamma=params['gamma'],
-                               device=device, save_prefix=save_prefix)
+            loss_v = calc_loss_dqn(batch, net, tgt_net.target_model, gamma=params['gamma'], device=device)
             loss_v.backward()
-            # print(str(loss_v.data))
+            print(loss_v)
             optimizer.step()
 
             if frame_idx % params['target_net_sync'] == 0:
                 tgt_net.sync()
+
+            if frame_idx % 500 == 0:
+                for layer_idx, sigma_l2 in enumerate(net.noisy_layers_sigma_snr()):
+                    writer.add_scalar("sigma_snr_layer_%d" % (layer_idx+1),
+                                      sigma_l2, frame_idx)

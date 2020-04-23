@@ -1,12 +1,13 @@
 import collections
 from copy import deepcopy
+from warnings import warn
 
 from fastai.basic_train import LearnerCallback
 from fastai.imports import torch, Any
 
 from fast_rl.agents.dist_dqn_models import TargetNet
 from fast_rl.agents.dqn_models import distr_projection
-from fast_rl.core.agent_core import ExperienceReplay, NStepExperienceReplay
+from fast_rl.core.agent_core import ExperienceReplay, NStepExperienceReplay, NStepPriorityExperienceReplay
 from fast_rl.core.basic_train import AgentLearner, listify, List
 from fast_rl.core.data_block import MDPDataBunch, MDPStep
 from fastai.imports import torch
@@ -23,6 +24,9 @@ import torch.optim as optim
 Vmax = 10
 Vmin = -10
 N_ATOMS = 51
+# Vmax = 5
+# Vmin = -5
+# N_ATOMS = 8
 DELTA_Z = (Vmax - Vmin) / (N_ATOMS - 1)
 
 ExperienceFirstLast = collections.namedtuple('ExperienceFirstLast', ('state', 'action', 'reward', 'last_state','done'))
@@ -46,37 +50,45 @@ def unpack_batch(batch):
            np.array(dones, dtype=np.uint8), np.array(last_states, copy=False)
 
 
-def calc_loss(batch, net, tgt_net, gamma, device="cpu", save_prefix=None):
+def calc_loss(batch, batch_weights, net, tgt_net, gamma, device="cpu"):
     states, actions, rewards, dones, next_states = unpack_batch(batch)
     batch_size = len(batch)
 
     states_v = torch.tensor(states).to(device)
     actions_v = torch.tensor(actions).to(device)
     next_states_v = torch.tensor(next_states).to(device)
+    if batch_weights is not None: batch_weights_v = torch.tensor(batch_weights).to(device)
 
     # next state distribution
-    next_distr_v, next_qvals_v = tgt_net.both(next_states_v)
-    next_actions = next_qvals_v.max(1)[1].data.cpu().numpy()
-    next_distr = tgt_net.apply_softmax(next_distr_v).data.cpu().numpy()
+    # dueling arch -- actions from main net, distr from tgt_net
 
-    next_best_distr = next_distr[range(batch_size), next_actions]
+    # calc at once both next and cur states
+    distr_v, qvals_v = net.both(torch.cat((states_v, next_states_v)))
+    next_qvals_v = qvals_v[batch_size:]
+    distr_v = distr_v[:batch_size]
+
+    next_actions_v = next_qvals_v.max(1)[1]
+    next_distr_v = tgt_net(next_states_v)
+    next_best_distr_v = next_distr_v[range(batch_size), next_actions_v.data]
+    next_best_distr_v = tgt_net.apply_softmax(next_best_distr_v)
+    next_best_distr = next_best_distr_v.data.cpu().numpy()
+
     dones = dones.astype(np.bool)
 
     # project our distribution using Bellman update
     proj_distr = distr_projection(next_best_distr, rewards, dones, Vmin, Vmax, N_ATOMS, gamma)
 
     # calculate net output
-    distr_v = net(states_v)
     state_action_values = distr_v[range(batch_size), actions_v.data]
     state_log_sm_v = F.log_softmax(state_action_values, dim=1)
     proj_distr_v = torch.tensor(proj_distr).to(device)
 
     loss_v = -state_log_sm_v * proj_distr_v
-    return loss_v.sum(dim=1).mean()
+    if batch_weights is not None: loss_v = batch_weights_v * loss_v.sum(dim=1)
+    return loss_v.mean(), loss_v + 1e-5
 
 
-
-class BaseDistDQNTrainer(LearnerCallback):
+class BaseRainbowDQNTrainer(LearnerCallback):
     def __init__(self, learn: 'DistDQNLearner', max_episodes=None):
         r"""Handles basic DQN end of step model optimization."""
         super().__init__(learn)
@@ -90,7 +102,7 @@ class BaseDistDQNTrainer(LearnerCallback):
         self.previous_item = None
 
     @property
-    def learn(self)->'DistDQNLearner':
+    def learn(self)->'RainbowDQNLearner':
         return self._learn()
 
     def on_train_begin(self, n_epochs, **kwargs: Any):
@@ -115,7 +127,8 @@ class BaseDistDQNTrainer(LearnerCallback):
             batch=[ExperienceFirstLast(state=deepcopy(s.s[0]),action=deepcopy(s.action.taken_action),
                    reward=deepcopy(s.reward),last_state=deepcopy(s.s_prime[0]),done=deepcopy(s.done)) for s in samples]
             # model_func=lambda x: self.learn.model.qvals(x)
-            loss=calc_loss(batch,self.learn.model,self.learn.target_net.target_model,gamma=0.99,device=self.learn.data.device,save_prefix=None)
+            loss,weight_loss=calc_loss(batch,self.memory.weights(),self.learn.model,self.learn.target_net.target_model,gamma=0.99,device=self.learn.data.device)
+            self.learn.memory.refresh({'td_error':weight_loss})
             return {'last_output':loss}
         else: return None
 
@@ -161,11 +174,15 @@ class EpsilonTracker:
 
 
 
-class DistDQNLearner(AgentLearner):
-    def __init__(self, data: MDPDataBunch, model, trainers, loss_func=None,opt=torch.optim.Adam,**learn_kwargs):
+class RainbowDQNLearner(AgentLearner):
+    def __init__(self, data: MDPDataBunch, model, trainers,use_per=True, loss_func=None,opt=torch.optim.Adam,**learn_kwargs):
         super().__init__(data=data, model=model, opt=opt,loss_func=loss_func, **learn_kwargs)
         self._loss_func=loss_func
-        self.memory=NStepExperienceReplay(100000)
+        self.memory=NStepPriorityExperienceReplay(100000,n_step=2) if use_per else NStepExperienceReplay(100000,step_sz=2)
+        if use_per: warn('Using per on simpler evs such as cartpole has not been solved at least before 2000 epochs. '
+                         'We will see if there is a way to configure per to handling these simpler environments')
+        warn('RAINBOW for envs like cartpole is extremely slow on convergence requiring more than 600 epochs. '
+             'Due to a memory issue, we cannot test beyond this number of epochs to get detailed convergence.')
         self.target_net=TargetNet(self.model)
         self.exploration_method=EpsilonGreedyActionSelector(1.0)
         self.epsilon_tracker=EpsilonTracker(self.exploration_method, {'epsilon_frames': 100, 'epsilon_start': 1.0,
@@ -182,4 +199,5 @@ class DistDQNLearner(AgentLearner):
         q=q_v.data.cpu().numpy()
         actions=self.exploration_method(q)
         return actions
+
 

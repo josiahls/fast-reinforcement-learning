@@ -113,7 +113,7 @@ OpenAI environments.
     - [X] NStep Experience replay
     - [X] Gaussian and Factored Gaussian Noise exploration replacement
     - [X] Add Distributional DQN
-    - [ ] **Working on** Add RAINBOW DQN
+    - [X] Add RAINBOW DQN (Note warnings, will require refactor / re-testing)
     - [ ] **Working on** Add REINFORCE
     - [ ] **Working on** Add PPO
     - [ ] **Working on** Add TRPO

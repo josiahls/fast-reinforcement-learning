@@ -47,8 +47,8 @@ def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_siz
 	explore = ifnone(explore,GreedyEpsilon(epsilon_start=1, epsilon_end=0.02, decay=decay))
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
-								 memory_management_strategy='k_partitions_top', k=3,**kwargs)
-	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
+								 memory_management_strategy='k_partitions_top', k=1,**kwargs)
+	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.Adam,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
 	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
 						callback_fns=metrics)
@@ -175,13 +175,13 @@ layer_clss=[GaussianNoisyLinear,GaussianNoisyFactorizedLinear]
 @pytest.mark.parametrize(["model_cls", "s_format",'layer_cls'],
 						 list(product(p_model, p_format,layer_clss)))
 def test_dqn_models_noisy_layers_cartpole(model_cls, s_format,layer_cls):
-	experience=NStepExperienceReplay
+	experience=ExperienceReplay
 	group_interp = GroupAgentInterpretation()
 	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}_{layer_cls.__name__}'
 	for i in range(1):
 		# Since we are using noisy layers, just use default exploration strategy (no exploration)
-		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],
-								memory_size=1000000, decay=0.001,lin_cls=layer_cls,explore=ExplorationStrategy(),epochs=450)
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[512],lr=0.0001,
+								memory_size=100000, decay=0.01,lin_cls=layer_cls,explore=ExplorationStrategy(),epochs=800)
 
 		learner2gif(learn,s_format,group_interp,'cartpole_layer_exp',extra_s)
 

@@ -5,6 +5,7 @@ import gym
 from fastai.basic_train import *
 from fastai.torch_core import *
 
+from fast_rl.core.data_block import MDPStep
 from fast_rl.core.data_structures import SumTree
 
 
@@ -87,11 +88,17 @@ class Experience:
 	def __len__(self):
 		raise NotImplementedError('Experience needs a concept of size')
 
+	def weights(self): return None
+
 	@property
 	def memory(self): return None
 	def sample(self, **kwargs): pass
-	def update(self, item, **kwargs): item.to(device=defaults.device)
-	def refresh(self, **kwargs): pass
+	def update(self, item, **kwargs):
+		if isinstance(item,list):
+			for o in item: o.to(device=defaults.device)
+		else:
+			item.to(device=defaults.device)
+	def refresh(self, *args,**kwargs): pass
 
 
 class ExperienceReplay(Experience):
@@ -215,11 +222,11 @@ class PriorityExperienceReplay(Experience):
 			self.tree.update(self._indices.astype(int), np.abs(post_optimize['td_error'])+self.epsilon)
 
 	def sample(self, batch, **kwargs):
-		self.beta=np.min([1., self.beta+self.b_inc])
 		ranges=np.linspace(0, ceil(self.tree.total()/batch), num=batch+1)
 		uniform_ranges=[np.random.uniform(ranges[i], ranges[i+1]) for i in range(len(ranges)-1)]
 		try:
 			self._indices, weights, samples=self.tree.batch_get(uniform_ranges)
+			self.beta=np.min([1., self.beta+self.b_inc])
 		except ValueError:
 			warn('Too few values to unpack. Your batch size is too small, when PER queries tree, all 0 values get'
 				 ' ignored. We will retry until we can return at least one sample.')
@@ -248,15 +255,46 @@ class PriorityExperienceReplay(Experience):
 		self.tree.add(np.abs(maximal_priority)+self.epsilon, item)
 
 
-# class HindsightExperienceReplay(Experience):
-# 	def __init__(self, memory_size):
-# 		"""
-#
-# 		References:
-# 			[1] Andrychowicz, Marcin, et al. "Hindsight experience replay."
-# 			Advances in Neural Information Processing Systems. 2017.
-#
-# 		Args:
-# 			memory_size:
-# 		"""
-# 		super().__init__(memory_size)
+
+class NStepPriorityExperienceReplay(PriorityExperienceReplay):
+
+	def __init__(self, memory_size, n_step=1, **kwargs):
+		super().__init__(memory_size//n_step, **kwargs)
+		self.n_step=n_step
+		self._memory=[]
+		self._temp_samples=[]
+
+	def refresh(self, post_optimize, **kwargs):
+		pre_td_error=[]
+		idx=0
+		for item in self._temp_samples:
+			temp_td_error=[]
+			for _ in item:
+				temp_td_error.append(post_optimize['td_error'][idx])
+				idx+=1
+			pre_td_error.append(np.average(temp_td_error))
+		post_optimize['td_error']=pre_td_error
+		super(NStepPriorityExperienceReplay, self).refresh(post_optimize)
+
+	def weights(self):
+		individual_item_weights=[]
+		idx=0
+		for item in self._temp_samples:
+			for _ in item:
+				individual_item_weights.append(self.p_weights[idx])
+			idx+=1
+		return individual_item_weights
+
+
+	def update(self, item:MDPStep, **kwargs):
+		item=deepcopy(item)
+		if len(self._memory)<self.n_step:
+			self._memory.append(item)
+		if len(self._memory)>=self.n_step or item.done:
+			super(NStepPriorityExperienceReplay,self).update(deepcopy(self._memory))
+			self._memory.clear()
+
+	def sample(self, batch, **kwargs):
+		samples=super(NStepPriorityExperienceReplay, self).sample(batch//self.n_step)
+		self._temp_samples=samples
+		return [o for ll in samples for o in ll]
