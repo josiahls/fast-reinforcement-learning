@@ -2,6 +2,12 @@
 [![pypi fasti_rl version](https://img.shields.io/pypi/v/fast_rl)](https://pypi.python.org/pypi/fast_rl)
 [![github_master version](https://img.shields.io/github/v/release/josiahls/fast-reinforcement-learning?include_prereleases)](https://github.com/josiahls/fast-reinforcement-learning/releases)
 
+**Important Note**
+fastrl==2.* is being developed at [fast-reinforcement-learning-2](https://github.com/josiahls/fast-reinforcement-learning-2). This is a temporary location. Once version 2.* is working well enough and does not require anymore massive breaking changes, we will merge this into this repo.
+
+Feel free to track that repo and play around with the code as it develops.
+
+
 # Fast_rl
 This repo is not affiliated with Jeremy Howard or his course which can be found [here](https://www.fast.ai/about/).
 We will be using components from the Fastai library for building and training our reinforcement learning (RL) 
