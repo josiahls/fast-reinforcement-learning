@@ -3,9 +3,8 @@
 [![github_master version](https://img.shields.io/github/v/release/josiahls/fast-reinforcement-learning?include_prereleases)](https://github.com/josiahls/fast-reinforcement-learning/releases)
 
 **Important Note**
-fastrl==2.* is being developed at [fast-reinforcement-learning-2](https://github.com/josiahls/fast-reinforcement-learning-2). This is a temporary location. Once version 2.* is working well enough and does not require anymore massive breaking changes, we will merge this into this repo.
+fastrl==2.* is being developed at [fastrl](https://github.com/josiahls/fastrl). This is the permanent place for all fastai version 2.0 changes as well as faster/refactored/more stable models. Please go there instead for new information.
 
-Feel free to track that repo and play around with the code as it develops.
 
 
 # Fast_rl
