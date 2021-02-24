@@ -5,12 +5,13 @@ import gym
 from fastai.basic_train import *
 from fastai.torch_core import *
 
+from fast_rl.core.data_block import MDPStep
 from fast_rl.core.data_structures import SumTree
 
 
 class ExplorationStrategy:
 	def __init__(self, explore: bool = True): self.explore=explore
-	def update(self, max_episodes, explore, **kwargs): self.explore=explore
+	def update(self,episode, max_episodes, explore, **kwargs): self.explore=explore
 	def perturb(self, action, action_space) -> np.ndarray:
 		"""
 		Base method just returns the action. Subclass, and change to return randomly / augmented actions.
@@ -42,7 +43,7 @@ class GreedyEpsilon(ExplorationStrategy):
 		return action_space.sample() if np.random.random()<self.epsilon and self.explore else action
 
 	def update(self, episode, end_episode=0, **kwargs):
-		super(GreedyEpsilon, self).update(**kwargs)
+		super(GreedyEpsilon, self).update(episode,**kwargs)
 		if self.explore:
 			self.end_episode=end_episode
 			self.epsilon=self.e_end+(self.e_start-self.e_end)*math.exp(-1.*(self.steps*self.decay))
@@ -84,11 +85,20 @@ class Experience:
 		self.max_size=memory_size
 		self.callbacks=[]
 
+	def __len__(self):
+		raise NotImplementedError('Experience needs a concept of size')
+
+	def weights(self): return None
+
 	@property
 	def memory(self): return None
 	def sample(self, **kwargs): pass
-	def update(self, item, **kwargs): item.to(device=defaults.device)
-	def refresh(self, **kwargs): pass
+	def update(self, item, **kwargs):
+		if isinstance(item,list):
+			for o in item: o.to(device=defaults.device)
+		else:
+			item.to(device=defaults.device)
+	def refresh(self, *args,**kwargs): pass
 
 
 class ExperienceReplay(Experience):
@@ -123,6 +133,46 @@ class ExperienceReplay(Experience):
 		super().update(item, **kwargs)
 		if self.reduce_ram: item.clean()
 		self._memory.append(item)
+
+
+class NStepExperienceReplay(Experience):
+	def __init__(self, memory_size,step_sz=2,**kwargs):
+		r"""
+		Basic store-er of s space transitions for training agents.
+
+		References:
+			[1] Mnih, Volodymyr, et al. "Playing atari with deep reinforcement learning."
+			arXiv preprint arXiv:1312.5602 (2013).
+
+		Args:
+			memory_size (int): Max N samples to store
+		"""
+		super().__init__(memory_size, **kwargs)
+		self.step_sz=step_sz
+		self.max_size=memory_size
+		self._memory=deque(maxlen=memory_size)
+
+	@property
+	def memory(self):
+		return self._memory
+
+	def __len__(self):
+		return len(self._memory)
+
+	def sample(self, batch, **kwargs):
+		if len(self._memory)<batch: return self._memory
+		return [o for ll in random.sample(self.memory, batch) for o in ll][:batch]
+
+	def update(self, item, **kwargs):
+		item=deepcopy(item)
+		super().update(item, **kwargs)
+		if self.reduce_ram: item.clean()
+		if len(self._memory)==0: self._memory.append([])
+		if len(self.memory[-1])<self.step_sz and not item.d: self.memory[-1].append(item)
+		if len(self.memory[-1])<self.step_sz and item.d:
+			self.memory[-1].append(item)
+			self._memory.append([])
+		else:								  self._memory.append([item])
 
 
 class PriorityExperienceReplayCallback(LearnerCallback):
@@ -172,11 +222,11 @@ class PriorityExperienceReplay(Experience):
 			self.tree.update(self._indices.astype(int), np.abs(post_optimize['td_error'])+self.epsilon)
 
 	def sample(self, batch, **kwargs):
-		self.beta=np.min([1., self.beta+self.b_inc])
 		ranges=np.linspace(0, ceil(self.tree.total()/batch), num=batch+1)
 		uniform_ranges=[np.random.uniform(ranges[i], ranges[i+1]) for i in range(len(ranges)-1)]
 		try:
 			self._indices, weights, samples=self.tree.batch_get(uniform_ranges)
+			self.beta=np.min([1., self.beta+self.b_inc])
 		except ValueError:
 			warn('Too few values to unpack. Your batch size is too small, when PER queries tree, all 0 values get'
 				 ' ignored. We will retry until we can return at least one sample.')
@@ -205,15 +255,46 @@ class PriorityExperienceReplay(Experience):
 		self.tree.add(np.abs(maximal_priority)+self.epsilon, item)
 
 
-# class HindsightExperienceReplay(Experience):
-# 	def __init__(self, memory_size):
-# 		"""
-#
-# 		References:
-# 			[1] Andrychowicz, Marcin, et al. "Hindsight experience replay."
-# 			Advances in Neural Information Processing Systems. 2017.
-#
-# 		Args:
-# 			memory_size:
-# 		"""
-# 		super().__init__(memory_size)
+
+class NStepPriorityExperienceReplay(PriorityExperienceReplay):
+
+	def __init__(self, memory_size, n_step=1, **kwargs):
+		super().__init__(memory_size//n_step, **kwargs)
+		self.n_step=n_step
+		self._memory=[]
+		self._temp_samples=[]
+
+	def refresh(self, post_optimize, **kwargs):
+		pre_td_error=[]
+		idx=0
+		for item in self._temp_samples:
+			temp_td_error=[]
+			for _ in item:
+				temp_td_error.append(post_optimize['td_error'][idx])
+				idx+=1
+			pre_td_error.append(np.average(temp_td_error))
+		post_optimize['td_error']=pre_td_error
+		super(NStepPriorityExperienceReplay, self).refresh(post_optimize)
+
+	def weights(self):
+		individual_item_weights=[]
+		idx=0
+		for item in self._temp_samples:
+			for _ in item:
+				individual_item_weights.append(self.p_weights[idx])
+			idx+=1
+		return individual_item_weights
+
+
+	def update(self, item:MDPStep, **kwargs):
+		item=deepcopy(item)
+		if len(self._memory)<self.n_step:
+			self._memory.append(item)
+		if len(self._memory)>=self.n_step or item.done:
+			super(NStepPriorityExperienceReplay,self).update(deepcopy(self._memory))
+			self._memory.clear()
+
+	def sample(self, batch, **kwargs):
+		samples=super(NStepPriorityExperienceReplay, self).sample(batch//self.n_step)
+		self._temp_samples=samples
+		return [o for ll in samples for o in ll]

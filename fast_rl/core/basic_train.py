@@ -3,6 +3,7 @@ from multiprocessing.pool import Pool
 from fastai.basic_train import Learner, load_callback
 from fastai.torch_core import *
 
+from fast_rl.core.agent_core import ExplorationStrategy
 from fast_rl.core.data_block import MDPDataBunch
 
 
@@ -35,10 +36,11 @@ class AgentLearner(Learner):
 
 	def __init__(self, data, loss_func=None, callback_fns=None, opt=torch.optim.Adam, **kwargs):
 		super().__init__(data=data, callback_fns=ifnone(callback_fns, []) + data.callback, **kwargs)
-		self.model.loss_func = ifnone(loss_func, F.mse_loss)
+		self.model.loss_func = ifnone(ifnone(loss_func,self.model.loss_func), F.mse_loss)
 		self.model.set_opt(opt)
 		self.loss_func = None
 		self.trainers = None
+		self.exploration_strategy: Union[None,ExplorationStrategy]=None
 		self._loss_func = WrapperLossFunc(self)
 
 	@property
@@ -53,7 +55,7 @@ class AgentLearner(Learner):
 		 By default, the learner will have a `None` loss function, and so the fit function will not try to log that
 		 loss.
 		 """
-		self.loss_func = WrapperLossFunc(self)
+		self.loss_func=self._loss_func
 
 	def export(self, file:PathLikeOrBinaryStream='export.pkl', destroy=False, pickle_data=False):
 		"Export the state of the `Learner` in `self.path/file`. `file` can be file-like (file or buffer)"

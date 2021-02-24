@@ -98,13 +98,6 @@ class DDPGModule(Module):
 		References:
 			[1] Lillicrap, Timothy P., et al. "Continuous control with deep reinforcement learning."
 			arXiv preprint arXiv:1509.02971 (2015).
-
-		Args:
-			data: Primary data object to use.
-			memory: How big the tree buffer will be for offline training.
-			tau: Defines how "soft/hard" we will copy the target networks over to the primary networks.
-			discount: Determines the amount of discounting the existing Q reward.
-			lr: Rate that the opt will learn parameter gradients.
 		"""
 		super().__init__()
 		self.name = 'DDPG'

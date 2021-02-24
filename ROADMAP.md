@@ -3,39 +3,72 @@
 - [X] 0.9.0 Notebook demonstrations of basic model usage.
 - [X] **1.0.0** Base version is completed with working model visualizations proving performance / expected failure. At 
 this point, all models should have guaranteed environments they should succeed in. 
-- [ ] **Working on** 1.1.0 More Traditional RL models
+- [ ] 1.1.0 More Traditional RL models
+    - [X] Add Cross Entropy Method CEM
+    - [X] NStep Experience replay
+    - [X] Gaussian and Factored Gaussian Noise exploration replacement
+    - [X] Add Distributional DQN
+    - [X] Add RAINBOW DQN (Note warnings, will require refactor / re-testing)
+    - [X] Add REINFORCE
     - [ ] **Working on** Add PPO
     - [ ] **Working on** Add TRPO
     - [ ] Add D4PG
     - [ ] Add A2C
     - [ ] Add A3C
-- [ ] 1.2.0 HRL models *Possibly might change version to 2.0 depending on SMDP issues*
+    - [ ] Add SAC
+- [ ] 2.0.0 Mass refactor / performance update
+    - [ ] Environments needs to be faster. Beat openai baseline 350 frames per second
+        - Comparing against https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On performance
+    - [ ] fastrl needs to handle ram better
+    - [ ] Use Pong as "expensive computation" benchmark for all compatible models (discrete). 
+        - [ ] 2 Runs image space
+    - [ ] Use Cartpole as "cheap computation" benchmark for all compatible models (discrete).
+        - [ ] 5 Runs state space
+        - [ ] 2 Runs image space
+    - [ ] Use Mountain car as "far distance goal" benchmark all compatible models (discrete)
+        - [ ] 5 Runs state space
+        - [ ] 2 Runs image space
+    - [ ] Use Ant as "expensive computation" benchmark for all compatible models (continuous). 
+        - [ ] 2 Runs image space
+    - [ ] Use Pendulum as "cheap computation" benchmark for all compatible models (continuous).
+        - [ ] 5 Runs state space
+        - [ ] 2 Runs image space
+    - [ ] Use Mountain car continuous as "cheap computation" "far distance goal" benchmark all compatible models (continuous).
+        - [ ] 5 Runs state space
+        - [ ] 2 Runs image space
+    - [ ] Use yield instead of return for the MDPDataset object
+    - [ ] Unify common code pieces shared in all models
+    - [ ] Transition entire project to [nbdev](https://github.com/fastai/nbdev)
+        - Make documentation easier / more expansive. Current method is tedious.
+- [ ] 2.1.0 HRL models *Possibly might change version to 2.0 depending on SMDP issues*
     - [ ] Add SMDP
     - [ ] Add Goal oriented MDPs. Will Require a new "Step"
     - [ ] Add FeUdal Network
     - [ ] Add storage based DataBunch memory management. This can prevent RAM from being used up by episode image frames
     that may or may not serve any use to the agent, but only for logging.
-- [ ] 1.3.0
+- [ ] 2.2.0
     - [ ] Add HAC
     - [ ] Add MAXQ
     - [ ] Add HIRO
-- [ ] 1.4.0
+- [ ] 2.3.0
     - [ ] Add h-DQN
     - [ ] Add Modulated Policy Hierarchies
     - [ ] Add Meta Learning Shared Hierarchies
-- [ ] 1.5.0
+- [ ] 2.4.0
     - [ ] Add STRategic Attentive Writer (STRAW)
     - [ ] Add H-DRLN
     - [ ] Add Abstract Markov Decision Process (AMDP)
-- [ ] 1.6.0 HRL Options models *Possibly will already be implemented in a previous model*
+    - [ ] Add conda integration so that installation can be truly one step.
+- [ ] 2.5.0 HRL Options models *Possibly will already be implemented in a previous model*
     - [ ] Options augmentation to DQN based models
     - [ ] Options augmentation to actor critic models
     - [ ] Options augmentation to async actor critic models
-- [ ] 1.8.0 HRL Skills
+- [ ] 2.6.0 HRL Skills
     - [ ] Skills augmentation to DQN based models
     - [ ] Skills augmentation to actor critic models
     - [ ] Skills augmentation to async actor critic models
-- [ ] 1.9.0
-- [ ] 2.0.0 Add PyBullet Fetch Environments
-    - [ ] 2.0.0 Not part of this repo, however the envs need to subclass the OpenAI `gym.GoalEnv`
-    - [ ] 2.0.0 Add HER
+- [ ] 2.7.0 Add PyBullet Fetch Environments
+    - [ ] Envs need to subclass OpenAI `gym.GoalEnv`
+    - [ ] Add HER
+- [ ] 3.0.0 Breaking refactor of all methods
+    - [ ] Move to fastai 2.0

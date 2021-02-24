@@ -6,15 +6,16 @@ from fastai.basic_data import DatasetType
 
 from fast_rl.agents.dqn import create_dqn_model, dqn_learner, DQNLearner
 from fast_rl.agents.dqn_models import *
-from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon
+from fast_rl.core.agent_core import ExperienceReplay, PriorityExperienceReplay, GreedyEpsilon, NStepExperienceReplay, \
+	ExplorationStrategy
 from fast_rl.core.data_block import MDPDataBunch, FEED_TYPE_STATE, FEED_TYPE_IMAGE, ResolutionWrapper
-from fast_rl.core.metrics import RewardMetric, EpsilonMetric
+from fast_rl.core.metrics import RewardMetric, EpsilonMetric, RollingRewardMetric
 from fast_rl.core.train import GroupAgentInterpretation, AgentInterpretation
 from torch import optim
 
 p_model = [DQNModule, FixedTargetDQNModule,DoubleDuelingModule,DuelingDQNModule,DoubleDQNModule]
 p_exp = [ExperienceReplay,
-		PriorityExperienceReplay]
+		PriorityExperienceReplay,NStepExperienceReplay]
 p_format = [FEED_TYPE_STATE]#, FEED_TYPE_IMAGE]
 p_envs = ['CartPole-v1']
 
@@ -37,18 +38,21 @@ def learner2gif(lnr:DQNLearner,s_format,group_interp:GroupAgentInterpretation,na
 
 
 def trained_learner(model_cls, env, s_format, experience, bs, layers, memory_size=1000000, decay=0.001,
-					copy_over_frequency=300, lr=None, epochs=450,**kwargs):
+					copy_over_frequency=300, lr=None, epochs=450,lin_cls=None,explore=None,model_kwargs=None,**kwargs):
 	if lr is None: lr = [0.001, 0.00025]
+	model_kwargs=ifnone(model_kwargs,{})
 	memory = experience(memory_size=memory_size, reduce_ram=True)
-	explore = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=decay)
+	metrics=[RewardMetric, RollingRewardMetric]
+	if explore is None: metrics.append(EpsilonMetric)
+	explore = ifnone(explore,GreedyEpsilon(epsilon_start=1, epsilon_end=0.02, decay=decay))
 	if type(lr) == list: lr = lr[0] if model_cls == DQNModule else lr[1]
 	data = MDPDataBunch.from_env(env, render='human', bs=bs, add_valid=False, keep_env_open=False, feed_type=s_format,
-								 memory_management_strategy='k_partitions_top', k=3,**kwargs)
-	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.RMSprop)
-	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers)
+								 memory_management_strategy='k_partitions_top', k=1,**kwargs)
+	if model_cls == DQNModule: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers, opt=optim.Adam,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
+	else: model = create_dqn_model(data=data, base_arch=model_cls, lr=lr, layers=layers,lin_cls=ifnone(lin_cls,nn.Linear),**model_kwargs)
 	learn = dqn_learner(data, model, memory=memory, exploration_method=explore, copy_over_frequency=copy_over_frequency,
-						callback_fns=[RewardMetric, EpsilonMetric])
-	learn.fit(epochs)
+						callback_fns=metrics)
+	learn.fit(epochs,wd=0)
 	return learn
 
 # @pytest.mark.usefixtures('skip_performance_check')
@@ -103,28 +107,6 @@ def test_dqn_fit_maze_env(model_cls, s_format, mem):
 								memory_size=1000000, decay=0.00001, res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
 
 		learner2gif(learn,s_format,group_interp,'maze_5x5',extra_s)
-	# success = False
-	# while not success:
-	# 	try:
-	# 		data = MDPDataBunch.from_env('maze-random-5x5-v0', render='rgb_array', bs=5, max_steps=20,
-	# 									 add_valid=False, keep_env_open=False, feed_type=s_format)
-	# 		model = create_dqn_model(data, model_cls, opt=torch.optim.RMSprop)
-	# 		memory = ExperienceReplay(10000)
-	# 		exploration_method = GreedyEpsilon(epsilon_start=1, epsilon_end=0.1, decay=0.001)
-	# 		learner = dqn_learner(data=data, model=model, memory=memory, exploration_method=exploration_method,
-	# 							  callback_fns=[RewardMetric, EpsilonMetric])
-	# 		learner.fit(2)
-	#
-	# 		assert config_env_expectations['maze-random-5x5-v0']['action_shape'] == (
-	# 			1, data.action.n_possible_values.item())
-	# 		if s_format == FEED_TYPE_STATE:
-	# 			assert config_env_expectations['maze-random-5x5-v0']['state_shape'] == data.state.s.shape
-	# 		sleep(1)
-	# 		success = True
-	# 	except Exception as e:
-	# 		if not str(e).__contains__('Surface'):
-	# 			raise Exception
-
 
 @pytest.mark.usefixtures('skip_performance_check')
 @pytest.mark.parametrize(["model_cls", "s_format", 'experience'], list(product(p_model, p_format, p_exp)))
@@ -150,19 +132,58 @@ def test_dqn_models_minigrids(model_cls, s_format, experience):
 def test_dqn_models_cartpole(model_cls, s_format, experience):
 	group_interp = GroupAgentInterpretation()
 	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
+	for i in range(1):
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],epochs=200,
+								memory_size=1000000,decay=0.001,res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3))
+		# learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
+
+
+@pytest.mark.usefixtures('skip_performance_check')
+@pytest.mark.parametrize(["s_format", 'experience'],
+						 list(product(p_format, p_exp)))
+def test_dqn_models_categorical_cartpole(s_format, experience):
+	model_cls=DistributionalDQN
+	group_interp = GroupAgentInterpretation()
+	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
 	for i in range(5):
 		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[64, 64],
 								memory_size=1000000, decay=0.001)
 
 		learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
-		# meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
-		# interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
-		# interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
-		# group_interp.add_interpretation(interp)
-		# filename = f'{learn.model.name.lower()}_{meta}'
-		# group_interp.to_pickle(f'../docs_src/data/cartpole_{learn.model.name.lower()}/', filename)
-		# [g.write('../res/run_gifs/cartpole') for g in interp.generate_gif()]
-		# del learn
+
+
+@pytest.mark.usefixtures('skip_performance_check')
+@pytest.mark.parametrize(["s_format"],
+						 list(product(p_format)))
+def test_dqn_models_distributional_cartpole(s_format):
+	experience=ExperienceReplay
+	group_interp = GroupAgentInterpretation()
+	model_cls=DistributionalDQN
+	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}'
+	for i in range(1):
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[512],lr=[0.0001,0.0001],
+								memory_size=100000, decay=0.008,model_kwargs={'v_max':10,'v_min':-10,'n_atoms':51,'opt':optim.Adam},
+								res_wrap=partial(ResolutionWrapper, w_step=3, h_step=3),epochs=800,copy_over_frequency=300)
+
+		# learner2gif(learn,s_format,group_interp,'cartpole',extra_s)
+
+
+layer_clss=[GaussianNoisyLinear,GaussianNoisyFactorizedLinear]
+
+
+@pytest.mark.usefixtures('skip_performance_check')
+@pytest.mark.parametrize(["model_cls", "s_format",'layer_cls'],
+						 list(product(p_model, p_format,layer_clss)))
+def test_dqn_models_noisy_layers_cartpole(model_cls, s_format,layer_cls):
+	experience=ExperienceReplay
+	group_interp = GroupAgentInterpretation()
+	extra_s=f'{experience.__name__}_{model_cls.__name__}_{s_format}_{layer_cls.__name__}'
+	for i in range(1):
+		# Since we are using noisy layers, just use default exploration strategy (no exploration)
+		learn = trained_learner(model_cls, 'CartPole-v1', s_format, experience, bs=32, layers=[512],lr=0.0001,
+								memory_size=100000, decay=0.01,lin_cls=layer_cls,explore=ExplorationStrategy(),epochs=800)
+
+		learner2gif(learn,s_format,group_interp,'cartpole_layer_exp',extra_s)
 
 
 @pytest.mark.usefixtures('skip_performance_check')
@@ -177,14 +198,6 @@ def test_dqn_models_lunarlander(model_cls, s_format, experience):
 		learner2gif(learn, s_format, group_interp, 'lunarlander', extra_s)
 		del learn
 		gc.collect()
-		# meta = f'{experience.__name__}_{"FEED_TYPE_STATE" if s_format == FEED_TYPE_STATE else "FEED_TYPE_IMAGE"}'
-		# interp = AgentInterpretation(learn, ds_type=DatasetType.Train)
-		# interp.plot_rewards(cumulative=True, per_episode=True, group_name=meta)
-		# group_interp.add_interpretation(interp)
-		# filename = f'{learn.model.name.lower()}_{meta}'
-		# group_interp.to_pickle(f'../docs_src/data/lunarlander_{learn.model.name.lower()}/', filename)
-		# [g.write('../res/run_gifs/lunarlander') for g in interp.generate_gif()]
-		# del learn
 
 
 @pytest.mark.usefixtures('skip_performance_check')
